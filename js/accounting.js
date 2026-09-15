@@ -44,6 +44,20 @@ function getExpenseCategoryNames() {
 }
 const GENERAL_CATS = ["رواتب", "إقامات", "إيجار المكتب", "كهرباء", "مركبات"]; // احتياطي (Deprecated) — القائمة الفعلية الآن من getExpenseCategoryNames()
 
+// القيمة الإجمالية للمشروع كما وردت في العقد أو عرض السعر المعتمد المرتبط به (إن وُجد)
+function projectTotalValue(project) {
+  if (!project) return null;
+  if (project.contractId) {
+    const contract = dbGet("contracts", []).find(c => c.id === project.contractId);
+    if (contract) return contractAmounts(contract).grand;
+  }
+  if (project.approvedQuoteId) {
+    const quote = dbGet("quotes", []).find(q => q.id === project.approvedQuoteId);
+    if (quote) return quoteTotal(quote);
+  }
+  return null;
+}
+
 /* ================= محاسبة المشاريع ================= */
 function renderAccProjects(el) {
   const projects = dbGet("projects", []);
@@ -57,6 +71,8 @@ function renderAccProjects(el) {
   const net = revenue - expenses;
   const expenseByType = {};
   EXPENSE_TYPES.forEach(t => expenseByType[t] = entries.filter(e => e.type === t).reduce((s, e) => s + Number(e.amount || 0), 0));
+  const totalValue = projectTotalValue(project);
+  const remaining = totalValue !== null ? totalValue - revenue : null;
 
   el.innerHTML = `
     <div class="section-title-row">
@@ -70,6 +86,17 @@ function renderAccProjects(el) {
       <div class="stat-card"><div class="label">إجمالي الإيرادات</div><div class="value success">${fmtMoney(revenue)}</div></div>
       <div class="stat-card"><div class="label">إجمالي المصاريف</div><div class="value danger">${fmtMoney(expenses)}</div></div>
       <div class="stat-card"><div class="label">صافي الربح</div><div class="value ${net >= 0 ? "success" : "danger"}">${fmtMoney(net)}</div></div>
+    </div>
+
+    <div class="grid cols-2" style="margin-bottom:18px">
+      <div class="stat-card">
+        <div class="label">قيمة المشروع الإجمالية (حسب العقد/عرض السعر المعتمد)</div>
+        <div class="value">${totalValue !== null ? fmtMoney(totalValue) : "غير مرتبط بعقد أو عرض سعر معتمد"}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">المتبقي حتى نهاية المشروع</div>
+        <div class="value ${remaining === null ? "" : remaining > 0 ? "warning" : "success"}">${remaining !== null ? fmtMoney(remaining) : "-"}</div>
+      </div>
     </div>
 
     <div class="grid cols-4" style="margin-bottom:18px">
