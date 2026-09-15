@@ -11,7 +11,7 @@ const ACC_TYPE_BADGE = {
   "إيراد مشروع": "green", "فاتورة ضريبية": "green",
   "دفعة مشتريات": "blue", "مصروف مواد": "orange", "مصروف عمال": "orange", "مصروف نثرية": "gray",
 };
-const PAYMENT_METHODS = ["تحويل بنكي", "كاش", "شبكة"];
+const PAYMENT_METHODS = ["تحويل بنكي", "كاش", "شبكة", "سداد حكومي"];
 /* ---------- قائمة المصاريف والعهد (تصنيفات المصاريف الإدارية وبنودها الفرعية) ---------- */
 function defaultExpenseCatalog() {
   const mk = (name, itemNames) => ({ id: uid("ecat"), name, items: (itemNames || []).map(n => ({ id: uid("eit"), name: n })) });
