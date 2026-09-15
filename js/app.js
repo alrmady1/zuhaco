@@ -219,7 +219,13 @@ function renderFirstTimeSetup() {
 let APP_BOOTSTRAPPED = false;
 function renderApp() {
   const user = getCurrentUser();
-  if (!user) { renderLogin(); return; }
+  // جلسة محلية قديمة (currentUser محفوظ) بلا اتصال فعلي ناجح بالخادم (DB_READY) — لا يجوز
+  // المتابعة بها، وإلا تعمل seedIfEmpty()/الترحيلات على DB_CACHE فارغة وتُنتج بيانات تجريبية وهمية
+  if (!user || !DB_READY) {
+    if (user) setCurrentUser(null);
+    renderLogin();
+    return;
+  }
 
   // تُنفَّذ مرة واحدة فقط لكل تشغيل حقيقي للتطبيق (بعد اكتمال تحميل DB_CACHE من الخادم)
   if (!APP_BOOTSTRAPPED) {
