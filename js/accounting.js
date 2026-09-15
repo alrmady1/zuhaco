@@ -11,6 +11,7 @@ const ACC_TYPE_BADGE = {
   "دفعة مشتريات": "blue", "مصروف مواد": "orange", "مصروف عمال": "orange", "مصروف نثرية": "gray",
 };
 const PAYMENT_METHODS = ["تحويل بنكي", "كاش", "شبكة"];
+const VEHICLE_EXPENSE_TYPES = ["بنزين", "زيت", "تجديد استمارة", "فحص دوري", "كفرات", "صيانة", "غسيل"];
 /* ---------- قائمة المصاريف والعهد (تصنيفات المصاريف الإدارية وبنودها الفرعية) ---------- */
 function defaultExpenseCatalog() {
   const mk = (name, itemNames) => ({ id: uid("ecat"), name, items: (itemNames || []).map(n => ({ id: uid("eit"), name: n })) });
@@ -18,6 +19,8 @@ function defaultExpenseCatalog() {
     mk("مواد", ["إسمنت", "بلوك", "حديد", "رمل", "كهربائيات", "صبغة", "أخرى"]),
     mk("رواتب", []),
     mk("سلفية", []),
+    mk("مركبات", []),
+    mk("المرافق", []),
     mk("مواد التشغيل والنظافة", []),
     mk("إقامات", ["أجور طبي", "رسوم تجديد", "رسوم نقل كفالة", "رسوم مكتب عمل", "تحويل مهنة"]),
     mk("إيجار", []),
@@ -32,11 +35,13 @@ function getExpenseCatalog() {
   // العهد لها صفحتها المستقلة (تبويب "العهد") — لا يجوز إضافتها كتصنيف ضمن المصاريف الإدارية
   const filtered = cat.filter(c => c.name !== "مصاريف عهدة");
   if (filtered.length !== cat.length) { cat = filtered; dbSet("expenseCatalog", cat); }
-  // ترحيل: إضافة تصنيف "سلفية" تلقائياً للأنظمة القائمة التي أُنشئ كتالوجها قبل إضافة هذا التصنيف
-  if (!cat.some(c => c.name === "سلفية")) {
-    cat.push({ id: uid("ecat"), name: "سلفية", items: [] });
-    dbSet("expenseCatalog", cat);
-  }
+  // ترحيل: إضافة تصنيفات "سلفية"/"مركبات"/"المرافق" تلقائياً للأنظمة القائمة التي أُنشئ كتالوجها قبل إضافتها
+  const requiredCats = ["سلفية", "مركبات", "المرافق"];
+  let addedMissing = false;
+  requiredCats.forEach(name => {
+    if (!cat.some(c => c.name === name)) { cat.push({ id: uid("ecat"), name, items: [] }); addedMissing = true; }
+  });
+  if (addedMissing) dbSet("expenseCatalog", cat);
   return cat;
 }
 function getExpenseCategoryNames() {
@@ -535,6 +540,7 @@ function generalExpenseSubtitle(e) {
   if (e.subItem) parts.push(e.subItem);
   if (e.facilityName) parts.push("المرفق: " + e.facilityName);
   if (e.vehicleLabel) parts.push("المركبة: " + e.vehicleLabel);
+  if (e.vehicleExpenseType) parts.push(e.vehicleExpenseType);
   return parts.join(" — ");
 }
 
@@ -566,13 +572,14 @@ function renderGeneralExpensesTab(el) {
       ${list.length ? `
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>التصنيف</th><th>التفاصيل</th><th>المبلغ</th><th>التاريخ</th><th>ملاحظات</th><th>المرفق</th><th></th></tr></thead>
+          <thead><tr><th>التصنيف</th><th>التفاصيل</th><th>المبلغ</th><th>طريقة الدفع</th><th>التاريخ</th><th>ملاحظات</th><th>المرفق</th><th></th></tr></thead>
           <tbody>
             ${list.map(e => `
               <tr>
                 <td><span class="badge gray">${e.category}</span></td>
                 <td class="text-muted">${generalExpenseSubtitle(e) || "-"}</td>
                 <td><strong>${fmtMoney(e.amount)}</strong></td>
+                <td>${e.paymentMethod ? `<span class="badge blue">${e.paymentMethod}</span>` : "-"}</td>
                 <td>${fmtDate(e.date)}</td>
                 <td class="text-muted">${e.note || "-"}</td>
                 <td>${e.attachment ? `<a href="${e.attachment.url}" target="_blank" rel="noopener" class="badge blue" style="text-decoration:none">📎 عرض المرفق</a>` : "-"}</td>
@@ -791,6 +798,12 @@ function openGeneralExpenseModal(el) {
       <div class="field"><label id="g_dateLabel">التاريخ</label><input type="date" id="g_date" value="${todayISO()}"></div>
     </div>
     <div class="field"><label><input type="checkbox" id="g_vat" style="width:auto;display:inline-block"> يشمل فاتورة ضريبية (ضريبة قيمة مضافة قابلة للخصم)</label></div>
+    <div class="field"><label>طريقة الدفع</label>
+      <select id="g_paymentMethod">
+        <option value="">— اختر طريقة الدفع —</option>
+        ${PAYMENT_METHODS.map(m => `<option value="${m}">${m}</option>`).join("")}
+      </select>
+    </div>
     <div class="field"><label>ملاحظات</label><textarea id="g_note"></textarea></div>
     <div class="field">
       <label>إرفاق ملف الفاتورة أو المستند (اختياري)</label>
@@ -835,12 +848,20 @@ function openGeneralExpenseModal(el) {
       dateLabel.textContent = "التاريخ";
       const vehicles = dbGet("vehicles", []);
       extraBox.innerHTML = `
-        <div class="field"><label>المركبة</label>
-          <select id="g_vehicle">
-            <option value="">— اختر المركبة —</option>
-            ${vehicles.map(v => `<option value="${v.id}">${[v.brand, v.modelTrim].filter(Boolean).join(" ") || v.type || "مركبة"}${v.regNumber ? " — استمارة " + v.regNumber : ""}</option>`).join("")}
-          </select>
-          ${!vehicles.length ? `<div class="hint">لا توجد مركبات مسجلة — أضفها من الإعدادات ← المركبات</div>` : ""}
+        <div class="grid cols-2">
+          <div class="field"><label>المركبة</label>
+            <select id="g_vehicle">
+              <option value="">— اختر المركبة —</option>
+              ${vehicles.map(v => `<option value="${v.id}">${[v.brand, v.modelTrim].filter(Boolean).join(" ") || v.type || "مركبة"}${v.regNumber ? " — استمارة " + v.regNumber : ""}</option>`).join("")}
+            </select>
+            ${!vehicles.length ? `<div class="hint">لا توجد مركبات مسجلة — أضفها من الإعدادات ← المركبات</div>` : ""}
+          </div>
+          <div class="field"><label>نوع المصروف</label>
+            <select id="g_vehicleExpenseType">
+              <option value="">— اختر نوع المصروف —</option>
+              ${VEHICLE_EXPENSE_TYPES.map(t => `<option value="${t}">${t}</option>`).join("")}
+            </select>
+          </div>
         </div>
       `;
     } else if (catName === "المرافق") {
@@ -895,11 +916,13 @@ function openGeneralExpenseModal(el) {
     if (amount <= 0) { toast("يرجى إدخال مبلغ صحيح"); return; }
     const vatApplicable = ov.querySelector("#g_vat").checked;
     const category = catSelect.value;
+    const paymentMethod = ov.querySelector("#g_paymentMethod").value;
     const list = dbGet("accGeneral", []);
     const entry = {
       id: uid("ge"), category, amount,
       vatApplicable, vatAmount: vatApplicable ? amount * VAT_RATE : 0,
       date: ov.querySelector("#g_date").value || todayISO(), note: ov.querySelector("#g_note").value.trim(),
+      paymentMethod,
       attachment,
     };
     let logSuffix = "";
@@ -913,14 +936,18 @@ function openGeneralExpenseModal(el) {
       logSuffix = ` للموظف "${emp.name}"${entry.salaryMonth ? " عن شهر " + salaryMonthLabel(entry.salaryMonth) : ""}`;
     } else if (category === "مركبات") {
       const vehSelect = ov.querySelector("#g_vehicle");
+      const vehExpTypeSelect = ov.querySelector("#g_vehicleExpenseType");
+      if (vehExpTypeSelect && vehExpTypeSelect.value) entry.vehicleExpenseType = vehExpTypeSelect.value;
       if (vehSelect && vehSelect.value) {
         const veh = dbGet("vehicles", []).find(v => v.id === vehSelect.value);
         if (veh) {
           const label = [veh.brand, veh.modelTrim].filter(Boolean).join(" ") || veh.type || "مركبة";
           entry.vehicleId = veh.id;
           entry.vehicleLabel = label;
-          logSuffix = ` — المركبة: ${label}`;
+          logSuffix = ` — المركبة: ${label}${entry.vehicleExpenseType ? " (" + entry.vehicleExpenseType + ")" : ""}`;
         }
+      } else if (entry.vehicleExpenseType) {
+        logSuffix = ` — ${entry.vehicleExpenseType}`;
       }
     } else if (category === "المرافق") {
       const facilitySelect = ov.querySelector("#g_facility");
@@ -943,7 +970,7 @@ function openGeneralExpenseModal(el) {
     }
     list.push(entry);
     dbSet("accGeneral", list);
-    logActivity(`تم تسجيل مصروف إداري "${category}"${logSuffix} بقيمة ${fmtMoney(amount)}`);
+    logActivity(`تم تسجيل مصروف إداري "${category}"${logSuffix} بقيمة ${fmtMoney(amount)}${paymentMethod ? " — دفع عبر " + paymentMethod : ""}`);
     toast("تم إضافة المصروف الإداري");
     closeModal();
     renderGeneralExpensesTab(el);
