@@ -153,6 +153,7 @@ function openVisitModal(prefill) {
           <input id="v_location" type="url" placeholder="https://maps.app.goo.gl/..." value="${prefill.location || ""}">
           <div class="hint">افتح الموقع في خرائط جوجل، اضغط "مشاركة"، ثم انسخ الرابط والصقه هنا</div>
         </div>
+        <div class="field"><label>الحي</label><select id="v_district">${districtOptionsHtml(prefill.district || "")}</select></div>
         <div class="field"><label>الوقت المطلوب للزيارة</label><input type="datetime-local" id="v_time" value="${prefill.time || ""}"></div>
         <div class="field"><label>المشرف المكلف</label>
           <select id="v_assigned">${users.map(u => `<option value="${u.id}" ${prefill.assigned === u.id ? "selected" : ""}>${u.name}</option>`).join("") || `<option value="">لا يوجد مشرفون مسجلون</option>`}</select>
@@ -209,6 +210,7 @@ function openVisitModal(prefill) {
         clientName: nameInput.value.trim(),
         clientPhone: ov.querySelector("#v_clientPhone").value.trim(),
         location: ov.querySelector("#v_location").value.trim(),
+        district: ov.querySelector("#v_district").value,
         time: ov.querySelector("#v_time").value,
         assigned: ov.querySelector("#v_assigned").value,
         notes: ov.querySelector("#v_notes").value.trim(),
@@ -248,6 +250,7 @@ function openVisitModal(prefill) {
         clientPhone: ov.querySelector("#v_clientPhone").value.trim(),
         linkedClientId,
         location,
+        district: ov.querySelector("#v_district").value,
         requestedTime: ov.querySelector("#v_time").value,
         assignedTo: assignedUser ? assignedUser.id : "",
         assignedToName: assignedUser ? assignedUser.name : "",
@@ -289,6 +292,7 @@ function openVisitModal(prefill) {
     <div class="grid cols-2">
       <div class="kv-row"><span class="k">العميل</span><span class="v">${v.clientName} (${v.clientPhone || "-"})${contactIconsHtml(v.clientPhone)}</span></div>
       <div class="kv-row"><span class="k">الموقع</span><span class="v">${locationDisplay(v.location)}</span></div>
+      <div class="kv-row"><span class="k">الحي</span><span class="v">${v.district || "-"}</span></div>
       <div class="kv-row"><span class="k">الوقت المطلوب</span><span class="v">${v.requestedTime ? new Date(v.requestedTime).toLocaleString("ar-SA") : "-"}</span></div>
       <div class="kv-row"><span class="k">المشرف المكلف</span><span class="v">${v.assignedToName || "-"}</span></div>
     </div>

@@ -16,6 +16,21 @@ function sameClientName(a, b) {
   return (a || "").trim().toLowerCase() === (b || "").trim().toLowerCase();
 }
 
+// قائمة أحياء الرياض مجمّعة حسب منطقتها (مُدارة من الإعدادات ← مناطق الرياض)
+function districtOptionsHtml(selected) {
+  const zones = getRiyadhZones();
+  const neighborhoods = getNeighborhoodZones();
+  const byZone = {};
+  neighborhoods.forEach(n => { (byZone[n.zone_id] = byZone[n.zone_id] || []).push(n); });
+  let html = `<option value="">— اختر الحي —</option>`;
+  zones.forEach(z => {
+    const list = (byZone[z.id] || []).slice().sort((a, b) => a.neighborhood.localeCompare(b.neighborhood, "ar"));
+    if (!list.length) return;
+    html += `<optgroup label="${z.name}">${list.map(n => `<option value="${n.neighborhood}" ${n.neighborhood === selected ? "selected" : ""}>${n.neighborhood}</option>`).join("")}</optgroup>`;
+  });
+  return html;
+}
+
 function renderClients(el) {
   if (CLIENTS_VIEW === "detail") return renderClientDetail(el);
   renderClientsList(el);
@@ -93,7 +108,8 @@ function openNewClientModal(onSaved) {
       <div class="field"><label>رقم الجوال</label><input id="nc_phone"></div>
       <div class="field"><label>البريد الإلكتروني</label><input id="nc_email"></div>
       <div class="field"><label>الرقم الضريبي</label><input id="nc_tax"></div>
-      <div class="field"><label>العنوان</label><input id="nc_address"></div>
+      <div class="field"><label>الحي</label><select id="nc_district">${districtOptionsHtml("")}</select></div>
+      <div class="field" style="grid-column:span 2"><label>العنوان</label><input id="nc_address"></div>
       <div class="field" style="grid-column:span 2"><label>ملاحظات</label><textarea id="nc_notes"></textarea></div>
     </div>
     <div class="flex gap"><button class="btn primary" id="nc_save">حفظ العميل</button><button class="btn" id="nc_cancel">إلغاء</button></div>
@@ -111,6 +127,7 @@ function openNewClientModal(onSaved) {
       phone: ov.querySelector("#nc_phone").value.trim(),
       email: ov.querySelector("#nc_email").value.trim(),
       taxNumber: ov.querySelector("#nc_tax").value.trim(),
+      district: ov.querySelector("#nc_district").value,
       address: ov.querySelector("#nc_address").value.trim(),
       notes: ov.querySelector("#nc_notes").value.trim(),
       createdAt: new Date().toISOString(),
@@ -155,8 +172,9 @@ function renderClientDetail(el) {
         </div>
         <div class="grid cols-2">
           <div class="field"><label>الرقم الضريبي</label><input id="ec_tax" value="${c.taxNumber || ""}"></div>
-          <div class="field"><label>العنوان</label><input id="ec_address" value="${c.address || ""}"></div>
+          <div class="field"><label>الحي</label><select id="ec_district">${districtOptionsHtml(c.district || "")}</select></div>
         </div>
+        <div class="field"><label>العنوان</label><input id="ec_address" value="${c.address || ""}"></div>
         <div class="field"><label>ملاحظات</label><textarea id="ec_notes">${c.notes || ""}</textarea></div>
         <div class="flex gap">
           <button class="btn primary" id="ec_save">💾 حفظ التعديلات</button>
@@ -238,6 +256,7 @@ function renderClientDetail(el) {
     target.phone = document.getElementById("ec_phone").value.trim();
     target.email = document.getElementById("ec_email").value.trim();
     target.taxNumber = document.getElementById("ec_tax").value.trim();
+    target.district = document.getElementById("ec_district").value;
     target.address = document.getElementById("ec_address").value.trim();
     target.notes = document.getElementById("ec_notes").value.trim();
     dbSet("clients", list);

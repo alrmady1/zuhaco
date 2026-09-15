@@ -16,6 +16,7 @@ function newDraftProject() {
     name: "",
     clientId: "", client: "",
     location: "",
+    district: "",
     projectType: "construction",
     startDate: "", endDate: "",
     status: "قيد التنفيذ",
@@ -282,6 +283,7 @@ function renderProjectBuilder(el) {
         </div>
         <div class="hint">افتح الموقع في خرائط جوجل، اضغط "مشاركة"، ثم انسخ الرابط والصقه هنا — أو اكتب العنوان نصاً</div>
       </div>
+      <div class="field"><label>الحي</label><select id="p_district">${districtOptionsHtml(d.district)}</select></div>
       <div class="field"><label>نوع المشروع</label>
         <div class="pill-group">${CONTRACT_TYPES.map(t => `<div class="pill ${d.projectType === t.key ? "active" : ""}" data-ptype="${t.key}">${projectTypeLabel(t.key)}</div>`).join("")}</div>
       </div>
@@ -348,6 +350,7 @@ function renderProjectBuilder(el) {
 
   document.getElementById("p_name").oninput = (e) => d.name = e.target.value;
   document.getElementById("p_location").oninput = (e) => d.location = e.target.value;
+  document.getElementById("p_district").onchange = (e) => d.district = e.target.value;
   document.getElementById("p_useMyLocation").onclick = () => {
     if (!navigator.geolocation) { toast("المتصفح لا يدعم تحديد الموقع"); return; }
     toast("جارٍ تحديد الموقع...");
@@ -461,6 +464,7 @@ function renderProjectDetail(el) {
           </div>
           <div id="pd_locationLink" style="margin-top:6px">${p.location ? locationDisplay(p.location) : ""}</div>
         </div>
+        <div class="field"><label>الحي</label><select id="pd_district">${districtOptionsHtml(p.district || "")}</select></div>
         <div class="grid cols-2">
           <div class="field"><label>تاريخ البدء</label><input type="date" id="pd_start" value="${p.startDate || ""}"></div>
           <div class="field"><label>تاريخ الانتهاء المتوقع</label><input type="date" id="pd_end" value="${p.endDate || ""}"></div>
@@ -570,6 +574,7 @@ function renderProjectDetail(el) {
     persist();
     document.getElementById("pd_locationLink").innerHTML = p.location ? locationDisplay(p.location) : "";
   };
+  document.getElementById("pd_district").onchange = (e) => { p.district = e.target.value; persist(); };
   document.getElementById("pd_useMyLocation").onclick = () => {
     if (!navigator.geolocation) { toast("المتصفح لا يدعم تحديد الموقع"); return; }
     toast("جارٍ تحديد الموقع...");
