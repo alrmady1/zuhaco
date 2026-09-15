@@ -8,24 +8,63 @@ function uid(prefix = "id") {
   return prefix + "_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
+/* ---------- التخزين المركزي (Vercel Postgres عبر /api/data) ----------
+   DB_CACHE نسخة في الذاكرة من كامل بيانات الخادم، تُحمَّل دفعة واحدة عبر
+   loadRemoteData() عند بدء التشغيل/بعد تسجيل الدخول. dbGet/dbSet تبقيان
+   متزامنتين (نفس الاستخدام في كل ملفات النظام دون أي تعديل) وتقرآن/تكتبان
+   من/إلى هذه النسخة مباشرة؛ dbSet ترسل أيضاً نسخة الخادم في الخلفية. */
+let DB_CACHE = {};
+let DB_READY = false;
+
 function dbGet(key, fallback) {
-  try {
-    const raw = localStorage.getItem(DB_PREFIX + key);
-    if (raw === null) return fallback;
-    return JSON.parse(raw);
-  } catch (e) {
-    console.error("dbGet error", key, e);
-    return fallback;
-  }
+  if (!DB_READY) return fallback;
+  return Object.prototype.hasOwnProperty.call(DB_CACHE, key) ? DB_CACHE[key] : fallback;
 }
 
 function dbSet(key, value) {
-  try {
-    localStorage.setItem(DB_PREFIX + key, JSON.stringify(value));
-  } catch (e) {
-    console.error("dbSet error", key, e);
-    alert("تعذر حفظ البيانات محلياً (قد تكون المساحة ممتلئة بسبب حجم الصور المرفوعة).");
+  DB_CACHE[key] = value;
+  fetch("/api/data", {
+    method: "POST",
+    headers: Object.assign({ "Content-Type": "application/json" }, authHeader()),
+    body: JSON.stringify({ key, value }),
+  }).then(res => {
+    if (!res.ok) throw new Error("http " + res.status);
+  }).catch(e => {
+    console.error("dbSet sync error", key, e);
+    toast("تعذّر حفظ آخر تعديل على الخادم — تحقق من الاتصال بالإنترنت");
+  });
+}
+
+function getAuthToken() {
+  return localStorage.getItem(DB_PREFIX + "authToken");
+}
+function setAuthToken(token) {
+  if (token) localStorage.setItem(DB_PREFIX + "authToken", token);
+  else localStorage.removeItem(DB_PREFIX + "authToken");
+}
+function authHeader() {
+  const t = getAuthToken();
+  return t ? { Authorization: "Bearer " + t } : {};
+}
+
+// يجلب كامل البيانات من الخادم ويملأ DB_CACHE بها — يُستدعى عند بدء التشغيل (إن وُجد توكن) وبعد كل تسجيل دخول ناجح
+async function loadRemoteData() {
+  const res = await fetch("/api/data", { headers: authHeader() });
+  if (res.status === 401) { setAuthToken(null); throw new Error("unauthorized"); }
+  if (!res.ok) throw new Error("http " + res.status);
+  DB_CACHE = await res.json();
+  DB_READY = true;
+}
+
+// يجمع كل بيانات localStorage القديمة (من قبل الانتقال للخادم) — تُستخدم مرة واحدة فقط في شاشة "الإعداد الأول"
+function collectLegacyLocalData() {
+  const out = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!k || k.indexOf(DB_PREFIX) !== 0 || k === DB_PREFIX + "authToken") continue;
+    try { out[k.slice(DB_PREFIX.length)] = JSON.parse(localStorage.getItem(k)); } catch (e) { /* تجاهل مفتاح تالف */ }
   }
+  return out;
 }
 
 function todayISO() {
@@ -305,11 +344,16 @@ function migrateClientTypes() {
   if (changed) dbSet("clients", clients);
 }
 
+// "من مسجّل دخول على هذا الجهاز تحديداً" يبقى محلياً عمداً (لا يُزامَن كباقي البيانات)
 function getCurrentUser() {
-  return dbGet("currentUser", null);
+  try {
+    const raw = localStorage.getItem(DB_PREFIX + "currentUser");
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
 }
 function setCurrentUser(u) {
-  dbSet("currentUser", u);
+  if (u) localStorage.setItem(DB_PREFIX + "currentUser", JSON.stringify(u));
+  else localStorage.removeItem(DB_PREFIX + "currentUser");
 }
 
 /* ---------- الإجازات (أنواعها وأحكامها حسب نظام العمل السعودي) ---------- */

@@ -1,2 +1,6 @@
 # ملفات إعدادات محلية خاصة بأداة التطوير (Claude Code) - غير قابلة للنقل بين الأجهزة
 .claude/
+
+# تبعيات Node.js (يُعاد تثبيتها تلقائياً على Vercel من package.json)
+node_modules/
+.vercel/

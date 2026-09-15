@@ -98,8 +98,27 @@ function initials(name) {
 }
 
 /* ---------- تسجيل الدخول ---------- */
-function renderLogin() {
-  const users = dbGet("users", []);
+async function renderLogin() {
+  document.getElementById("root").innerHTML = `<div class="login-wrap"><div class="login-card login-card-wide"><p class="sub">جارٍ التحميل...</p></div></div>`;
+
+  let users;
+  try {
+    const res = await fetch("/api/public-users");
+    if (!res.ok) throw new Error("http " + res.status);
+    users = await res.json();
+  } catch (e) {
+    document.getElementById("root").innerHTML = `
+      <div class="login-wrap"><div class="login-card login-card-wide">
+        <h1>تعذّر الاتصال بالخادم</h1>
+        <p class="sub">تحقق من اتصالك بالإنترنت ثم أعد المحاولة.</p>
+        <button class="btn primary" id="retryLoginLoad">إعادة المحاولة</button>
+      </div></div>`;
+    document.getElementById("retryLoginLoad").onclick = renderLogin;
+    return;
+  }
+
+  if (!users.length) { renderFirstTimeSetup(); return; }
+
   document.getElementById("root").innerHTML = `
     <div class="login-wrap">
       <div class="login-card login-card-wide">
@@ -120,23 +139,37 @@ function renderLogin() {
               <button class="btn sm primary" data-loginbtn="${u.id}">دخول</button>
             </div>`).join("")}
         </div>
-        <p class="sub" style="margin:16px 0 0">هذا عرض تجريبي: الرقم السري اختياري لكل موظف ويُدار من الإعدادات ← التحكم بالمستخدمين.</p>
+        <p class="sub" style="margin:16px 0 0">الرقم السري اختياري لكل موظف ويُدار من الإعدادات ← التحكم بالمستخدمين.</p>
       </div>
     </div>`;
 
-  function attemptLogin(id) {
-    const u = users.find(x => x.id === id);
-    if (!u) return;
+  async function attemptLogin(id) {
     const input = document.querySelector(`[data-passfor="${id}"]`);
     const entered = input ? input.value : "";
-    if (u.password && u.password !== entered) {
-      toast("الرقم السري غير صحيح");
-      if (input) { input.value = ""; input.focus(); }
-      return;
+    const btn = document.querySelector(`[data-loginbtn="${id}"]`);
+    if (btn) btn.disabled = true;
+    try {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, password: entered }),
+      });
+      if (!res.ok) {
+        toast("الرقم السري غير صحيح");
+        if (input) { input.value = ""; input.focus(); }
+        return;
+      }
+      const data = await res.json();
+      setAuthToken(data.token);
+      await loadRemoteData();
+      setCurrentUser(data.user);
+      location.hash = "#/dashboard";
+      renderApp();
+    } catch (e) {
+      toast("تعذّر الاتصال بالخادم لتسجيل الدخول");
+    } finally {
+      if (btn) btn.disabled = false;
     }
-    setCurrentUser(u);
-    location.hash = "#/dashboard";
-    renderApp();
   }
 
   document.querySelectorAll("[data-loginbtn]").forEach(b => b.onclick = () => attemptLogin(b.dataset.loginbtn));
@@ -145,10 +178,61 @@ function renderLogin() {
   });
 }
 
+// تُعرض فقط عندما تكون قاعدة البيانات المركزية فارغة كلياً (أول اتصال بها إطلاقاً)
+function renderFirstTimeSetup() {
+  document.getElementById("root").innerHTML = `
+    <div class="login-wrap">
+      <div class="login-card login-card-wide">
+        <div class="login-logo"><img src="logo.jpg" alt="شركة زهى الاعمال للمقاولات"></div>
+        <h1>شركة زهى الاعمال للمقاولات</h1>
+        <p class="sub">هذا أول اتصال بقاعدة البيانات المركزية — لم تُرفع أي بيانات بعد.</p>
+        <p class="sub">إن كان لديك بيانات محفوظة سابقاً في متصفح هذا الجهاز، اضغط الزر أدناه لرفعها لتصبح هي البيانات المركزية لكل الأجهزة.</p>
+        <button class="btn primary" id="uploadLegacyBtn">رفع بيانات هذا الجهاز إلى الخادم</button>
+        <p class="sub" id="uploadStatus" style="margin-top:10px"></p>
+      </div>
+    </div>`;
+
+  document.getElementById("uploadLegacyBtn").onclick = async () => {
+    const btn = document.getElementById("uploadLegacyBtn");
+    const status = document.getElementById("uploadStatus");
+    btn.disabled = true;
+    status.textContent = "جارٍ الرفع...";
+    try {
+      const legacy = collectLegacyLocalData();
+      legacy._initialized = true;
+      const res = await fetch("/api/data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bulk: legacy }),
+      });
+      if (!res.ok) throw new Error("http " + res.status);
+      status.textContent = "تم الرفع بنجاح، جارٍ إعادة التحميل...";
+      setTimeout(() => location.reload(), 1000);
+    } catch (e) {
+      status.textContent = "تعذّر الرفع — تحقق من الاتصال وحاول مرة أخرى.";
+      btn.disabled = false;
+    }
+  };
+}
+
 /* ---------- الهيكل العام ---------- */
+let APP_BOOTSTRAPPED = false;
 function renderApp() {
   const user = getCurrentUser();
   if (!user) { renderLogin(); return; }
+
+  // تُنفَّذ مرة واحدة فقط لكل تشغيل حقيقي للتطبيق (بعد اكتمال تحميل DB_CACHE من الخادم)
+  if (!APP_BOOTSTRAPPED) {
+    seedIfEmpty();
+    migrateClients();
+    migratePriceCatalog();
+    migrateProfitMargin();
+    migrateProjectsSchema();
+    migrateClientTypes();
+    checkProjectDeadlineNotifications();
+    checkVisitNotifications();
+    APP_BOOTSTRAPPED = true;
+  }
 
   const root = document.getElementById("root");
   root.innerHTML = `
@@ -191,6 +275,7 @@ function renderApp() {
 
   document.getElementById("logoutBtn").onclick = () => {
     setCurrentUser(null);
+    setAuthToken(null);
     location.hash = "";
     renderLogin();
   };
@@ -429,21 +514,36 @@ function renderDashboard(el) {
 
 /* ---------- بدء التشغيل ---------- */
 window.addEventListener("hashchange", router);
-window.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("DOMContentLoaded", async () => {
   applyTheme();
-  seedIfEmpty();
-  migrateClients();
-  migratePriceCatalog();
-  migrateProfitMargin();
-  migrateProjectsSchema();
-  migrateClientTypes();
-  checkProjectDeadlineNotifications();
-  checkVisitNotifications();
+
+  const token = getAuthToken();
+  if (token) {
+    document.getElementById("root").innerHTML = `<div class="login-wrap"><div class="login-card login-card-wide"><p class="sub">جارٍ تحميل بياناتك...</p></div></div>`;
+    try {
+      await loadRemoteData();
+    } catch (e) {
+      if (e.message === "unauthorized") {
+        setCurrentUser(null);
+      } else {
+        document.getElementById("root").innerHTML = `
+          <div class="login-wrap"><div class="login-card login-card-wide">
+            <h1>تعذّر الاتصال بالخادم</h1>
+            <p class="sub">تحقق من اتصالك بالإنترنت ثم أعد المحاولة.</p>
+            <button class="btn primary" id="retryBootBtn">إعادة المحاولة</button>
+          </div></div>`;
+        document.getElementById("retryBootBtn").onclick = () => location.reload();
+        return;
+      }
+    }
+  }
+
+  renderApp();
+
   setInterval(() => {
     if (!getCurrentUser()) return;
     checkProjectDeadlineNotifications();
     checkVisitNotifications();
     renderNotifBell(); // تحديث عداد التنبيهات فقط دون إعادة رسم الصفحة الحالية (حتى لا تُفقد أي بيانات قيد الإدخال)
   }, 5 * 60 * 1000); // إعادة فحص التنبيهات كل 5 دقائق أثناء بقاء التطبيق مفتوحاً
-  renderApp();
 });

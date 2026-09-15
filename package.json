@@ -1,0 +1,10 @@
+{
+  "name": "zaha-amal-contracting",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "نظام إدارة مشاريع شركة زهى الاعمال للمقاولات — واجهة ثابتة مع دوال خادم (Vercel Functions) لقاعدة بيانات مركزية",
+  "dependencies": {
+    "@vercel/postgres": "^0.10.0"
+  }
+}
