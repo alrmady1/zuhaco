@@ -521,13 +521,35 @@ function renderLeavesTab(el) {
 }
 
 /* ---------- تبويب المركبات ---------- */
+const VEHICLE_OWNERSHIP_OPTIONS = ["ملكية الشركة", "مستأجرة"];
+const VEHICLE_RENTAL_PERIODS = ["شهري", "يومي"];
+
 function renderVehiclesTab(el) {
   const vehicles = dbGet("vehicles", []);
   const users = dbGet("users", []);
+  const companyName = getCompanyProfile().name || "الشركة";
 
   function employeeOptions(selectedId) {
     return `<option value="">— بدون تحديد —</option>` +
       users.map(u => `<option value="${u.id}" ${selectedId === u.id ? "selected" : ""}>${u.name} — ${u.role}</option>`).join("");
+  }
+
+  function ownershipDetailsCell(v) {
+    if (v.ownership === "مستأجرة") {
+      return `
+        <div class="flex" style="flex-direction:column;gap:5px;min-width:170px">
+          <input value="${v.lessorName || ""}" placeholder="اسم الشركة المؤجرة" data-editv="${v.id}:lessorName" style="border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-size:11.5px">
+          <input type="date" value="${v.rentalStart || ""}" data-editv="${v.id}:rentalStart" style="border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-size:11.5px">
+          <input value="${v.rentalDuration || ""}" placeholder="مدة العقد" data-editv="${v.id}:rentalDuration" style="border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-size:11.5px">
+          <div class="flex" style="gap:5px">
+            <select data-editv="${v.id}:rentalPeriod" style="border:1px solid var(--border);border-radius:6px;padding:4px 5px;font-size:11.5px">
+              ${VEHICLE_RENTAL_PERIODS.map(p => `<option value="${p}" ${v.rentalPeriod === p ? "selected" : ""}>${p}</option>`).join("")}
+            </select>
+            <input type="number" min="0" step="0.01" value="${v.rentalAmount || ""}" placeholder="المبلغ" data-editv="${v.id}:rentalAmount" style="border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-size:11.5px;width:90px">
+          </div>
+        </div>`;
+    }
+    return `<span class="text-muted" style="font-size:11.5px">المالك: ${companyName}</span>`;
   }
 
   el.innerHTML = `
@@ -536,17 +558,21 @@ function renderVehiclesTab(el) {
       <div class="grid cols-3">
         <div class="field"><label>نوع السيارة</label><input id="v_type" placeholder="مثال: بيك أب تويوتا هايلكس"></div>
         <div class="field"><label>الموديل</label><input id="v_model" placeholder="مثال: 2022"></div>
-        <div class="field"><label>الملكية</label><input id="v_ownership" placeholder="مثال: ملك الشركة"></div>
+        <div class="field"><label>الملكية</label>
+          <select id="v_ownership">${VEHICLE_OWNERSHIP_OPTIONS.map(o => `<option value="${o}">${o}</option>`).join("")}</select>
+        </div>
         <div class="field"><label>رقم الاستمارة</label><input id="v_regNumber"></div>
         <div class="field"><label>رقم الهيكل</label><input id="v_chassisNumber"></div>
         <div class="field">
           <label>الموظف المرتبط بالمركبة</label>
           <select id="v_employee">${employeeOptions("")}</select>
         </div>
-        <div class="field" style="grid-column:span 3">
-          <label>صورة استمارة السيارة</label>
-          <input type="file" id="v_regImage" accept="image/*">
-        </div>
+      </div>
+      <div id="v_ownershipNote" class="card" style="background:#f4f5f7;padding:10px 14px;margin-bottom:14px"></div>
+      <div id="v_rentalFields"></div>
+      <div class="field">
+        <label>صورة استمارة السيارة</label>
+        <input type="file" id="v_regImage" accept="image/*">
       </div>
       <button class="btn primary" id="addVehicleBtn">+ إضافة مركبة</button>
     </div>
@@ -555,13 +581,18 @@ function renderVehiclesTab(el) {
       <h3>المركبات المسجلة (${vehicles.length})</h3>
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>نوع السيارة</th><th>الموديل</th><th>الملكية</th><th>رقم الاستمارة</th><th>رقم الهيكل</th><th>الموظف المرتبط</th><th>صورة الاستمارة</th><th></th></tr></thead>
+          <thead><tr><th>نوع السيارة</th><th>الموديل</th><th>الملكية</th><th>تفاصيل الملكية</th><th>رقم الاستمارة</th><th>رقم الهيكل</th><th>الموظف المرتبط</th><th>صورة الاستمارة</th><th></th></tr></thead>
           <tbody>
             ${vehicles.length ? vehicles.map(v => `
               <tr>
                 <td><input value="${v.type || ""}" data-editv="${v.id}:type" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;width:100%;min-width:130px"></td>
                 <td><input value="${v.model || ""}" data-editv="${v.id}:model" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;width:90px"></td>
-                <td><input value="${v.ownership || ""}" data-editv="${v.id}:ownership" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;width:110px"></td>
+                <td>
+                  <select data-vownersel="${v.id}" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12.5px">
+                    ${VEHICLE_OWNERSHIP_OPTIONS.map(o => `<option value="${o}" ${v.ownership === o ? "selected" : ""}>${o}</option>`).join("")}
+                  </select>
+                </td>
+                <td>${ownershipDetailsCell(v)}</td>
                 <td><input value="${v.regNumber || ""}" data-editv="${v.id}:regNumber" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;width:110px"></td>
                 <td><input value="${v.chassisNumber || ""}" data-editv="${v.id}:chassisNumber" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;width:130px"></td>
                 <td>
@@ -574,12 +605,36 @@ function renderVehiclesTab(el) {
                   <input type="file" accept="image/*" data-vimg="${v.id}" style="display:block;margin-top:6px;font-size:11px;max-width:130px">
                 </td>
                 <td><button class="btn sm danger" data-delveh="${v.id}">حذف</button></td>
-              </tr>`).join("") : `<tr><td colspan="8"><div class="empty-state"><div class="ic">🚙</div>لا توجد مركبات مسجلة بعد</div></td></tr>`}
+              </tr>`).join("") : `<tr><td colspan="9"><div class="empty-state"><div class="ic">🚙</div>لا توجد مركبات مسجلة بعد</div></td></tr>`}
           </tbody>
         </table>
       </div>
     </div>
   `;
+
+  const ownershipSelect = document.getElementById("v_ownership");
+  const ownershipNote = document.getElementById("v_ownershipNote");
+  const rentalFieldsBox = document.getElementById("v_rentalFields");
+
+  function syncOwnershipFields() {
+    if (ownershipSelect.value === "مستأجرة") {
+      ownershipNote.style.display = "none";
+      rentalFieldsBox.innerHTML = `
+        <div class="grid cols-3">
+          <div class="field"><label>اسم الشركة المؤجرة</label><input id="v_lessorName"></div>
+          <div class="field"><label>بداية العقد</label><input type="date" id="v_rentalStart"></div>
+          <div class="field"><label>مدة العقد</label><input id="v_rentalDuration" placeholder="مثال: 12 شهر"></div>
+          <div class="field"><label>نوع المبلغ</label><select id="v_rentalPeriod">${VEHICLE_RENTAL_PERIODS.map(p => `<option value="${p}">${p}</option>`).join("")}</select></div>
+          <div class="field"><label>المبلغ (ر.س)</label><input type="number" min="0" step="0.01" id="v_rentalAmount"></div>
+        </div>`;
+    } else {
+      rentalFieldsBox.innerHTML = "";
+      ownershipNote.style.display = "";
+      ownershipNote.innerHTML = `<span class="text-muted" style="font-size:12.5px">المالك: ${companyName}</span>`;
+    }
+  }
+  ownershipSelect.onchange = syncOwnershipFields;
+  syncOwnershipFields();
 
   let pendingNewImage = null;
   document.getElementById("v_regImage").onchange = async (e) => {
@@ -590,16 +645,24 @@ function renderVehiclesTab(el) {
   document.getElementById("addVehicleBtn").onclick = () => {
     const type = document.getElementById("v_type").value.trim();
     const model = document.getElementById("v_model").value.trim();
-    const ownership = document.getElementById("v_ownership").value.trim();
+    const ownership = ownershipSelect.value;
     const regNumber = document.getElementById("v_regNumber").value.trim();
     const chassisNumber = document.getElementById("v_chassisNumber").value.trim();
     const employeeId = document.getElementById("v_employee").value;
     if (!type) { toast("يرجى إدخال نوع السيارة"); return; }
-    const list = dbGet("vehicles", []);
-    list.push({
+    const vehicle = {
       id: uid("veh"), type, model, ownership, regNumber, chassisNumber, employeeId,
       regImage: pendingNewImage, createdAt: new Date().toISOString(),
-    });
+    };
+    if (ownership === "مستأجرة") {
+      vehicle.lessorName = document.getElementById("v_lessorName").value.trim();
+      vehicle.rentalStart = document.getElementById("v_rentalStart").value;
+      vehicle.rentalDuration = document.getElementById("v_rentalDuration").value.trim();
+      vehicle.rentalPeriod = document.getElementById("v_rentalPeriod").value;
+      vehicle.rentalAmount = Number(document.getElementById("v_rentalAmount").value) || 0;
+    }
+    const list = dbGet("vehicles", []);
+    list.push(vehicle);
     dbSet("vehicles", list);
     logActivity(`تم إضافة مركبة جديدة "${type}"${model ? " موديل " + model : ""}`);
     toast("تم إضافة المركبة");
@@ -614,9 +677,16 @@ function renderVehiclesTab(el) {
   el.querySelectorAll("[data-editv]").forEach(inp => inp.onchange = () => {
     const [id, field] = inp.dataset.editv.split(":");
     const { list, v } = getVehicle(id);
-    v[field] = inp.value.trim();
+    v[field] = field === "rentalAmount" ? (Number(inp.value) || 0) : inp.value.trim ? inp.value.trim() : inp.value;
     dbSet("vehicles", list);
     toast("تم الحفظ");
+  });
+
+  el.querySelectorAll("[data-vownersel]").forEach(sel => sel.onchange = () => {
+    const { list, v } = getVehicle(sel.dataset.vownersel);
+    v.ownership = sel.value;
+    dbSet("vehicles", list);
+    renderSettings(el.parentElement);
   });
 
   el.querySelectorAll("[data-vempsel]").forEach(sel => sel.onchange = () => {
