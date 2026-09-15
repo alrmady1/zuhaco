@@ -10,6 +10,7 @@ const ACC_TYPE_BADGE = {
   "إيراد مشروع": "green", "فاتورة ضريبية": "green",
   "دفعة مشتريات": "blue", "مصروف مواد": "orange", "مصروف عمال": "orange", "مصروف نثرية": "gray",
 };
+const PAYMENT_METHODS = ["تحويل بنكي", "كاش", "شبكة"];
 /* ---------- قائمة المصاريف والعهد (تصنيفات المصاريف الإدارية وبنودها الفرعية) ---------- */
 function defaultExpenseCatalog() {
   const mk = (name, itemNames) => ({ id: uid("ecat"), name, items: (itemNames || []).map(n => ({ id: uid("eit"), name: n })) });
@@ -44,9 +45,12 @@ function renderAccProjects(el) {
   const project = projects.find(p => p.id === ACC_SELECTED_PROJECT);
   const entries = dbGet("accProjects", []).filter(e => e.projectId === ACC_SELECTED_PROJECT).sort((a, b) => (b.date > a.date ? 1 : -1));
 
+  const EXPENSE_TYPES = ["دفعة مشتريات", "مصروف مواد", "مصروف عمال", "مصروف نثرية"];
   const revenue = entries.filter(e => e.type === "إيراد مشروع" || e.type === "فاتورة ضريبية").reduce((s, e) => s + Number(e.amount || 0), 0);
-  const expenses = entries.filter(e => ["دفعة مشتريات", "مصروف مواد", "مصروف عمال", "مصروف نثرية"].includes(e.type)).reduce((s, e) => s + Number(e.amount || 0), 0);
+  const expenses = entries.filter(e => EXPENSE_TYPES.includes(e.type)).reduce((s, e) => s + Number(e.amount || 0), 0);
   const net = revenue - expenses;
+  const expenseByType = {};
+  EXPENSE_TYPES.forEach(t => expenseByType[t] = entries.filter(e => e.type === t).reduce((s, e) => s + Number(e.amount || 0), 0));
 
   el.innerHTML = `
     <div class="section-title-row">
@@ -62,6 +66,10 @@ function renderAccProjects(el) {
       <div class="stat-card"><div class="label">صافي الربح</div><div class="value ${net >= 0 ? "success" : "danger"}">${fmtMoney(net)}</div></div>
     </div>
 
+    <div class="grid cols-4" style="margin-bottom:18px">
+      ${EXPENSE_TYPES.map(t => `<div class="stat-card"><div class="label">${t}</div><div class="value danger">${fmtMoney(expenseByType[t])}</div></div>`).join("")}
+    </div>
+
     <div class="card">
       <div class="flex between wrap" style="margin-bottom:10px">
         <h3 class="mt-0">حركة الحساب — ${project ? project.name : ""}</h3>
@@ -73,7 +81,7 @@ function renderAccProjects(el) {
       ${entries.length ? `
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>النوع</th><th>المبلغ</th><th>ضريبة القيمة المضافة</th><th>التاريخ</th><th>ملاحظات</th><th></th></tr></thead>
+          <thead><tr><th>النوع</th><th>المبلغ</th><th>ضريبة القيمة المضافة</th><th>التاريخ</th><th>ملاحظات</th><th>المرفق</th><th></th></tr></thead>
           <tbody>
             ${entries.map(e => `
               <tr>
@@ -81,7 +89,12 @@ function renderAccProjects(el) {
                 <td><strong>${fmtMoney(e.amount)}</strong></td>
                 <td>${e.vatApplicable ? `<span class="badge blue">خاضع (${fmtMoney(e.vatAmount || Number(e.amount) * VAT_RATE)})</span>` : `<span class="badge gray">غير خاضع</span>`}</td>
                 <td>${fmtDate(e.date)}</td>
-                <td class="text-muted">${e.note || (e.invoiceNumber ? "فاتورة رقم " + e.invoiceNumber : "-")}</td>
+                <td class="text-muted">
+                  ${e.note || (e.invoiceNumber ? "فاتورة رقم " + e.invoiceNumber : "-")}
+                  ${e.vendorName ? `<br><span style="font-size:11px">التاجر: ${e.vendorName}${e.invoiceRefNumber ? " — فاتورة رقم " + e.invoiceRefNumber : ""}</span>` : ""}
+                  ${e.paymentMethod ? `<br><span class="badge gray" style="font-size:10.5px">${e.paymentMethod}</span>` : ""}
+                </td>
+                <td>${e.attachment ? `<a href="${e.attachment.url}" target="_blank" rel="noopener" class="badge blue" style="text-decoration:none">📎 عرض المرفق</a>` : "-"}</td>
                 <td>
                   ${e.type === "فاتورة ضريبية" ? `<button class="btn sm" data-printinv="${e.id}">طباعة</button>` : ""}
                   <button class="btn sm danger" data-delentry="${e.id}">حذف</button>
@@ -116,6 +129,7 @@ function openAccEntryModal(el) {
       <div class="field"><label>المبلغ (ر.س)</label><input type="number" min="0" step="0.01" id="e_amount"></div>
       <div class="field"><label>التاريخ</label><input type="date" id="e_date" value="${todayISO()}"></div>
     </div>
+    <div id="e_extra"></div>
     <div class="field"><label><input type="checkbox" id="e_vat" style="width:auto;display:inline-block"> خاضع لضريبة القيمة المضافة (15%)</label></div>
     <div class="field"><label>ملاحظات</label><textarea id="e_note"></textarea></div>
     <div class="flex gap"><button class="btn primary" id="e_save">حفظ</button><button class="btn" id="e_cancel">إلغاء</button></div>
@@ -123,19 +137,73 @@ function openAccEntryModal(el) {
   const ov = openModalShell(html);
   ov.querySelector("#mClose").onclick = closeModal;
   ov.querySelector("#e_cancel").onclick = closeModal;
+
+  const typeSelect = ov.querySelector("#e_type");
+  const extraBox = ov.querySelector("#e_extra");
+  let attachment = null;
+
+  function renderExtra() {
+    const type = typeSelect.value;
+    if (type === "دفعة مشتريات") {
+      extraBox.innerHTML = `
+        <div class="grid cols-2">
+          <div class="field"><label>رقم الفاتورة</label><input id="e_invoiceRef"></div>
+          <div class="field"><label>طريقة السداد</label><select id="e_paymentMethod">${PAYMENT_METHODS.map(m => `<option value="${m}">${m}</option>`).join("")}</select></div>
+        </div>
+        <div class="field"><label>اسم التاجر / المورّد</label><input id="e_vendor"></div>
+        <div class="field">
+          <label>صورة الفاتورة أو إيصال التحويل (اختياري)</label>
+          <input type="file" id="e_attachment" accept=".pdf,image/*">
+          <div id="e_attachmentPreview" class="flex wrap" style="margin-top:8px"></div>
+        </div>
+      `;
+      wireAttachment();
+    } else if (type === "إيراد مشروع") {
+      extraBox.innerHTML = `
+        <div class="field"><label>طريقة الاستلام</label><select id="e_paymentMethod">${PAYMENT_METHODS.map(m => `<option value="${m}">${m}</option>`).join("")}</select></div>
+      `;
+    } else {
+      extraBox.innerHTML = "";
+    }
+  }
+
+  function wireAttachment() {
+    const input = ov.querySelector("#e_attachment");
+    if (!input) return;
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) { attachment = null; ov.querySelector("#e_attachmentPreview").innerHTML = ""; return; }
+      const url = await fileToDataURL(file);
+      attachment = { name: file.name, type: file.type, url };
+      ov.querySelector("#e_attachmentPreview").innerHTML = `<span class="file-chip">📎 ${file.name}</span>`;
+    };
+  }
+
+  typeSelect.onchange = renderExtra;
+  renderExtra();
+
   ov.querySelector("#e_save").onclick = () => {
     const amount = Number(ov.querySelector("#e_amount").value) || 0;
     if (amount <= 0) { toast("يرجى إدخال مبلغ صحيح"); return; }
     const vatApplicable = ov.querySelector("#e_vat").checked;
-    const entries = dbGet("accProjects", []);
-    entries.push({
-      id: uid("ae"), projectId: ACC_SELECTED_PROJECT, type: ov.querySelector("#e_type").value,
+    const type = typeSelect.value;
+    const entry = {
+      id: uid("ae"), projectId: ACC_SELECTED_PROJECT, type,
       amount, vatApplicable, vatAmount: vatApplicable ? amount * VAT_RATE : 0,
       date: ov.querySelector("#e_date").value || todayISO(), note: ov.querySelector("#e_note").value.trim(),
-    });
+    };
+    const paymentSelect = ov.querySelector("#e_paymentMethod");
+    if (paymentSelect) entry.paymentMethod = paymentSelect.value;
+    if (type === "دفعة مشتريات") {
+      entry.invoiceRefNumber = ov.querySelector("#e_invoiceRef").value.trim();
+      entry.vendorName = ov.querySelector("#e_vendor").value.trim();
+      entry.attachment = attachment;
+    }
+    const entries = dbGet("accProjects", []);
+    entries.push(entry);
     dbSet("accProjects", entries);
     const projectName = (dbGet("projects", []).find(p => p.id === ACC_SELECTED_PROJECT) || {}).name || "";
-    logActivity(`تم تسجيل حركة "${ov.querySelector("#e_type").value}" بقيمة ${fmtMoney(amount)} لمشروع "${projectName}"`);
+    logActivity(`تم تسجيل حركة "${type}" بقيمة ${fmtMoney(amount)} لمشروع "${projectName}"`);
     toast("تم إضافة الحركة المالية");
     closeModal();
     renderAccProjects(el);
