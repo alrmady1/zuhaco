@@ -207,8 +207,8 @@ function printInvoice(id) {
   ov.querySelector("#printBtn").onclick = () => window.print();
 }
 
-/* ================= المحاسبة العامة ================= */
-let ACC_GENERAL_TAB = "expenses"; // expenses | custody
+/* ================= المحاسبة العامة (العهد والمصروفات) ================= */
+let ACC_GENERAL_TAB = "expenses"; // expenses | custody | projects | vat
 
 function renderAccGeneral(el) {
   el.innerHTML = `
@@ -216,6 +216,8 @@ function renderAccGeneral(el) {
     <div class="tabs">
       <div class="tab-btn ${ACC_GENERAL_TAB === "expenses" ? "active" : ""}" data-gtab="expenses">المصاريف الإدارية</div>
       <div class="tab-btn ${ACC_GENERAL_TAB === "custody" ? "active" : ""}" data-gtab="custody">العهد</div>
+      <div class="tab-btn ${ACC_GENERAL_TAB === "projects" ? "active" : ""}" data-gtab="projects">المشاريع</div>
+      <div class="tab-btn ${ACC_GENERAL_TAB === "vat" ? "active" : ""}" data-gtab="vat">الضريبة</div>
     </div>
     <div id="accGeneralBody"></div>
   `;
@@ -223,14 +225,170 @@ function renderAccGeneral(el) {
 
   const body = document.getElementById("accGeneralBody");
   if (ACC_GENERAL_TAB === "custody") renderCustodyTab(body);
+  else if (ACC_GENERAL_TAB === "projects") renderAccGeneralProjectsTab(body);
+  else if (ACC_GENERAL_TAB === "vat") renderAccGeneralVatTab(body);
   else renderGeneralExpensesTab(body);
+}
+
+/* ---------- تبويب المشاريع (إيرادات وتفاصيل مالية للمشاريع النشطة والمنتهية) ---------- */
+function renderAccGeneralProjectsTab(el) {
+  const projects = dbGet("projects", []);
+  const entries = dbGet("accProjects", []);
+
+  function statsFor(projectId) {
+    const list = entries.filter(e => e.projectId === projectId);
+    const revenue = list.filter(e => e.type === "إيراد مشروع" || e.type === "فاتورة ضريبية").reduce((s, e) => s + Number(e.amount || 0), 0);
+    const expenses = list.filter(e => ["دفعة مشتريات", "مصروف مواد", "مصروف عمال", "مصروف نثرية"].includes(e.type)).reduce((s, e) => s + Number(e.amount || 0), 0);
+    return { revenue, expenses, net: revenue - expenses };
+  }
+
+  function tableFor(list, emptyMsg) {
+    if (!list.length) return `<div class="empty-state"><div class="ic">📁</div>${emptyMsg}</div>`;
+    let totalRev = 0, totalExp = 0;
+    const rows = list.map(p => {
+      const s = statsFor(p.id); totalRev += s.revenue; totalExp += s.expenses;
+      return `<tr>
+        <td>${p.name}</td>
+        <td>${statusBadge2(p.status)}</td>
+        <td class="text-muted">${p.client || "-"}</td>
+        <td><strong class="success">${fmtMoney(s.revenue)}</strong></td>
+        <td><strong class="danger">${fmtMoney(s.expenses)}</strong></td>
+        <td><strong class="${s.net >= 0 ? "success" : "danger"}">${fmtMoney(s.net)}</strong></td>
+      </tr>`;
+    }).join("");
+    return `<div class="table-wrap"><table class="data-table">
+      <thead><tr><th>المشروع</th><th>الحالة</th><th>العميل</th><th>الإيرادات</th><th>المصاريف</th><th>صافي الربح</th></tr></thead>
+      <tbody>${rows}
+      <tr style="font-weight:800"><td colspan="3">الإجمالي</td><td class="success">${fmtMoney(totalRev)}</td><td class="danger">${fmtMoney(totalExp)}</td><td class="${totalRev - totalExp >= 0 ? "success" : "danger"}">${fmtMoney(totalRev - totalExp)}</td></tr>
+      </tbody></table></div>`;
+  }
+
+  const active = projects.filter(p => p.status !== "مكتمل");
+  const finished = projects.filter(p => p.status === "مكتمل");
+
+  el.innerHTML = `
+    <div class="card"><h3 class="mt-0">المشاريع النشطة (${active.length})</h3>${tableFor(active, "لا توجد مشاريع نشطة")}</div>
+    <div class="card"><h3 class="mt-0">المشاريع المنتهية (${finished.length})</h3>${tableFor(finished, "لا توجد مشاريع منتهية بعد")}</div>
+  `;
+}
+
+/* ---------- تبويب الضريبة (تفصيل ربع سنوي جاهز لإقرار هيئة الزكاة والضريبة والجمارك) ---------- */
+function renderAccGeneralVatTab(el) {
+  const now = new Date();
+  if (!renderAccGeneralVatTab.year) renderAccGeneralVatTab.year = now.getFullYear();
+  if (!renderAccGeneralVatTab.quarter) renderAccGeneralVatTab.quarter = Math.ceil((now.getMonth() + 1) / 3);
+  const year = renderAccGeneralVatTab.year, quarter = renderAccGeneralVatTab.quarter;
+
+  const inRange = (dateStr) => new Date(dateStr).getFullYear() === year && quarterOf(dateStr) === quarter;
+  const projEntries = dbGet("accProjects", []).filter(e => e.vatApplicable && inRange(e.date));
+  const genEntries = dbGet("accGeneral", []).filter(e => e.vatApplicable && inRange(e.date));
+
+  const revenueEntries = projEntries.filter(e => e.type === "إيراد مشروع" || e.type === "فاتورة ضريبية")
+    .slice().sort((a, b) => (a.date > b.date ? 1 : -1));
+  const purchaseEntries = [
+    ...projEntries.filter(e => ["دفعة مشتريات", "مصروف مواد", "مصروف عمال", "مصروف نثرية"].includes(e.type)),
+    ...genEntries,
+  ].slice().sort((a, b) => (a.date > b.date ? 1 : -1));
+
+  const outputSales = revenueEntries.reduce((s, e) => s + Number(e.amountBeforeTax ?? e.amount), 0);
+  const outputVat = revenueEntries.reduce((s, e) => s + Number(e.vatAmount || 0), 0);
+  const inputPurchases = purchaseEntries.reduce((s, e) => s + Number(e.amount), 0);
+  const inputVat = purchaseEntries.reduce((s, e) => s + Number(e.vatAmount || 0), 0);
+  const net = outputVat - inputVat;
+
+  function projectNameOf(e) { return (dbGet("projects", []).find(p => p.id === e.projectId) || {}).name || "-"; }
+
+  el.innerHTML = `
+    <div class="card no-print">
+      <div class="flex gap wrap" style="align-items:flex-end">
+        <div class="field" style="margin-bottom:0"><label>السنة</label><input type="number" id="tvatYear" value="${year}" style="width:110px"></div>
+        <div class="field" style="margin-bottom:0"><label>الربع</label>
+          <select id="tvatQuarter" style="width:150px">
+            ${[1, 2, 3, 4].map(q => `<option value="${q}" ${q === quarter ? "selected" : ""}>الربع ${q} (${["يناير-مارس", "أبريل-يونيو", "يوليو-سبتمبر", "أكتوبر-ديسمبر"][q - 1]})</option>`).join("")}
+          </select>
+        </div>
+        <button class="btn" id="tvatGo">عرض</button>
+        <button class="btn primary" id="tvatPrint" style="margin-inline-start:auto">🖨️ طباعة التقرير</button>
+      </div>
+      <p class="text-muted" style="font-size:12px;margin:10px 0 0">تفصيل جاهز لتعبئة إقرار ضريبة القيمة المضافة الربع سنوي في بوابة هيئة الزكاة والضريبة والجمارك (ZATCA) — التقديم الفعلي يتم يدوياً عبر بوابة الهيئة.</p>
+    </div>
+
+    <div class="card">
+      <h3 class="mt-0">الإيرادات الخاضعة للضريبة (${revenueEntries.length})</h3>
+      ${revenueEntries.length ? `
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>التاريخ</th><th>المشروع</th><th>البيان</th><th>المبلغ قبل الضريبة</th><th>الضريبة (15%)</th><th>الإجمالي</th></tr></thead>
+          <tbody>
+            ${revenueEntries.map(e => `
+              <tr>
+                <td>${fmtDate(e.date)}</td>
+                <td>${projectNameOf(e)}</td>
+                <td class="text-muted">${e.type === "فاتورة ضريبية" ? "فاتورة رقم " + e.invoiceNumber + (e.client ? " — " + e.client : "") : (e.note || e.type)}</td>
+                <td>${fmtMoney(e.amountBeforeTax ?? e.amount)}</td>
+                <td>${fmtMoney(e.vatAmount || 0)}</td>
+                <td><strong>${fmtMoney((e.amountBeforeTax ?? e.amount) + Number(e.vatAmount || 0))}</strong></td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>` : `<div class="empty-state"><div class="ic">💰</div>لا توجد إيرادات خاضعة للضريبة في هذا الربع</div>`}
+    </div>
+
+    <div class="card">
+      <h3 class="mt-0">المشتريات والمصاريف الخاضعة للضريبة (${purchaseEntries.length})</h3>
+      ${purchaseEntries.length ? `
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>التاريخ</th><th>البيان</th><th>المبلغ قبل الضريبة</th><th>الضريبة (15%)</th><th>الإجمالي</th></tr></thead>
+          <tbody>
+            ${purchaseEntries.map(e => `
+              <tr>
+                <td>${fmtDate(e.date)}</td>
+                <td class="text-muted">${e.projectId ? projectNameOf(e) + " — " + e.type : e.category + (generalExpenseSubtitle(e) ? " — " + generalExpenseSubtitle(e) : "")}</td>
+                <td>${fmtMoney(e.amount)}</td>
+                <td>${fmtMoney(e.vatAmount || 0)}</td>
+                <td><strong>${fmtMoney(Number(e.amount) + Number(e.vatAmount || 0))}</strong></td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>` : `<div class="empty-state"><div class="ic">🧾</div>لا توجد مشتريات خاضعة للضريبة في هذا الربع</div>`}
+    </div>
+
+    <div class="grid cols-2" style="margin-bottom:18px">
+      <div class="card">
+        <h3>ضريبة المخرجات (المبيعات)</h3>
+        <div class="kv-row"><span class="k">إجمالي المبيعات الخاضعة للضريبة</span><span class="v">${fmtMoney(outputSales)}</span></div>
+        <div class="kv-row"><span class="k">ضريبة المخرجات (15%)</span><span class="v">${fmtMoney(outputVat)}</span></div>
+      </div>
+      <div class="card">
+        <h3>ضريبة المدخلات (المشتريات والمصاريف)</h3>
+        <div class="kv-row"><span class="k">إجمالي المشتريات الخاضعة للضريبة</span><span class="v">${fmtMoney(inputPurchases)}</span></div>
+        <div class="kv-row"><span class="k">ضريبة المدخلات (15%)</span><span class="v">${fmtMoney(inputVat)}</span></div>
+      </div>
+    </div>
+
+    <div class="grand-total-box">
+      <div>${net >= 0 ? "صافي الضريبة المستحقة للهيئة" : "صافي الضريبة القابلة للاسترداد"}</div>
+      <div class="num">${fmtMoney(Math.abs(net))}</div>
+    </div>
+  `;
+
+  document.getElementById("tvatGo").onclick = () => {
+    renderAccGeneralVatTab.year = Number(document.getElementById("tvatYear").value) || year;
+    renderAccGeneralVatTab.quarter = Number(document.getElementById("tvatQuarter").value) || quarter;
+    renderAccGeneralVatTab(el);
+  };
+  document.getElementById("tvatPrint").onclick = () => window.print();
 }
 
 function generalExpenseSubtitle(e) {
   if (e.category === "رواتب" && e.employeeName) {
     return `${e.employeeName}${e.salaryMonth ? " — راتب شهر " + salaryMonthLabel(e.salaryMonth) : ""}`;
   }
-  return e.subItem || "";
+  const parts = [];
+  if (e.subItem) parts.push(e.subItem);
+  if (e.facilityName) parts.push("المرفق: " + e.facilityName);
+  return parts.join(" — ");
 }
 
 function salaryMonthLabel(ym) {
@@ -539,6 +697,17 @@ function openGeneralExpenseModal(el) {
         </div>
       ` : "";
     }
+    const facilities = dbGet("facilities", []);
+    if (facilities.length) {
+      extraBox.innerHTML += `
+        <div class="field"><label>المرفق المرتبط (اختياري)</label>
+          <select id="g_facility">
+            <option value="">— بدون تحديد —</option>
+            ${facilities.map(f => `<option value="${f.id}">${f.name}${f.type ? " — " + f.type : ""}</option>`).join("")}
+          </select>
+        </div>
+      `;
+    }
   }
   renderExtraFields();
   catSelect.onchange = renderExtraFields;
@@ -567,6 +736,11 @@ function openGeneralExpenseModal(el) {
     } else {
       const subSelect = ov.querySelector("#g_subItem");
       if (subSelect && subSelect.value) { entry.subItem = subSelect.value; logSuffix = ` (${subSelect.value})`; }
+    }
+    const facilitySelect = ov.querySelector("#g_facility");
+    if (facilitySelect && facilitySelect.value) {
+      const facility = dbGet("facilities", []).find(f => f.id === facilitySelect.value);
+      if (facility) { entry.facilityId = facility.id; entry.facilityName = facility.name; logSuffix += ` — المرفق: ${facility.name}`; }
     }
     list.push(entry);
     dbSet("accGeneral", list);

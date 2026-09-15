@@ -40,6 +40,45 @@ const PAGE_TITLES = {
   settings: "الإعدادات",
 };
 
+/* ---------- تطبيق إعدادات المظهر (الألوان والخط وحجمه والأيقونات) ---------- */
+const FONT_OPTIONS = {
+  Cairo: { label: "Cairo (افتراضي)", stack: "'Cairo','Segoe UI',Tahoma,sans-serif" },
+  Tajawal: { label: "Tajawal", stack: "'Tajawal','Segoe UI',Tahoma,sans-serif", googleFamily: "Tajawal:wght@400;500;700;800" },
+  Almarai: { label: "Almarai", stack: "'Almarai','Segoe UI',Tahoma,sans-serif", googleFamily: "Almarai:wght@400;700;800" },
+  "IBM Plex Sans Arabic": { label: "IBM Plex Sans Arabic", stack: "'IBM Plex Sans Arabic','Segoe UI',Tahoma,sans-serif", googleFamily: "IBM+Plex+Sans+Arabic:wght@400;500;600;700" },
+};
+const FONT_SIZE_OPTIONS = { small: { label: "صغير", scale: "92%" }, medium: { label: "متوسط (افتراضي)", scale: "100%" }, large: { label: "كبير", scale: "110%" }, xlarge: { label: "كبير جداً", scale: "122%" } };
+
+function ensureFontLoaded(fontKey) {
+  const def = FONT_OPTIONS[fontKey];
+  if (!def || !def.googleFamily) return;
+  const linkId = "dynFont_" + fontKey.replace(/\s+/g, "");
+  if (document.getElementById(linkId)) return;
+  const link = document.createElement("link");
+  link.id = linkId;
+  link.rel = "stylesheet";
+  link.href = `https://fonts.googleapis.com/css2?family=${def.googleFamily}&display=swap`;
+  document.head.appendChild(link);
+}
+
+function applyTheme() {
+  const t = getThemeSettings();
+  const root = document.documentElement;
+  root.style.setProperty("--primary", t.primaryColor);
+  root.style.setProperty("--primary-dark", shadeColor(t.primaryColor, -0.2));
+  root.style.setProperty("--primary-light", shadeColor(t.primaryColor, 0.75));
+  root.style.setProperty("--sidebar-bg", t.sidebarColor);
+  root.style.setProperty("--sidebar-active", t.primaryColor);
+
+  const fontDef = FONT_OPTIONS[t.fontFamily] || FONT_OPTIONS.Cairo;
+  ensureFontLoaded(t.fontFamily);
+  document.body.style.fontFamily = fontDef.stack;
+
+  document.documentElement.style.zoom = (FONT_SIZE_OPTIONS[t.fontSize] || FONT_SIZE_OPTIONS.medium).scale;
+
+  document.body.classList.toggle("hide-menu-icons", t.showMenuIcons === false);
+}
+
 function toast(msg) {
   let t = document.getElementById("toast");
   if (!t) {
@@ -391,6 +430,7 @@ function renderDashboard(el) {
 /* ---------- بدء التشغيل ---------- */
 window.addEventListener("hashchange", router);
 window.addEventListener("DOMContentLoaded", () => {
+  applyTheme();
   seedIfEmpty();
   migrateClients();
   migratePriceCatalog();

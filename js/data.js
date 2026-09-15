@@ -312,6 +312,104 @@ function setCurrentUser(u) {
   dbSet("currentUser", u);
 }
 
+/* ---------- الإجازات (أنواعها وأحكامها حسب نظام العمل السعودي) ---------- */
+const WEEKDAYS = [
+  { key: "sat", label: "السبت" }, { key: "sun", label: "الأحد" }, { key: "mon", label: "الاثنين" },
+  { key: "tue", label: "الثلاثاء" }, { key: "wed", label: "الأربعاء" }, { key: "thu", label: "الخميس" }, { key: "fri", label: "الجمعة" },
+];
+
+const LEAVE_TYPE_LABELS_AR = {
+  paid: "الإجازة السنوية",
+  sick: "إجازة مرضية",
+  emergency: "اضطرارية",
+  marriage: "إجازة زواج",
+  bereavement: "إجازة وفاة",
+  paternity: "إجازة مولود جديد (للأب)",
+  iddah: "عدة الوفاة (للمرأة المسلمة)",
+  hajj: "إجازة الحج",
+  official_holiday: "عطلة رسمية",
+  absence: "غياب",
+  unpaid: "بدون راتب",
+  other: "أخرى",
+};
+
+const ANNUAL_LEAVE_BALANCE_DAYS = 21;
+const ANNUAL_LEAVE_BALANCE_DAYS_AFTER_5_YEARS = 30;
+
+// مدة افتراضية ثابتة بالأيام لأنواع إجازات محددة المدة قانوناً — تُقترح تلقائياً كتاريخ نهاية، وتبقى قابلة للتعديل اليدوي
+const LEAVE_TYPE_FIXED_DAYS = { marriage: 5, bereavement: 5, paternity: 3, iddah: 130 };
+
+// أنواع إجازات "مرة واحدة طوال فترة الخدمة" — تنبيه استرشادي غير مانع فقط
+const LEAVE_TYPE_ONCE_PER_SERVICE = ["hajj"];
+
+const OFFICIAL_HOLIDAYS = {
+  eid_fitr: { label: "عيد الفطر", days: 4 },
+  eid_adha: { label: "عيد الأضحى", days: 4 },
+  national_day: { label: "اليوم الوطني", days: 1 },
+  founding_day: { label: "يوم التأسيس", days: 1 },
+};
+
+function leaveTypeDisplay(leave) {
+  if (leave.leaveType === "other" && leave.otherTypeLabel) return leave.otherTypeLabel;
+  return LEAVE_TYPE_LABELS_AR[leave.leaveType] || leave.leaveType;
+}
+
+// استحقاق الإجازة السنوية بالأيام حسب مدة الخدمة — ٢١ يوماً أساساً، ٣٠ يوماً بعد إتمام ٥ سنوات خدمة متصلة (المادة ١٠٩)
+function annualLeaveEntitlementDays(hireDate, asOfDate) {
+  asOfDate = asOfDate || new Date();
+  if (!hireDate) return ANNUAL_LEAVE_BALANCE_DAYS;
+  const fiveYearsAfterHire = new Date(hireDate);
+  fiveYearsAfterHire.setFullYear(fiveYearsAfterHire.getFullYear() + 5);
+  return asOfDate >= fiveYearsAfterHire ? ANNUAL_LEAVE_BALANCE_DAYS_AFTER_5_YEARS : ANNUAL_LEAVE_BALANCE_DAYS;
+}
+
+// توزيع أجر الإجازة المرضية على شرائح المادة ١١٧: أول ٣٠ يوماً بأجر كامل، الـ٦٠ التالية بثلاثة أرباع الأجر، الـ٣٠ الأخيرة بلا أجر (سقف ١٢٠ يوماً) — استرشادي فقط
+function sickLeavePayBreakdown(daysUsedBeforeThisLeave, thisLeaveDays) {
+  const start = Math.max(0, daysUsedBeforeThisLeave);
+  const end = start + Math.max(0, thisLeaveDays);
+  const overlap = (rangeStart, rangeEnd) => Math.max(0, Math.min(end, rangeEnd) - Math.max(start, rangeStart));
+  return { fullPayDays: overlap(0, 30), threeQuarterPayDays: overlap(30, 90), unpaidDays: overlap(90, Infinity) };
+}
+
+function daysBetweenInclusive(startStr, endStr) {
+  return Math.round((new Date(endStr).getTime() - new Date(startStr).getTime()) / 86400000) + 1;
+}
+
+// يضيف عدد أيام (شاملاً تاريخ البدء كيوم أول) إلى تاريخ YYYY-MM-DD
+function addInclusiveDays(dateStr, days) {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + Math.max(1, days) - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/* ---------- إعدادات المظهر (الألوان والأيقونات والخط) ---------- */
+function getThemeSettings() {
+  return dbGet("themeSettings", {
+    primaryColor: "#b5651d",
+    sidebarColor: "#16233a",
+    fontFamily: "Cairo",
+    fontSize: "medium", // small | medium | large | xlarge
+    showMenuIcons: true,
+  });
+}
+function setThemeSettings(t) {
+  dbSet("themeSettings", t);
+}
+
+/* تفتيح أو تغميق لون HEX بنسبة مئوية (سالبة = تغميق، موجبة = تفتيح) */
+function shadeColor(hex, percent) {
+  hex = (hex || "#b5651d").replace("#", "");
+  if (hex.length === 3) hex = hex.split("").map(c => c + c).join("");
+  const num = parseInt(hex, 16);
+  let r = (num >> 16) + Math.round(255 * percent);
+  let g = ((num >> 8) & 0x00ff) + Math.round(255 * percent);
+  let b = (num & 0x0000ff) + Math.round(255 * percent);
+  r = Math.min(255, Math.max(0, r));
+  g = Math.min(255, Math.max(0, g));
+  b = Math.min(255, Math.max(0, b));
+  return "#" + (0x1000000 + r * 0x10000 + g * 0x100 + b).toString(16).slice(1);
+}
+
 /* ---------- بيانات المؤسسة (تظهر في ترويسة عرض السعر النهائي) ---------- */
 function getCompanyProfile() {
   return dbGet("companyProfile", {

@@ -358,6 +358,14 @@ table.data-table tr:hover td { background: #fafbfc; }
 }
 .company-logo-preview img { width: 100%; height: 100%; object-fit: contain; }
 
+.veh-doc-thumb {
+  display: inline-block; width: 52px; height: 52px; border-radius: 8px; overflow: hidden;
+  background: #f4f5f7; border: 1px solid var(--border);
+}
+.veh-doc-thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+.hide-menu-icons .nav-link .ic { display: none; }
+
 .notif-bell-wrap { position: relative; }
 .notif-bell {
   position: relative; width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--border);
@@ -461,6 +469,8 @@ table.data-table tr:hover td { background: #fafbfc; }
 .toast.show { opacity: 1; }
 
 .text-muted { color: var(--text-muted); }
+.success { color: var(--success); }
+.danger { color: var(--danger); }
 .mt-0 { margin-top: 0; }
 .flex { display: flex; }
 .flex.between { justify-content: space-between; }
