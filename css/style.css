@@ -479,3 +479,4 @@ table.data-table tr:hover td { background: #fafbfc; }
 .flex.gap { gap: 10px; }
 .flex.center { align-items: center; }
 .flex.wrap { flex-wrap: wrap; }
+.leaflet-tooltip.rz-zone-tooltip { font-weight: 700; }

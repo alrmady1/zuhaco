@@ -2,7 +2,7 @@
    صفحة الإعدادات
    ========================================================= */
 
-let SETTINGS_TAB = "users"; // users | permissions | catalog | expenseCatalog | vehicles | facilities | leaves | appearance | company | activity
+let SETTINGS_TAB = "users"; // users | permissions | catalog | expenseCatalog | vehicles | facilities | leaves | appearance | company | activity | riyadhZones
 let ACTIVITY_LOG_SEARCH = "";
 let EXPENSE_CAT_COLLAPSED = {};
 
@@ -20,6 +20,7 @@ function renderSettings(el) {
       <div class="tab-btn ${SETTINGS_TAB === "appearance" ? "active" : ""}" data-tab="appearance">٨. المظهر</div>
       <div class="tab-btn ${SETTINGS_TAB === "company" ? "active" : ""}" data-tab="company">٩. بيانات المؤسسة والشعار</div>
       <div class="tab-btn ${SETTINGS_TAB === "activity" ? "active" : ""}" data-tab="activity">١٠. سجل العمليات</div>
+      <div class="tab-btn ${SETTINGS_TAB === "riyadhZones" ? "active" : ""}" data-tab="riyadhZones">١١. مناطق الرياض</div>
     </div>
     <div id="settingsBody"></div>
   `;
@@ -35,6 +36,7 @@ function renderSettings(el) {
   else if (SETTINGS_TAB === "leaves") renderLeavesTab(body);
   else if (SETTINGS_TAB === "appearance") renderAppearanceTab(body);
   else if (SETTINGS_TAB === "activity") renderActivityLogTab(body);
+  else if (SETTINGS_TAB === "riyadhZones") renderRiyadhZonesTab(body);
   else renderCompanyTab(body);
 }
 
@@ -1380,5 +1382,296 @@ function renderCatalogTab(el) {
     dbSet("priceCatalog", cats);
     toast("تم إضافة البند");
     renderSettings(el.parentElement);
+  });
+}
+
+/* ---------- تبويب مناطق الرياض ---------- */
+const RIYADH_CENTER = [24.7136, 46.6753];
+let RZ_SORT = "neighborhood"; // neighborhood | zone
+let RZ_MAP_VIEW = null; // { center:[lat,lng], zoom } — يُحفظ بين إعادات الرسم للحفاظ على موضع الخريطة
+let RZ_DRAWING_ZONE = null;
+
+// نقطة بداية تقريبية لتقسيم الرياض إلى 5 مناطق (مستطيلات تقريبية حول وسط
+// المدينة) — تُعدَّل حدود كل منطقة لاحقاً بالسحب على الخريطة من نفس التبويب.
+function defaultRiyadhZones() {
+  return [
+    { id: "zone-north", name: "شمال الرياض", color: "#3B82F6", boundary: [[24.85, 46.35], [24.85, 47.05], [25.05, 47.05], [25.05, 46.35]] },
+    { id: "zone-south", name: "جنوب الرياض", color: "#F59E0B", boundary: [[24.45, 46.35], [24.45, 47.05], [24.65, 47.05], [24.65, 46.35]] },
+    { id: "zone-east", name: "شرق الرياض", color: "#10B981", boundary: [[24.65, 46.80], [24.65, 47.05], [24.85, 47.05], [24.85, 46.80]] },
+    { id: "zone-west", name: "غرب الرياض", color: "#EF4444", boundary: [[24.65, 46.35], [24.65, 46.60], [24.85, 46.60], [24.85, 46.35]] },
+    { id: "zone-center", name: "وسط الرياض", color: "#8B5CF6", boundary: [[24.65, 46.60], [24.65, 46.80], [24.85, 46.80], [24.85, 46.60]] },
+  ];
+}
+
+// قائمة ابتدائية بأحياء الرياض المعروفة مجمّعة تقريبياً حسب المنطقة —
+// نقطة بداية للمراجعة والتعديل من الجدول أسفل الخريطة، وليست مرجعاً
+// جغرافياً دقيقاً بالضرورة. أي حي مطلوب غير موجود هنا يُضاف يدوياً بسهولة.
+function defaultNeighborhoodZones() {
+  const rows = [
+    ["الملقا", "zone-north"], ["الصحافة", "zone-north"], ["حطين", "zone-north"], ["النرجس", "zone-north"],
+    ["الياسمين", "zone-north"], ["العارض", "zone-north"], ["الوادي", "zone-north"], ["العقيق", "zone-north"],
+    ["النخيل", "zone-north"], ["الغدير", "zone-north"], ["الرحمانية", "zone-north"], ["الرائد", "zone-north"],
+    ["الفلاح", "zone-north"], ["النفل", "zone-north"], ["الازدهار", "zone-north"], ["القيروان", "zone-north"],
+    ["الواحة", "zone-north"], ["الملك عبدالله", "zone-north"], ["الملك عبدالعزيز", "zone-north"], ["الملك فيصل", "zone-north"],
+    ["الملك سلمان", "zone-north"], ["بنبان", "zone-north"], ["المهدية", "zone-north"],
+
+    ["الشفا", "zone-south"], ["العزيزية", "zone-south"], ["منفوحة", "zone-south"], ["السلي", "zone-south"],
+    ["الفيصلية", "zone-south"], ["العريجاء", "zone-south"], ["السويدي", "zone-south"], ["الشميسي", "zone-south"],
+    ["غبيرة", "zone-south"], ["الحزم", "zone-south"], ["طويق", "zone-south"], ["الدريهمية", "zone-south"],
+    ["المصفاة", "zone-south"], ["الشهداء", "zone-south"], ["سلطانة", "zone-south"], ["الوسيطاء", "zone-south"],
+    ["الزهرة", "zone-south"], ["بدر", "zone-south"], ["الصناعية الأولى", "zone-south"], ["الصناعية الثانية", "zone-south"],
+    ["النور", "zone-south"], ["اليمامة", "zone-south"], ["الخالدية", "zone-south"], ["عتيقة", "zone-south"],
+
+    ["النسيم الشرقي", "zone-east"], ["النسيم الغربي", "zone-east"], ["الرمال", "zone-east"], ["الروضة", "zone-east"],
+    ["قرطبة", "zone-east"], ["الريان", "zone-east"], ["الجنادرية", "zone-east"], ["المونسية", "zone-east"],
+    ["الخليج", "zone-east"], ["الربوة", "zone-east"], ["اليرموك", "zone-east"], ["إشبيلية", "zone-east"],
+    ["الأندلس", "zone-east"], ["غرناطة", "zone-east"], ["جرير", "zone-east"], ["القادسية", "zone-east"],
+    ["النظيم", "zone-east"], ["السلام", "zone-east"], ["الروابي", "zone-east"],
+
+    ["عرقة", "zone-west"], ["ظهرة لبن", "zone-west"], ["الدار البيضاء", "zone-west"], ["نمار", "zone-west"],
+    ["شبرا", "zone-west"], ["ديراب", "zone-west"], ["الحمراء", "zone-west"], ["عكاظ", "zone-west"],
+    ["البديعة", "zone-west"], ["ظهرة البديعة", "zone-west"], ["أم سليم", "zone-west"], ["خشم العان", "zone-west"],
+
+    ["الملز", "zone-center"], ["المربع", "zone-center"], ["الديرة", "zone-center"], ["العليا", "zone-center"],
+    ["السليمانية", "zone-center"], ["المعذر", "zone-center"], ["الوزارات", "zone-center"], ["الورود", "zone-center"],
+    ["الملك فهد", "zone-center"], ["صلاح الدين", "zone-center"], ["المروج", "zone-center"], ["النزهة", "zone-center"],
+    ["أم الحمام الشرقي", "zone-center"], ["أم الحمام الغربي", "zone-center"], ["السفارات", "zone-center"],
+    ["الضباط", "zone-center"], ["الوشام", "zone-center"], ["المرسلات", "zone-center"],
+  ];
+  return rows.map(([neighborhood, zone_id]) => ({ id: uid("rzn"), neighborhood, zone_id }));
+}
+
+function getRiyadhZones() {
+  let zones = dbGet("riyadhZones", null);
+  if (!zones) { zones = defaultRiyadhZones(); dbSet("riyadhZones", zones); }
+  return zones;
+}
+function getNeighborhoodZones() {
+  let list = dbGet("neighborhoodZones", null);
+  if (!list) { list = defaultNeighborhoodZones(); dbSet("neighborhoodZones", list); }
+  return list;
+}
+
+function renderRiyadhZonesTab(el) {
+  const zones = getRiyadhZones();
+  const neighborhoods = getNeighborhoodZones();
+  const zoneOrder = {};
+  zones.forEach((z, i) => zoneOrder[z.id] = i);
+  const sorted = neighborhoods.slice().sort((a, b) => {
+    if (RZ_SORT === "zone") {
+      const diff = (zoneOrder[a.zone_id] ?? 999) - (zoneOrder[b.zone_id] ?? 999);
+      if (diff !== 0) return diff;
+    }
+    return a.neighborhood.localeCompare(b.neighborhood, "ar");
+  });
+
+  let rowsHtml = "";
+  let lastZone;
+  sorted.forEach(a => {
+    const zone = zones.find(z => z.id === a.zone_id);
+    if (RZ_SORT === "zone" && a.zone_id !== lastZone) {
+      rowsHtml += `<tr style="background:#f8f9fb"><td colspan="3" style="font-size:12px;font-weight:700;color:var(--text-muted);padding:6px 10px">
+        <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${zone ? zone.color : "#94a3b8"};margin-inline-end:6px"></span>${zone ? zone.name : "بدون منطقة"}
+      </td></tr>`;
+      lastZone = a.zone_id;
+    }
+    rowsHtml += `
+      <tr>
+        <td>${a.neighborhood}</td>
+        <td><select data-neighborhoodzone="${a.id}">${zones.map(z => `<option value="${z.id}" ${z.id === a.zone_id ? "selected" : ""}>${z.name}</option>`).join("")}</select></td>
+        <td><button class="btn sm danger" data-neighborhooddel="${a.id}">حذف</button></td>
+      </tr>`;
+  });
+  if (!sorted.length) rowsHtml = `<tr><td colspan="3" class="text-muted" style="text-align:center;padding:14px">لا توجد أحياء مربوطة بعد</td></tr>`;
+
+  el.innerHTML = `
+    <div class="card">
+      <h3 class="mt-0">مناطق الرياض</h3>
+      <p class="text-muted" style="font-size:12.5px;margin-top:-6px">قسّم الرياض إلى مناطق واربط كل حيّ بمنطقته — يساعد على تنظيم المشاريع والزيارات حسب الموقع الجغرافي</p>
+      <div class="flex gap" style="margin:12px 0 6px">
+        <input id="rz_search" placeholder="ابحث عن حيّ لتحديد موقعه على الخريطة...">
+        <button class="btn sm" id="rz_searchBtn">بحث</button>
+      </div>
+      <div id="rz_searchMsg" style="font-size:12px;color:var(--danger);min-height:16px;margin-bottom:6px"></div>
+      <div id="rz_map" style="height:420px;border-radius:10px;overflow:hidden;border:1px solid var(--border)"></div>
+    </div>
+
+    <div class="card">
+      <div class="flex between" style="margin-bottom:10px"><h3 class="mt-0">المناطق</h3><button class="btn sm primary" id="rz_addZone">+ إضافة منطقة</button></div>
+      <div id="rz_zoneList">
+        ${zones.map(z => `
+          <div class="flex gap wrap" style="align-items:center;padding:9px 0;border-bottom:1px solid var(--border)">
+            <input type="color" value="${z.color}" data-zonecolor="${z.id}" style="width:34px;height:32px;padding:1px;border:1px solid var(--border);border-radius:6px;cursor:pointer">
+            <input value="${z.name}" data-zonename="${z.id}" style="flex:1;min-width:130px;font-weight:700">
+            <button class="btn sm ${RZ_DRAWING_ZONE === z.id ? "primary" : ""}" data-zonedraw="${z.id}">${RZ_DRAWING_ZONE === z.id ? "جارِ الرسم…" : "رسم الحدود"}</button>
+            ${z.boundary && z.boundary.length ? `<button class="btn sm" data-zoneclear="${z.id}">مسح الحدود</button>` : ""}
+            <button class="btn sm danger" data-zonedel="${z.id}">حذف</button>
+          </div>
+        `).join("") || `<div class="text-muted" style="text-align:center;padding:14px">لا توجد مناطق بعد</div>`}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="flex between wrap" style="margin-bottom:10px">
+        <h3 class="mt-0">ربط الأحياء بالمناطق</h3>
+        <label style="font-size:12px;display:flex;align-items:center;gap:6px">فرز حسب:
+          <select id="rz_sortMode" style="width:auto">
+            <option value="neighborhood" ${RZ_SORT === "neighborhood" ? "selected" : ""}>اسم الحي (أبجدي)</option>
+            <option value="zone" ${RZ_SORT === "zone" ? "selected" : ""}>المنطقة</option>
+          </select>
+        </label>
+      </div>
+      <div class="flex gap wrap" style="margin-bottom:10px">
+        <input id="rz_newNeighborhood" placeholder="اسم الحي" style="flex:1;min-width:160px">
+        <select id="rz_newNeighborhoodZone" style="width:auto">
+          <option value="">اختر المنطقة</option>
+          ${zones.map(z => `<option value="${z.id}">${z.name}</option>`).join("")}
+        </select>
+        <button class="btn sm primary" id="rz_addNeighborhood">+ إضافة حي</button>
+      </div>
+      <div class="table-wrap" style="max-height:440px;overflow-y:auto">
+        <table class="data-table">
+          <thead><tr><th>الحي</th><th>المنطقة</th><th></th></tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  /* ---------- الخريطة ---------- */
+  const map = L.map("rz_map").setView(RZ_MAP_VIEW ? RZ_MAP_VIEW.center : RIYADH_CENTER, RZ_MAP_VIEW ? RZ_MAP_VIEW.zoom : 11);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap contributors" }).addTo(map);
+  map.on("moveend", () => { RZ_MAP_VIEW = { center: [map.getCenter().lat, map.getCenter().lng], zoom: map.getZoom() }; });
+
+  const fg = new L.FeatureGroup().addTo(map);
+  zones.forEach(z => {
+    if (!z.boundary || z.boundary.length < 3) return;
+    const polygon = L.polygon(z.boundary, { color: z.color, fillOpacity: 0.25, weight: 2 });
+    polygon._rzZoneId = z.id;
+    polygon.bindTooltip(z.name, { permanent: true, direction: "center", className: "rz-zone-tooltip" });
+    fg.addLayer(polygon);
+  });
+
+  const drawControl = new L.Control.Draw({ position: "topright", draw: false, edit: { featureGroup: fg, remove: false } });
+  map.addControl(drawControl);
+
+  map.on("draw:edited", (e) => {
+    e.layers.eachLayer(layer => {
+      if (!layer._rzZoneId) return;
+      const latlngs = layer.getLatLngs()[0].map(p => [p.lat, p.lng]);
+      const list = getRiyadhZones();
+      const zn = list.find(x => x.id === layer._rzZoneId);
+      if (zn) { zn.boundary = latlngs; dbSet("riyadhZones", list); }
+    });
+  });
+
+  map.on("draw:created", (e) => {
+    if (!RZ_DRAWING_ZONE) return;
+    const latlngs = e.layer.getLatLngs()[0].map(p => [p.lat, p.lng]);
+    const list = getRiyadhZones();
+    const zn = list.find(x => x.id === RZ_DRAWING_ZONE);
+    if (zn) { zn.boundary = latlngs; dbSet("riyadhZones", list); logActivity(`تم رسم حدود منطقة "${zn.name}"`); }
+    RZ_DRAWING_ZONE = null;
+    renderRiyadhZonesTab(el);
+  });
+
+  if (RZ_DRAWING_ZONE) {
+    const zn = zones.find(z => z.id === RZ_DRAWING_ZONE);
+    const dh = new L.Draw.Polygon(map, { shapeOptions: { color: zn ? zn.color : "#64748b" } });
+    dh.enable();
+  }
+
+  /* ---------- البحث عن حيّ ---------- */
+  let searchMarker = null;
+  function doSearch() {
+    const q = document.getElementById("rz_search").value.trim();
+    const msg = document.getElementById("rz_searchMsg");
+    msg.textContent = "";
+    if (!q) return;
+    msg.textContent = "جارِ البحث…";
+    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q + ", الرياض, السعودية")}&limit=1&accept-language=ar`)
+      .then(r => r.json())
+      .then(data => {
+        if (!data.length) { msg.textContent = "لم يُعثر على نتائج لهذا الحي"; return; }
+        msg.textContent = "";
+        const lat = Number(data[0].lat), lon = Number(data[0].lon);
+        map.setView([lat, lon], 14);
+        if (searchMarker) map.removeLayer(searchMarker);
+        searchMarker = L.marker([lat, lon]).addTo(map).bindPopup(data[0].display_name).openPopup();
+        const newField = document.getElementById("rz_newNeighborhood");
+        if (newField && !newField.value) newField.value = q;
+      })
+      .catch(() => { msg.textContent = "تعذّر البحث — تحقق من الاتصال بالإنترنت"; });
+  }
+  document.getElementById("rz_searchBtn").onclick = doSearch;
+  document.getElementById("rz_search").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); doSearch(); } };
+
+  /* ---------- أحداث المناطق ---------- */
+  document.getElementById("rz_addZone").onclick = () => {
+    const list = getRiyadhZones();
+    list.push({ id: uid("rz"), name: "منطقة جديدة", color: "#64748b", boundary: [] });
+    dbSet("riyadhZones", list);
+    logActivity("تم إضافة منطقة رياض جديدة");
+    renderRiyadhZonesTab(el);
+  };
+  el.querySelectorAll("[data-zonecolor]").forEach(inp => inp.onchange = () => {
+    const list = getRiyadhZones();
+    const zn = list.find(z => z.id === inp.dataset.zonecolor);
+    if (zn) { zn.color = inp.value; dbSet("riyadhZones", list); }
+    renderRiyadhZonesTab(el);
+  });
+  el.querySelectorAll("[data-zonename]").forEach(inp => inp.onblur = () => {
+    const name = inp.value.trim();
+    if (!name) return;
+    const list = getRiyadhZones();
+    const zn = list.find(z => z.id === inp.dataset.zonename);
+    if (zn && zn.name !== name) { zn.name = name; dbSet("riyadhZones", list); logActivity(`تم تعديل اسم منطقة رياض إلى "${name}"`); renderRiyadhZonesTab(el); }
+  });
+  el.querySelectorAll("[data-zonedraw]").forEach(b => b.onclick = () => {
+    RZ_DRAWING_ZONE = RZ_DRAWING_ZONE === b.dataset.zonedraw ? null : b.dataset.zonedraw;
+    renderRiyadhZonesTab(el);
+  });
+  el.querySelectorAll("[data-zoneclear]").forEach(b => b.onclick = () => {
+    const list = getRiyadhZones();
+    const zn = list.find(z => z.id === b.dataset.zoneclear);
+    if (zn) { zn.boundary = []; dbSet("riyadhZones", list); }
+    renderRiyadhZonesTab(el);
+  });
+  el.querySelectorAll("[data-zonedel]").forEach(b => b.onclick = () => {
+    const list = getRiyadhZones();
+    const zn = list.find(z => z.id === b.dataset.zonedel);
+    if (!zn) return;
+    if (!confirm(`حذف منطقة "${zn.name}" نهائياً؟ ستفقد الأحياء المربوطة بها تصنيفها.`)) return;
+    dbSet("riyadhZones", list.filter(z => z.id !== zn.id));
+    logActivity(`تم حذف منطقة رياض "${zn.name}"`);
+    renderRiyadhZonesTab(el);
+  });
+
+  /* ---------- أحداث الأحياء ---------- */
+  document.getElementById("rz_sortMode").onchange = (e) => { RZ_SORT = e.target.value; renderRiyadhZonesTab(el); };
+  document.getElementById("rz_addNeighborhood").onclick = () => {
+    const nameInput = document.getElementById("rz_newNeighborhood");
+    const zoneSelect = document.getElementById("rz_newNeighborhoodZone");
+    const name = nameInput.value.trim();
+    if (!name || !zoneSelect.value) { toast("يرجى إدخال اسم الحي واختيار المنطقة"); return; }
+    const list = getNeighborhoodZones();
+    list.push({ id: uid("rzn"), neighborhood: name, zone_id: zoneSelect.value });
+    dbSet("neighborhoodZones", list);
+    logActivity(`تم ربط حيّ "${name}" بمنطقة رياض`);
+    renderRiyadhZonesTab(el);
+  };
+  el.querySelectorAll("[data-neighborhoodzone]").forEach(sel => sel.onchange = () => {
+    const list = getNeighborhoodZones();
+    const a = list.find(x => x.id === sel.dataset.neighborhoodzone);
+    if (a) { a.zone_id = sel.value; dbSet("neighborhoodZones", list); }
+    renderRiyadhZonesTab(el);
+  });
+  el.querySelectorAll("[data-neighborhooddel]").forEach(b => b.onclick = () => {
+    const list = getNeighborhoodZones();
+    const a = list.find(x => x.id === b.dataset.neighborhooddel);
+    if (!a) return;
+    if (!confirm(`حذف ربط حيّ "${a.neighborhood}"؟`)) return;
+    dbSet("neighborhoodZones", list.filter(x => x.id !== a.id));
+    renderRiyadhZonesTab(el);
   });
 }
