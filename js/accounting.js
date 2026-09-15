@@ -4,6 +4,7 @@
 
 const VAT_RATE = 0.15;
 let ACC_SELECTED_PROJECT = null;
+let GEN_EXP_SORT = { key: "date", dir: "desc" };
 
 const ACC_TYPES = ["إيراد مشروع", "دفعة مشتريات", "مصروف مواد", "مصروف عمال", "مصروف نثرية"];
 const ACC_TYPE_BADGE = {
@@ -551,8 +552,25 @@ function salaryMonthLabel(ym) {
   return d.toLocaleDateString("ar-SA-u-ca-gregory", { year: "numeric", month: "long" });
 }
 
+function generalExpenseSortTh(label, key) {
+  const active = GEN_EXP_SORT.key === key;
+  const arrow = active ? (GEN_EXP_SORT.dir === "asc" ? " ▲" : " ▼") : "";
+  return `<th class="sortable-th" data-sortkey="${key}">${label}${arrow}</th>`;
+}
+
 function renderGeneralExpensesTab(el) {
-  const list = dbGet("accGeneral", []).slice().sort((a, b) => (b.date > a.date ? 1 : -1));
+  const list = dbGet("accGeneral", []).slice();
+  const { key, dir } = GEN_EXP_SORT;
+  const mul = dir === "asc" ? 1 : -1;
+  list.sort((a, b) => {
+    let av, bv;
+    if (key === "amount") { av = Number(a.amount) || 0; bv = Number(b.amount) || 0; }
+    else if (key === "category") { av = a.category || ""; bv = b.category || ""; }
+    else { av = a.date || ""; bv = b.date || ""; }
+    if (av < bv) return -1 * mul;
+    if (av > bv) return 1 * mul;
+    return 0;
+  });
   const total = list.reduce((s, e) => s + Number(e.amount || 0), 0);
   const catNames = getExpenseCategoryNames();
   const byCat = {};
@@ -572,7 +590,7 @@ function renderGeneralExpensesTab(el) {
       ${list.length ? `
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>التصنيف</th><th>التفاصيل</th><th>المبلغ</th><th>طريقة الدفع</th><th>التاريخ</th><th>ملاحظات</th><th>المرفق</th><th></th></tr></thead>
+          <thead><tr>${generalExpenseSortTh("التصنيف", "category")}<th>التفاصيل</th>${generalExpenseSortTh("المبلغ", "amount")}<th>طريقة الدفع</th>${generalExpenseSortTh("التاريخ", "date")}<th>ملاحظات</th><th>المرفق</th><th></th></tr></thead>
           <tbody>
             ${list.map(e => `
               <tr>
@@ -583,7 +601,11 @@ function renderGeneralExpensesTab(el) {
                 <td>${fmtDate(e.date)}</td>
                 <td class="text-muted">${e.note || "-"}</td>
                 <td>${e.attachment ? `<a href="${e.attachment.url}" target="_blank" rel="noopener" class="badge blue" style="text-decoration:none">📎 عرض المرفق</a>` : "-"}</td>
-                <td><button class="btn sm danger" data-delgen="${e.id}">حذف</button></td>
+                <td>
+                  <button class="btn sm" data-viewgen="${e.id}">عرض</button>
+                  <button class="btn sm" data-editgen="${e.id}">تعديل</button>
+                  <button class="btn sm danger" data-delgen="${e.id}">حذف</button>
+                </td>
               </tr>`).join("")}
           </tbody>
         </table>
@@ -592,6 +614,20 @@ function renderGeneralExpensesTab(el) {
   `;
 
   document.getElementById("addGeneralBtn").onclick = () => openGeneralExpenseModal(el);
+  el.querySelectorAll("[data-sortkey]").forEach(th => th.onclick = () => {
+    const k = th.dataset.sortkey;
+    if (GEN_EXP_SORT.key === k) GEN_EXP_SORT.dir = GEN_EXP_SORT.dir === "asc" ? "desc" : "asc";
+    else GEN_EXP_SORT = { key: k, dir: k === "date" ? "desc" : "asc" };
+    renderGeneralExpensesTab(el);
+  });
+  el.querySelectorAll("[data-viewgen]").forEach(b => b.onclick = () => {
+    const target = dbGet("accGeneral", []).find(x => x.id === b.dataset.viewgen);
+    if (target) openGeneralExpenseViewModal(target);
+  });
+  el.querySelectorAll("[data-editgen]").forEach(b => b.onclick = () => {
+    const target = dbGet("accGeneral", []).find(x => x.id === b.dataset.editgen);
+    if (target) openGeneralExpenseModal(el, target);
+  });
   el.querySelectorAll("[data-delgen]").forEach(b => b.onclick = () => {
     if (!confirm("حذف هذا المصروف؟")) return;
     const target = dbGet("accGeneral", []).find(x => x.id === b.dataset.delgen);
@@ -785,30 +821,49 @@ function openAddCustodyTxnModal(custodyId, type, el) {
   };
 }
 
-function openGeneralExpenseModal(el) {
+function openGeneralExpenseViewModal(e) {
+  const html = `
+    <div class="modal-head"><h3>تفاصيل المصروف الإداري</h3><button class="modal-close" id="mClose">×</button></div>
+    <div class="kv-row"><span class="k">التصنيف</span><span class="v">${e.category}</span></div>
+    ${generalExpenseSubtitle(e) ? `<div class="kv-row"><span class="k">التفاصيل</span><span class="v">${generalExpenseSubtitle(e)}</span></div>` : ""}
+    <div class="kv-row"><span class="k">المبلغ</span><span class="v">${fmtMoney(e.amount)}</span></div>
+    <div class="kv-row"><span class="k">التاريخ</span><span class="v">${fmtDate(e.date)}</span></div>
+    <div class="kv-row"><span class="k">ضريبة القيمة المضافة</span><span class="v">${e.vatApplicable ? `خاضع (${fmtMoney(e.vatAmount || Number(e.amount) * VAT_RATE)})` : "غير خاضع"}</span></div>
+    ${e.paymentMethod ? `<div class="kv-row"><span class="k">طريقة الدفع</span><span class="v">${e.paymentMethod}</span></div>` : ""}
+    ${e.note ? `<div class="kv-row"><span class="k">ملاحظات</span><span class="v">${e.note}</span></div>` : ""}
+    ${e.attachment ? `<div class="kv-row"><span class="k">المرفق</span><span class="v"><a href="${e.attachment.url}" target="_blank" rel="noopener">📎 ${e.attachment.name || "عرض المرفق"}</a></span></div>` : ""}
+    <div class="flex gap" style="margin-top:14px"><button class="btn" id="v_close">إغلاق</button></div>
+  `;
+  const ov = openModalShell(html);
+  ov.querySelector("#mClose").onclick = closeModal;
+  ov.querySelector("#v_close").onclick = closeModal;
+}
+
+function openGeneralExpenseModal(el, existingEntry) {
+  const isEdit = !!existingEntry;
   const catalog = getExpenseCatalog();
   const catNames = catalog.map(c => c.name);
   const users = dbGet("users", []);
   const html = `
-    <div class="modal-head"><h3>إضافة مصروف إداري</h3><button class="modal-close" id="mClose">×</button></div>
-    <div class="field"><label>التصنيف</label><select id="g_cat">${catNames.map(c => `<option value="${c}">${c}</option>`).join("")}</select></div>
+    <div class="modal-head"><h3>${isEdit ? "تعديل مصروف إداري" : "إضافة مصروف إداري"}</h3><button class="modal-close" id="mClose">×</button></div>
+    <div class="field"><label>التصنيف</label><select id="g_cat">${catNames.map(c => `<option value="${c}" ${isEdit && existingEntry.category === c ? "selected" : ""}>${c}</option>`).join("")}</select></div>
     <div id="g_extraFields"></div>
     <div class="grid cols-2">
-      <div class="field"><label>المبلغ (ر.س)</label><input type="number" min="0" step="0.01" id="g_amount"></div>
-      <div class="field"><label id="g_dateLabel">التاريخ</label><input type="date" id="g_date" value="${todayISO()}"></div>
+      <div class="field"><label>المبلغ (ر.س)</label><input type="number" min="0" step="0.01" id="g_amount" value="${isEdit ? existingEntry.amount : ""}"></div>
+      <div class="field"><label id="g_dateLabel">التاريخ</label><input type="date" id="g_date" value="${isEdit ? existingEntry.date : todayISO()}"></div>
     </div>
-    <div class="field"><label><input type="checkbox" id="g_vat" style="width:auto;display:inline-block"> يشمل فاتورة ضريبية (ضريبة قيمة مضافة قابلة للخصم)</label></div>
+    <div class="field"><label><input type="checkbox" id="g_vat" ${isEdit && existingEntry.vatApplicable ? "checked" : ""} style="width:auto;display:inline-block"> يشمل فاتورة ضريبية (ضريبة قيمة مضافة قابلة للخصم)</label></div>
     <div class="field"><label>طريقة الدفع</label>
       <select id="g_paymentMethod">
         <option value="">— اختر طريقة الدفع —</option>
-        ${PAYMENT_METHODS.map(m => `<option value="${m}">${m}</option>`).join("")}
+        ${PAYMENT_METHODS.map(m => `<option value="${m}" ${isEdit && existingEntry.paymentMethod === m ? "selected" : ""}>${m}</option>`).join("")}
       </select>
     </div>
-    <div class="field"><label>ملاحظات</label><textarea id="g_note"></textarea></div>
+    <div class="field"><label>ملاحظات</label><textarea id="g_note">${isEdit ? (existingEntry.note || "") : ""}</textarea></div>
     <div class="field">
       <label>إرفاق ملف الفاتورة أو المستند (اختياري)</label>
       <input type="file" id="g_attachment" accept=".pdf,image/*">
-      <div id="g_attachmentPreview" class="flex wrap" style="margin-top:8px"></div>
+      <div id="g_attachmentPreview" class="flex wrap" style="margin-top:8px">${isEdit && existingEntry.attachment ? `<span class="file-chip">📎 ${existingEntry.attachment.name || "المرفق الحالي"}</span>` : ""}</div>
     </div>
     <div class="flex gap"><button class="btn primary" id="g_save">حفظ</button><button class="btn" id="g_cancel">إلغاء</button></div>
   `;
@@ -816,7 +871,7 @@ function openGeneralExpenseModal(el) {
   ov.querySelector("#mClose").onclick = closeModal;
   ov.querySelector("#g_cancel").onclick = closeModal;
 
-  let attachment = null;
+  let attachment = isEdit ? (existingEntry.attachment || null) : null;
   ov.querySelector("#g_attachment").onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) { attachment = null; ov.querySelector("#g_attachmentPreview").innerHTML = ""; return; }
@@ -838,10 +893,10 @@ function openGeneralExpenseModal(el) {
           <div class="field"><label>الموظف</label>
             <select id="g_employee">
               <option value="">— اختر الموظف —</option>
-              ${users.map(u => `<option value="${u.id}">${u.name} — ${u.role}</option>`).join("")}
+              ${users.map(u => `<option value="${u.id}" ${isEdit && existingEntry.employeeId === u.id ? "selected" : ""}>${u.name} — ${u.role}</option>`).join("")}
             </select>
           </div>
-          <div class="field"><label>الشهر المستحق عنه الراتب</label><input type="month" id="g_salaryMonth" value="${todayISO().slice(0, 7)}"></div>
+          <div class="field"><label>الشهر المستحق عنه الراتب</label><input type="month" id="g_salaryMonth" value="${isEdit && existingEntry.salaryMonth ? existingEntry.salaryMonth : todayISO().slice(0, 7)}"></div>
         </div>
       `;
     } else if (catName === "مركبات") {
@@ -852,14 +907,14 @@ function openGeneralExpenseModal(el) {
           <div class="field"><label>المركبة</label>
             <select id="g_vehicle">
               <option value="">— اختر المركبة —</option>
-              ${vehicles.map(v => `<option value="${v.id}">${[v.brand, v.modelTrim].filter(Boolean).join(" ") || v.type || "مركبة"}${v.regNumber ? " — استمارة " + v.regNumber : ""}</option>`).join("")}
+              ${vehicles.map(v => `<option value="${v.id}" ${isEdit && existingEntry.vehicleId === v.id ? "selected" : ""}>${[v.brand, v.modelTrim].filter(Boolean).join(" ") || v.type || "مركبة"}${v.regNumber ? " — استمارة " + v.regNumber : ""}</option>`).join("")}
             </select>
             ${!vehicles.length ? `<div class="hint">لا توجد مركبات مسجلة — أضفها من الإعدادات ← المركبات</div>` : ""}
           </div>
           <div class="field"><label>نوع المصروف</label>
             <select id="g_vehicleExpenseType">
               <option value="">— اختر نوع المصروف —</option>
-              ${VEHICLE_EXPENSE_TYPES.map(t => `<option value="${t}">${t}</option>`).join("")}
+              ${VEHICLE_EXPENSE_TYPES.map(t => `<option value="${t}" ${isEdit && existingEntry.vehicleExpenseType === t ? "selected" : ""}>${t}</option>`).join("")}
             </select>
           </div>
         </div>
@@ -871,7 +926,7 @@ function openGeneralExpenseModal(el) {
         <div class="field"><label>المرفق</label>
           <select id="g_facility">
             <option value="">— اختر المرفق —</option>
-            ${facilities.map(f => `<option value="${f.id}">${f.name}${f.type ? " — " + f.type : ""}</option>`).join("")}
+            ${facilities.map(f => `<option value="${f.id}" ${isEdit && existingEntry.facilityId === f.id ? "selected" : ""}>${f.name}${f.type ? " — " + f.type : ""}</option>`).join("")}
           </select>
           ${!facilities.length ? `<div class="hint">لا توجد مرافق مسجلة — أضفها من الإعدادات ← المرافق</div>` : ""}
         </div>
@@ -883,13 +938,13 @@ function openGeneralExpenseModal(el) {
           <div class="field"><label>الموظف</label>
             <select id="g_advanceEmployee">
               <option value="">— اختر الموظف —</option>
-              ${users.map(u => `<option value="${u.id}">${u.name} — ${u.role}</option>`).join("")}
+              ${users.map(u => `<option value="${u.id}" ${isEdit && existingEntry.advanceEmployeeId === u.id ? "selected" : ""}>${u.name} — ${u.role}</option>`).join("")}
             </select>
           </div>
           <div class="field"><label>حالة السلفية</label>
             <select id="g_advanceStatus">
-              <option value="deduct">تُخصم من الراتب القادم</option>
-              <option value="exempt">معفية (لا تُخصم)</option>
+              <option value="deduct" ${isEdit && existingEntry.advanceStatus === "deduct" ? "selected" : ""}>تُخصم من الراتب القادم</option>
+              <option value="exempt" ${isEdit && existingEntry.advanceStatus === "exempt" ? "selected" : ""}>معفية (لا تُخصم)</option>
             </select>
           </div>
         </div>
@@ -902,7 +957,7 @@ function openGeneralExpenseModal(el) {
         <div class="field"><label>البند الفرعي (اختياري)</label>
           <select id="g_subItem">
             <option value="">— بدون تحديد —</option>
-            ${items.map(it => `<option value="${it.name}">${it.name}</option>`).join("")}
+            ${items.map(it => `<option value="${it.name}" ${isEdit && existingEntry.subItem === it.name ? "selected" : ""}>${it.name}</option>`).join("")}
           </select>
         </div>
       ` : "";
@@ -919,7 +974,7 @@ function openGeneralExpenseModal(el) {
     const paymentMethod = ov.querySelector("#g_paymentMethod").value;
     const list = dbGet("accGeneral", []);
     const entry = {
-      id: uid("ge"), category, amount,
+      id: isEdit ? existingEntry.id : uid("ge"), category, amount,
       vatApplicable, vatAmount: vatApplicable ? amount * VAT_RATE : 0,
       date: ov.querySelector("#g_date").value || todayISO(), note: ov.querySelector("#g_note").value.trim(),
       paymentMethod,
@@ -968,10 +1023,15 @@ function openGeneralExpenseModal(el) {
       const subSelect = ov.querySelector("#g_subItem");
       if (subSelect && subSelect.value) { entry.subItem = subSelect.value; logSuffix = ` (${subSelect.value})`; }
     }
-    list.push(entry);
+    if (isEdit) {
+      const idx = list.findIndex(x => x.id === existingEntry.id);
+      if (idx >= 0) list[idx] = entry; else list.push(entry);
+    } else {
+      list.push(entry);
+    }
     dbSet("accGeneral", list);
-    logActivity(`تم تسجيل مصروف إداري "${category}"${logSuffix} بقيمة ${fmtMoney(amount)}${paymentMethod ? " — دفع عبر " + paymentMethod : ""}`);
-    toast("تم إضافة المصروف الإداري");
+    logActivity(`تم ${isEdit ? "تعديل" : "تسجيل"} مصروف إداري "${category}"${logSuffix} بقيمة ${fmtMoney(amount)}${paymentMethod ? " — دفع عبر " + paymentMethod : ""}`);
+    toast(isEdit ? "تم حفظ التعديلات على المصروف" : "تم إضافة المصروف الإداري");
     closeModal();
     renderGeneralExpensesTab(el);
   };
