@@ -102,7 +102,7 @@ function renderAccProjects(el) {
                 </td>
                 <td>${e.attachment ? `<a href="${e.attachment.url}" target="_blank" rel="noopener" class="badge blue" style="text-decoration:none">📎 عرض المرفق</a>` : "-"}</td>
                 <td>
-                  ${e.type === "فاتورة ضريبية" ? `<button class="btn sm" data-printinv="${e.id}">طباعة</button>` : ""}
+                  ${e.type === "فاتورة ضريبية" ? `<button class="btn sm" data-printinv="${e.id}">طباعة</button>` : `<button class="btn sm" data-viewentry="${e.id}">عرض</button><button class="btn sm" data-editentry="${e.id}">تعديل</button>`}
                   <button class="btn sm danger" data-delentry="${e.id}">حذف</button>
                 </td>
               </tr>`).join("")}
@@ -123,21 +123,50 @@ function renderAccProjects(el) {
     renderAccProjects(el);
   });
   el.querySelectorAll("[data-printinv]").forEach(b => b.onclick = () => printInvoice(b.dataset.printinv));
+  el.querySelectorAll("[data-editentry]").forEach(b => b.onclick = () => {
+    const target = dbGet("accProjects", []).find(x => x.id === b.dataset.editentry);
+    if (target) openAccEntryModal(el, target);
+  });
+  el.querySelectorAll("[data-viewentry]").forEach(b => b.onclick = () => {
+    const target = dbGet("accProjects", []).find(x => x.id === b.dataset.viewentry);
+    if (target) openAccEntryViewModal(target);
+  });
 }
 
-function openAccEntryModal(el) {
+/* عرض تفصيلي للحركة المالية (بدون تعديل) — يوضّح كل بياناتها بما فيها التاجر ورقم الفاتورة وطريقة السداد والمرفق */
+function openAccEntryViewModal(e) {
   const html = `
-    <div class="modal-head"><h3>إضافة حركة مالية للمشروع</h3><button class="modal-close" id="mClose">×</button></div>
+    <div class="modal-head"><h3>تفاصيل الحركة المالية</h3><button class="modal-close" id="mClose">×</button></div>
+    <div class="kv-row"><span class="k">النوع</span><span class="v">${e.type}</span></div>
+    <div class="kv-row"><span class="k">المبلغ</span><span class="v">${fmtMoney(e.amount)}</span></div>
+    <div class="kv-row"><span class="k">التاريخ</span><span class="v">${fmtDate(e.date)}</span></div>
+    <div class="kv-row"><span class="k">ضريبة القيمة المضافة</span><span class="v">${e.vatApplicable ? `خاضع (${fmtMoney(e.vatAmount || Number(e.amount) * VAT_RATE)})` : "غير خاضع"}</span></div>
+    ${e.vendorName ? `<div class="kv-row"><span class="k">التاجر / المورّد</span><span class="v">${e.vendorName}</span></div>` : ""}
+    ${e.invoiceRefNumber ? `<div class="kv-row"><span class="k">رقم الفاتورة</span><span class="v">${e.invoiceRefNumber}</span></div>` : ""}
+    ${e.paymentMethod ? `<div class="kv-row"><span class="k">طريقة السداد/الاستلام</span><span class="v">${e.paymentMethod}</span></div>` : ""}
+    ${e.note ? `<div class="kv-row"><span class="k">ملاحظات</span><span class="v">${e.note}</span></div>` : ""}
+    ${e.attachment ? `<div class="kv-row"><span class="k">المرفق</span><span class="v"><a href="${e.attachment.url}" target="_blank" rel="noopener">📎 ${e.attachment.name || "عرض المرفق"}</a></span></div>` : ""}
+    <div class="flex gap" style="margin-top:14px"><button class="btn" id="v_close">إغلاق</button></div>
+  `;
+  const ov = openModalShell(html);
+  ov.querySelector("#mClose").onclick = closeModal;
+  ov.querySelector("#v_close").onclick = closeModal;
+}
+
+function openAccEntryModal(el, existingEntry) {
+  const isEdit = !!existingEntry;
+  const html = `
+    <div class="modal-head"><h3>${isEdit ? "تعديل حركة مالية" : "إضافة حركة مالية للمشروع"}</h3><button class="modal-close" id="mClose">×</button></div>
     <div class="field"><label>نوع الحركة</label>
-      <select id="e_type">${ACC_TYPES.map(t => `<option value="${t}">${t}</option>`).join("")}</select>
+      <select id="e_type">${ACC_TYPES.map(t => `<option value="${t}" ${isEdit && existingEntry.type === t ? "selected" : ""}>${t}</option>`).join("")}</select>
     </div>
     <div class="grid cols-2">
-      <div class="field"><label>المبلغ (ر.س)</label><input type="number" min="0" step="0.01" id="e_amount"></div>
-      <div class="field"><label>التاريخ</label><input type="date" id="e_date" value="${todayISO()}"></div>
+      <div class="field"><label>المبلغ (ر.س)</label><input type="number" min="0" step="0.01" id="e_amount" value="${isEdit ? existingEntry.amount : ""}"></div>
+      <div class="field"><label>التاريخ</label><input type="date" id="e_date" value="${isEdit ? existingEntry.date : todayISO()}"></div>
     </div>
     <div id="e_extra"></div>
-    <div class="field"><label><input type="checkbox" id="e_vat" style="width:auto;display:inline-block"> خاضع لضريبة القيمة المضافة (15%)</label></div>
-    <div class="field"><label>ملاحظات</label><textarea id="e_note"></textarea></div>
+    <div class="field"><label><input type="checkbox" id="e_vat" ${isEdit && existingEntry.vatApplicable ? "checked" : ""} style="width:auto;display:inline-block"> خاضع لضريبة القيمة المضافة (15%)</label></div>
+    <div class="field"><label>ملاحظات</label><textarea id="e_note">${isEdit ? (existingEntry.note || "") : ""}</textarea></div>
     <div class="flex gap"><button class="btn primary" id="e_save">حفظ</button><button class="btn" id="e_cancel">إلغاء</button></div>
   `;
   const ov = openModalShell(html);
@@ -146,27 +175,27 @@ function openAccEntryModal(el) {
 
   const typeSelect = ov.querySelector("#e_type");
   const extraBox = ov.querySelector("#e_extra");
-  let attachment = null;
+  let attachment = isEdit ? (existingEntry.attachment || null) : null;
 
   function renderExtra() {
     const type = typeSelect.value;
     if (type === "دفعة مشتريات") {
       extraBox.innerHTML = `
         <div class="grid cols-2">
-          <div class="field"><label>رقم الفاتورة</label><input id="e_invoiceRef"></div>
-          <div class="field"><label>طريقة السداد</label><select id="e_paymentMethod">${PAYMENT_METHODS.map(m => `<option value="${m}">${m}</option>`).join("")}</select></div>
+          <div class="field"><label>رقم الفاتورة</label><input id="e_invoiceRef" value="${isEdit ? (existingEntry.invoiceRefNumber || "") : ""}"></div>
+          <div class="field"><label>طريقة السداد</label><select id="e_paymentMethod">${PAYMENT_METHODS.map(m => `<option value="${m}" ${isEdit && existingEntry.paymentMethod === m ? "selected" : ""}>${m}</option>`).join("")}</select></div>
         </div>
-        <div class="field"><label>اسم التاجر / المورّد</label><input id="e_vendor"></div>
+        <div class="field"><label>اسم التاجر / المورّد</label><input id="e_vendor" value="${isEdit ? (existingEntry.vendorName || "") : ""}"></div>
         <div class="field">
           <label>صورة الفاتورة أو إيصال التحويل (اختياري)</label>
           <input type="file" id="e_attachment" accept=".pdf,image/*">
-          <div id="e_attachmentPreview" class="flex wrap" style="margin-top:8px"></div>
+          <div id="e_attachmentPreview" class="flex wrap" style="margin-top:8px">${attachment ? `<span class="file-chip">📎 ${attachment.name || "المرفق الحالي"}</span>` : ""}</div>
         </div>
       `;
       wireAttachment();
     } else if (type === "إيراد مشروع") {
       extraBox.innerHTML = `
-        <div class="field"><label>طريقة الاستلام</label><select id="e_paymentMethod">${PAYMENT_METHODS.map(m => `<option value="${m}">${m}</option>`).join("")}</select></div>
+        <div class="field"><label>طريقة الاستلام</label><select id="e_paymentMethod">${PAYMENT_METHODS.map(m => `<option value="${m}" ${isEdit && existingEntry.paymentMethod === m ? "selected" : ""}>${m}</option>`).join("")}</select></div>
       `;
     } else {
       extraBox.innerHTML = "";
@@ -194,7 +223,7 @@ function openAccEntryModal(el) {
     const vatApplicable = ov.querySelector("#e_vat").checked;
     const type = typeSelect.value;
     const entry = {
-      id: uid("ae"), projectId: ACC_SELECTED_PROJECT, type,
+      id: isEdit ? existingEntry.id : uid("ae"), projectId: ACC_SELECTED_PROJECT, type,
       amount, vatApplicable, vatAmount: vatApplicable ? amount * VAT_RATE : 0,
       date: ov.querySelector("#e_date").value || todayISO(), note: ov.querySelector("#e_note").value.trim(),
     };
@@ -206,11 +235,16 @@ function openAccEntryModal(el) {
       entry.attachment = attachment;
     }
     const entries = dbGet("accProjects", []);
-    entries.push(entry);
+    if (isEdit) {
+      const idx = entries.findIndex(x => x.id === existingEntry.id);
+      if (idx >= 0) entries[idx] = entry; else entries.push(entry);
+    } else {
+      entries.push(entry);
+    }
     dbSet("accProjects", entries);
     const projectName = (dbGet("projects", []).find(p => p.id === ACC_SELECTED_PROJECT) || {}).name || "";
-    logActivity(`تم تسجيل حركة "${type}" بقيمة ${fmtMoney(amount)} لمشروع "${projectName}"`);
-    toast("تم إضافة الحركة المالية");
+    logActivity(`تم ${isEdit ? "تعديل" : "تسجيل"} حركة "${type}" بقيمة ${fmtMoney(amount)} لمشروع "${projectName}"`);
+    toast(isEdit ? "تم حفظ التعديلات على الحركة" : "تم إضافة الحركة المالية");
     closeModal();
     renderAccProjects(el);
   };
