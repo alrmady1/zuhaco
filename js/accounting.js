@@ -17,6 +17,7 @@ function defaultExpenseCatalog() {
   return [
     mk("مواد", ["إسمنت", "بلوك", "حديد", "رمل", "كهربائيات", "صبغة", "أخرى"]),
     mk("رواتب", []),
+    mk("سلفية", []),
     mk("مواد التشغيل والنظافة", []),
     mk("إقامات", ["أجور طبي", "رسوم تجديد", "رسوم نقل كفالة", "رسوم مكتب عمل", "تحويل مهنة"]),
     mk("إيجار", []),
@@ -31,6 +32,11 @@ function getExpenseCatalog() {
   // العهد لها صفحتها المستقلة (تبويب "العهد") — لا يجوز إضافتها كتصنيف ضمن المصاريف الإدارية
   const filtered = cat.filter(c => c.name !== "مصاريف عهدة");
   if (filtered.length !== cat.length) { cat = filtered; dbSet("expenseCatalog", cat); }
+  // ترحيل: إضافة تصنيف "سلفية" تلقائياً للأنظمة القائمة التي أُنشئ كتالوجها قبل إضافة هذا التصنيف
+  if (!cat.some(c => c.name === "سلفية")) {
+    cat.push({ id: uid("ecat"), name: "سلفية", items: [] });
+    dbSet("expenseCatalog", cat);
+  }
   return cat;
 }
 function getExpenseCategoryNames() {
@@ -453,6 +459,9 @@ function generalExpenseSubtitle(e) {
   if (e.category === "رواتب" && e.employeeName) {
     return `${e.employeeName}${e.salaryMonth ? " — راتب شهر " + salaryMonthLabel(e.salaryMonth) : ""}`;
   }
+  if (e.category === "سلفية" && e.advanceEmployeeName) {
+    return `${e.advanceEmployeeName} — ${e.advanceStatus === "exempt" ? "معفية" : "تُخصم من الراتب القادم"}`;
+  }
   const parts = [];
   if (e.subItem) parts.push(e.subItem);
   if (e.facilityName) parts.push("المرفق: " + e.facilityName);
@@ -777,6 +786,24 @@ function openGeneralExpenseModal(el) {
           ${!facilities.length ? `<div class="hint">لا توجد مرافق مسجلة — أضفها من الإعدادات ← المرافق</div>` : ""}
         </div>
       `;
+    } else if (catName === "سلفية") {
+      dateLabel.textContent = "تاريخ السلفية";
+      extraBox.innerHTML = `
+        <div class="grid cols-2">
+          <div class="field"><label>الموظف</label>
+            <select id="g_advanceEmployee">
+              <option value="">— اختر الموظف —</option>
+              ${users.map(u => `<option value="${u.id}">${u.name} — ${u.role}</option>`).join("")}
+            </select>
+          </div>
+          <div class="field"><label>حالة السلفية</label>
+            <select id="g_advanceStatus">
+              <option value="deduct">تُخصم من الراتب القادم</option>
+              <option value="exempt">معفية (لا تُخصم)</option>
+            </select>
+          </div>
+        </div>
+      `;
     } else {
       dateLabel.textContent = "التاريخ";
       const cat = catalog.find(c => c.name === catName);
@@ -832,6 +859,15 @@ function openGeneralExpenseModal(el) {
         const facility = dbGet("facilities", []).find(f => f.id === facilitySelect.value);
         if (facility) { entry.facilityId = facility.id; entry.facilityName = facility.name; logSuffix = ` — المرفق: ${facility.name}`; }
       }
+    } else if (category === "سلفية") {
+      const empSelect = ov.querySelector("#g_advanceEmployee");
+      const emp = users.find(u => u.id === (empSelect ? empSelect.value : ""));
+      if (!emp) { toast("يرجى اختيار الموظف"); return; }
+      const status = ov.querySelector("#g_advanceStatus").value;
+      entry.advanceEmployeeId = emp.id;
+      entry.advanceEmployeeName = emp.name;
+      entry.advanceStatus = status;
+      logSuffix = ` للموظف "${emp.name}" — ${status === "exempt" ? "معفية" : "تُخصم من الراتب القادم"}`;
     } else {
       const subSelect = ov.querySelector("#g_subItem");
       if (subSelect && subSelect.value) { entry.subItem = subSelect.value; logSuffix = ` (${subSelect.value})`; }
