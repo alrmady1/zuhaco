@@ -1041,7 +1041,38 @@ function renderCompanyTab(el) {
       </div>
       <button class="btn primary" id="cp_save">💾 حفظ بيانات المؤسسة</button>
     </div>
+
+    ${(getCurrentUser() || {}).role === "مدير عام" ? `
+    <div class="card" style="background:#fdf6ec;border-color:#f2dfb8">
+      <h3 class="mt-0">مزامنة بيانات هذا الجهاز مع الخادم</h3>
+      <p class="text-muted" style="font-size:12.5px">إن كان هذا الجهاز لا يزال يحتفظ ببيانات محلية قديمة (من قبل الانتقال لقاعدة البيانات المركزية) غير موجودة حالياً على الخادم — مثل مشاريع أو عملاء أُدخلوا من هذا الجهاز تحديداً — يمكنك رفعها الآن لدمجها مع بيانات الخادم.</p>
+      <p style="font-size:12.5px;color:var(--warning);font-weight:700">⚠️ تنبيه: أي بيانات في هذا الجهاز تحمل نفس المفتاح (مثل قائمة المشاريع كاملة) ستستبدل ما هو موجود حالياً على الخادم لذلك المفتاح. استخدم هذا فقط إذا كنت متأكداً أن بيانات هذا الجهاز أحدث/أكمل.</p>
+      <button class="btn" id="syncDeviceBtn">رفع ودمج بيانات هذا الجهاز</button>
+      <span id="syncDeviceStatus" class="text-muted" style="font-size:12.5px;margin-inline-start:10px"></span>
+    </div>` : ""}
   `;
+
+  const syncBtn = document.getElementById("syncDeviceBtn");
+  if (syncBtn) syncBtn.onclick = async () => {
+    if (!confirm("سيتم رفع كل بيانات هذا الجهاز المحلية ودمجها مع الخادم، مع استبدال أي مفتاح مطابق. هل أنت متأكد؟")) return;
+    const status = document.getElementById("syncDeviceStatus");
+    syncBtn.disabled = true;
+    status.textContent = "جارٍ الرفع...";
+    try {
+      const legacy = collectLegacyLocalData();
+      const res = await fetch("/api/data", {
+        method: "POST",
+        headers: Object.assign({ "Content-Type": "application/json" }, authHeader()),
+        body: JSON.stringify({ bulk: legacy }),
+      });
+      if (!res.ok) throw new Error("http " + res.status);
+      status.textContent = "تم الدمج بنجاح — جارٍ إعادة التحميل...";
+      setTimeout(() => location.reload(), 1000);
+    } catch (e) {
+      status.textContent = "تعذّر الرفع — تحقق من الاتصال وحاول مرة أخرى.";
+      syncBtn.disabled = false;
+    }
+  };
 
   let pendingLogo = profile.logo || null;
 
