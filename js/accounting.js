@@ -196,7 +196,13 @@ function openAccEntryModal(el, existingEntry) {
     } else if (type === "إيراد مشروع") {
       extraBox.innerHTML = `
         <div class="field"><label>طريقة الاستلام</label><select id="e_paymentMethod">${PAYMENT_METHODS.map(m => `<option value="${m}" ${isEdit && existingEntry.paymentMethod === m ? "selected" : ""}>${m}</option>`).join("")}</select></div>
+        <div class="field">
+          <label>إيصال التحويل أو الاستلام (اختياري)</label>
+          <input type="file" id="e_attachment" accept=".pdf,image/*">
+          <div id="e_attachmentPreview" class="flex wrap" style="margin-top:8px">${attachment ? `<span class="file-chip">📎 ${attachment.name || "المرفق الحالي"}</span>` : ""}</div>
+        </div>
       `;
+      wireAttachment();
     } else {
       extraBox.innerHTML = "";
     }
@@ -232,6 +238,8 @@ function openAccEntryModal(el, existingEntry) {
     if (type === "دفعة مشتريات") {
       entry.invoiceRefNumber = ov.querySelector("#e_invoiceRef").value.trim();
       entry.vendorName = ov.querySelector("#e_vendor").value.trim();
+      entry.attachment = attachment;
+    } else if (type === "إيراد مشروع") {
       entry.attachment = attachment;
     }
     const entries = dbGet("accProjects", []);
