@@ -64,7 +64,7 @@ function renderLogin() {
   document.getElementById("root").innerHTML = `
     <div class="login-wrap">
       <div class="login-card login-card-wide">
-        <div class="login-logo"><img src="logo.png" alt="شركة زهى الاعمال للمقاولات"></div>
+        <div class="login-logo"><img src="logo.jpg" alt="شركة زهى الاعمال للمقاولات"></div>
         <h1>شركة زهى الاعمال للمقاولات</h1>
         <p class="sub">اختر اسمك وأدخل الرقم السري لتسجيل الدخول</p>
         <div class="login-user-list">
@@ -117,7 +117,7 @@ function renderApp() {
       <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
       <aside class="sidebar" id="sidebarAside">
         <div class="sidebar-brand">
-          <div class="logo"><img src="logo.png" alt="شركة زهى الاعمال للمقاولات"></div>
+          <div class="logo"><img src="logo.jpg" alt="شركة زهى الاعمال للمقاولات"></div>
           <div class="name">شركة زهى الاعمال للمقاولات<small>نظام إدارة المشاريع</small></div>
         </div>
         <nav class="sidebar-nav" id="sidebarNav"></nav>
