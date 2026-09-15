@@ -234,9 +234,10 @@ function renderContractBuilder(el) {
 
   el.innerHTML = `
     <div class="section-title-row">
-      <div><h2>إنشاء عقد جديد</h2><p>اختر نموذج العقد وأدخل بيانات العميل والدفعات</p></div>
+      <div><h2>${d.id ? "تعديل عقد" : "إنشاء عقد جديد"}</h2><p>اختر نموذج العقد وأدخل بيانات العميل والدفعات</p></div>
       <button class="btn" id="backList">إلغاء والرجوع</button>
     </div>
+    ${d.id ? `<div class="card" style="background:#fdf6ec;border-color:#f2dfb8"><span style="font-size:12.5px;color:var(--warning)">⚠️ تنبيه: هذا عقد محفوظ وقد يكون سارياً بالفعل — تأكد من إبلاغ الطرف الآخر بأي تعديل جوهري عليه.</span></div>` : ""}
 
     <div class="card">
       <h3>نوع العقد</h3>
@@ -309,8 +310,12 @@ function renderContractBuilder(el) {
 
   renderPaymentsRows();
 
-  document.getElementById("backList").onclick = () => { CONTRACTS_VIEW = "list"; router(); };
-  document.getElementById("cancelContractBtn").onclick = () => { CONTRACTS_VIEW = "list"; router(); };
+  const goBack = () => {
+    if (d.id) { CONTRACT_VIEW_ID = d.id; CONTRACTS_VIEW = "view"; } else { CONTRACTS_VIEW = "list"; }
+    router();
+  };
+  document.getElementById("backList").onclick = goBack;
+  document.getElementById("cancelContractBtn").onclick = goBack;
 
   el.querySelectorAll("[data-type]").forEach(p => p.onclick = () => { d.type = p.dataset.type; renderContractBuilder(el); });
 
@@ -387,14 +392,21 @@ function renderContractBuilder(el) {
     if (Math.round(sum) !== 100) { toast("مجموع نسب الدفعات يجب أن يساوي 100%"); return; }
 
     const contracts = dbGet("contracts", []);
-    d.id = uid("c");
+    const isEdit = !!d.id;
+    if (!isEdit) d.id = uid("c");
     d.endDate = contractEndDate(d);
     d.contractText = document.getElementById("c_text").value;
-    contracts.push(d);
+    if (isEdit) {
+      const idx = contracts.findIndex(x => x.id === d.id);
+      if (idx >= 0) contracts[idx] = d; else contracts.push(d);
+    } else {
+      contracts.push(d);
+    }
     dbSet("contracts", contracts);
-    logActivity(`تم إنشاء عقد "${(CONTRACT_TYPES.find(t => t.key === d.type) || {}).label || d.type}" للعميل "${d.clientName}" بقيمة ${fmtMoneyEN(d.totalAmount)}`);
-    toast("تم حفظ العقد بنجاح");
-    CONTRACTS_VIEW = "list";
+    logActivity(`تم ${isEdit ? "تعديل" : "إنشاء"} عقد "${(CONTRACT_TYPES.find(t => t.key === d.type) || {}).label || d.type}" للعميل "${d.clientName}" بقيمة ${fmtMoneyEN(d.totalAmount)}`);
+    toast(isEdit ? "تم حفظ التعديلات على العقد" : "تم حفظ العقد بنجاح");
+    CONTRACT_VIEW_ID = d.id;
+    CONTRACTS_VIEW = "view";
     router();
   };
 }
@@ -402,15 +414,27 @@ function renderContractBuilder(el) {
 function renderContractView(el) {
   const c = dbGet("contracts", []).find(x => x.id === CONTRACT_VIEW_ID);
   if (!c) { CONTRACTS_VIEW = "list"; router(); return; }
+  const canEdit = hasPermission((getCurrentUser() || {}).role, "contracts_add");
   el.innerHTML = `
     <div class="section-title-row no-print">
       <div><h2>${(CONTRACT_TYPES.find(t => t.key === c.type) || {}).label}</h2><p>${c.clientName}</p></div>
-      <div class="flex gap"><button class="btn" id="backList2">رجوع</button><button class="btn primary" id="printContract">🖨️ طباعة</button></div>
+      <div class="flex gap">
+        <button class="btn" id="backList2">رجوع</button>
+        ${canEdit ? `<button class="btn" id="editContract">✏️ تعديل</button>` : ""}
+        <button class="btn primary" id="printContract">🖨️ طباعة</button>
+      </div>
     </div>
     <div class="card">
       <pre style="white-space:pre-wrap;font-family:'Cairo',sans-serif;line-height:1.9;font-size:13.5px;margin:0">${c.contractText}</pre>
     </div>
   `;
+  const editBtn = document.getElementById("editContract");
+  if (editBtn) editBtn.onclick = () => {
+    if (!confirm("تنبيه: هذا العقد قد يكون سارياً بالفعل بين الطرفين — هل أنت متأكد من رغبتك في التعديل عليه؟")) return;
+    DRAFT_CONTRACT = JSON.parse(JSON.stringify(c));
+    CONTRACTS_VIEW = "builder";
+    router();
+  };
   document.getElementById("backList2").onclick = () => { CONTRACTS_VIEW = "list"; router(); };
   document.getElementById("printContract").onclick = () => window.print();
 }
