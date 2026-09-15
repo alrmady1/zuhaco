@@ -18,11 +18,21 @@ const CONTRACT_TYPES = [
   { key: "finishing", label: "عقد أعمال تشطيبات" },
 ];
 
-// يحسب المبلغ الأساسي (قبل الضريبة) والضريبة والإجمالي شامل الضريبة، حسب ما إذا كان
-// المبلغ المُدخل (d.totalAmount) شاملاً للضريبة أصلاً أم لا (d.amountIncludesVat)
+const VAT_MODES = [
+  { key: "excluded", label: "غير شامل الضريبة (تُضاف 15%)" },
+  { key: "included", label: "شامل الضريبة (15% مضمّنة في المبلغ)" },
+  { key: "none", label: "بدون ضريبة (المشروع معفى)" },
+];
+
+// يحسب المبلغ الأساسي (قبل الضريبة) والضريبة والإجمالي شامل الضريبة، حسب طريقة احتساب
+// الضريبة المختارة لهذا العقد (d.vatMode): excluded | included | none
 function contractAmounts(d) {
   const entered = Number(d.totalAmount) || 0;
-  if (d.amountIncludesVat) {
+  const mode = d.vatMode || (d.amountIncludesVat ? "included" : "excluded");
+  if (mode === "none") {
+    return { base: entered, vat: 0, grand: entered };
+  }
+  if (mode === "included") {
     const base = entered / (1 + VAT_RATE);
     return { base, vat: entered - base, grand: entered };
   }
@@ -48,9 +58,13 @@ ${d.projectDescription}
 يلتزم المقاول بتنفيذ أعمال ${typeLabel.replace("عقد ", "")} للمشروع الخاص بالمالك وفقاً للمواصفات والمخططات المعتمدة من الطرفين.
 
 المادة الثانية - القيمة الإجمالية
-${d.amountIncludesVat
-    ? `تبلغ قيمة العقد مبلغ ${fmtMoneyEN(contractAmounts(d).grand)} شاملاً ضريبة القيمة المضافة بنسبة 15% (قيمة الضريبة ${fmtMoneyEN(contractAmounts(d).vat)} من أصل مبلغ ${fmtMoneyEN(contractAmounts(d).base)} قبل الضريبة)، تُسدد على دفعات وفق الجدول التالي:`
-    : `تبلغ قيمة العقد مبلغ ${fmtMoneyEN(contractAmounts(d).base)} غير شامل ضريبة القيمة المضافة، ويضاف إليها ضريبة القيمة المضافة بنسبة 15% وقدرها ${fmtMoneyEN(contractAmounts(d).vat)}، ليصبح الإجمالي شامل الضريبة مبلغ ${fmtMoneyEN(contractAmounts(d).grand)}، تُسدد على دفعات وفق الجدول التالي:`}
+${(() => {
+    const mode = d.vatMode || (d.amountIncludesVat ? "included" : "excluded");
+    const a = contractAmounts(d);
+    if (mode === "none") return `تبلغ قيمة العقد مبلغ ${fmtMoneyEN(a.base)}، وهذه القيمة غير خاضعة لضريبة القيمة المضافة، تُسدد على دفعات وفق الجدول التالي:`;
+    if (mode === "included") return `تبلغ قيمة العقد مبلغ ${fmtMoneyEN(a.grand)} شاملاً ضريبة القيمة المضافة بنسبة 15% (قيمة الضريبة ${fmtMoneyEN(a.vat)} من أصل مبلغ ${fmtMoneyEN(a.base)} قبل الضريبة)، تُسدد على دفعات وفق الجدول التالي:`;
+    return `تبلغ قيمة العقد مبلغ ${fmtMoneyEN(a.base)} غير شامل ضريبة القيمة المضافة، ويضاف إليها ضريبة القيمة المضافة بنسبة 15% وقدرها ${fmtMoneyEN(a.vat)}، ليصبح الإجمالي شامل الضريبة مبلغ ${fmtMoneyEN(a.grand)}، تُسدد على دفعات وفق الجدول التالي:`;
+  })()}
 ${d.paymentsText || ""}
 
 المادة الثالثة - مدة التنفيذ
@@ -82,7 +96,7 @@ function newDraftContract() {
     id: null, type: "construction", linkedClientId: "", clientName: "", taxNumber: "",
     ownerContactName: "", ownerContactRole: "", ownerContactPhone: "", ownerContactEmail: "",
     projectDescription: "",
-    totalAmount: 0, amountIncludesVat: false, paymentsCount: 2, payments: [{ percent: 50 }, { percent: 50 }],
+    totalAmount: 0, vatMode: "excluded", paymentsCount: 2, payments: [{ percent: 50 }, { percent: 50 }],
     startDate: "", durationDays: "", endDate: "", hideDuration: false,
     contractText: "", date: todayISO(),
   };
@@ -215,6 +229,7 @@ function paymentsSummaryText(d) {
 
 function renderContractBuilder(el) {
   const d = DRAFT_CONTRACT;
+  if (!d.vatMode) d.vatMode = d.amountIncludesVat ? "included" : "excluded";
   const percentSum = d.payments.reduce((s, p) => s + Number(p.percent || 0), 0);
 
   el.innerHTML = `
@@ -270,7 +285,9 @@ function renderContractBuilder(el) {
         <div class="field"><label>قيمة المشروع (ر.س)</label><input type="number" min="0" id="c_total" value="${d.totalAmount}"></div>
         <div class="field"><label>عدد الدفعات</label><input type="number" min="1" max="12" id="c_count" value="${d.paymentsCount}"></div>
       </div>
-      <label class="chk" style="margin-bottom:14px"><input type="checkbox" id="c_includesVat" ${d.amountIncludesVat ? "checked" : ""}> المبلغ أعلاه شامل ضريبة القيمة المضافة (15%)</label>
+      <div class="field"><label>طريقة احتساب الضريبة</label>
+        <select id="c_vatMode">${VAT_MODES.map(m => `<option value="${m.key}" ${d.vatMode === m.key ? "selected" : ""}>${m.label}</option>`).join("")}</select>
+      </div>
       <div class="grid cols-2" style="margin-bottom:14px">
         <div class="kv-row"><span class="k">ضريبة القيمة المضافة (15%)</span><span class="v" id="c_vatAmount">${fmtMoneyEN(contractAmounts(d).vat)}</span></div>
         <div class="kv-row"><span class="k">الإجمالي شامل الضريبة</span><span class="v" id="c_grandTotal">${fmtMoneyEN(contractAmounts(d).grand)}</span></div>
@@ -317,8 +334,8 @@ function renderContractBuilder(el) {
     updateVatDisplay();
     renderPaymentsRows();
   };
-  document.getElementById("c_includesVat").onchange = (e) => {
-    d.amountIncludesVat = e.target.checked;
+  document.getElementById("c_vatMode").onchange = (e) => {
+    d.vatMode = e.target.value;
     updateVatDisplay();
     renderPaymentsRows();
   };
