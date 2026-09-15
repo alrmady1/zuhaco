@@ -12,7 +12,6 @@ const ACC_TYPE_BADGE = {
   "دفعة مشتريات": "blue", "مصروف مواد": "orange", "مصروف عمال": "orange", "مصروف نثرية": "gray",
 };
 const PAYMENT_METHODS = ["تحويل بنكي", "كاش", "شبكة"];
-const VEHICLE_EXPENSE_TYPES = ["بنزين", "زيت", "تجديد استمارة", "فحص دوري", "كفرات", "صيانة", "غسيل"];
 /* ---------- قائمة المصاريف والعهد (تصنيفات المصاريف الإدارية وبنودها الفرعية) ---------- */
 function defaultExpenseCatalog() {
   const mk = (name, itemNames) => ({ id: uid("ecat"), name, items: (itemNames || []).map(n => ({ id: uid("eit"), name: n })) });
@@ -902,6 +901,8 @@ function openGeneralExpenseModal(el, existingEntry) {
     } else if (catName === "مركبات") {
       dateLabel.textContent = "التاريخ";
       const vehicles = dbGet("vehicles", []);
+      const vehCat = catalog.find(c => c.name === "مركبات");
+      const vehItems = vehCat ? vehCat.items : [];
       extraBox.innerHTML = `
         <div class="grid cols-2">
           <div class="field"><label>المركبة</label>
@@ -912,10 +913,11 @@ function openGeneralExpenseModal(el, existingEntry) {
             ${!vehicles.length ? `<div class="hint">لا توجد مركبات مسجلة — أضفها من الإعدادات ← المركبات</div>` : ""}
           </div>
           <div class="field"><label>نوع المصروف</label>
-            <select id="g_vehicleExpenseType">
+            <select id="g_subItem">
               <option value="">— اختر نوع المصروف —</option>
-              ${VEHICLE_EXPENSE_TYPES.map(t => `<option value="${t}" ${isEdit && existingEntry.vehicleExpenseType === t ? "selected" : ""}>${t}</option>`).join("")}
+              ${vehItems.map(it => `<option value="${it.name}" ${isEdit && existingEntry.subItem === it.name ? "selected" : ""}>${it.name}</option>`).join("")}
             </select>
+            ${!vehItems.length ? `<div class="hint">لا توجد أنواع مصروفات مسجلة — أضفها من الإعدادات ← العهد والمصروفات ← مركبات</div>` : ""}
           </div>
         </div>
       `;
@@ -991,18 +993,18 @@ function openGeneralExpenseModal(el, existingEntry) {
       logSuffix = ` للموظف "${emp.name}"${entry.salaryMonth ? " عن شهر " + salaryMonthLabel(entry.salaryMonth) : ""}`;
     } else if (category === "مركبات") {
       const vehSelect = ov.querySelector("#g_vehicle");
-      const vehExpTypeSelect = ov.querySelector("#g_vehicleExpenseType");
-      if (vehExpTypeSelect && vehExpTypeSelect.value) entry.vehicleExpenseType = vehExpTypeSelect.value;
+      const subSelect = ov.querySelector("#g_subItem");
+      if (subSelect && subSelect.value) entry.subItem = subSelect.value;
       if (vehSelect && vehSelect.value) {
         const veh = dbGet("vehicles", []).find(v => v.id === vehSelect.value);
         if (veh) {
           const label = [veh.brand, veh.modelTrim].filter(Boolean).join(" ") || veh.type || "مركبة";
           entry.vehicleId = veh.id;
           entry.vehicleLabel = label;
-          logSuffix = ` — المركبة: ${label}${entry.vehicleExpenseType ? " (" + entry.vehicleExpenseType + ")" : ""}`;
+          logSuffix = ` — المركبة: ${label}${entry.subItem ? " (" + entry.subItem + ")" : ""}`;
         }
-      } else if (entry.vehicleExpenseType) {
-        logSuffix = ` — ${entry.vehicleExpenseType}`;
+      } else if (entry.subItem) {
+        logSuffix = ` — ${entry.subItem}`;
       }
     } else if (category === "المرافق") {
       const facilitySelect = ov.querySelector("#g_facility");
