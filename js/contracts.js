@@ -360,25 +360,44 @@ function renderContractBuilder(el) {
 
   function renderPaymentsRows() {
     const wrap = document.getElementById("paymentsRows");
+    const base = contractAmounts(d).base;
     wrap.innerHTML = d.payments.map((p, i) => `
       <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:#fafbfc">
         <div class="item-row" style="grid-template-columns: 1fr 1fr 1fr;margin-bottom:0">
           <div style="font-size:12.5px;font-weight:700">الدفعة ${i + 1}</div>
           <div class="flex" style="align-items:center;gap:6px">
             <input type="number" min="0" max="100" step="0.01" value="${p.percent}" data-pct="${i}" placeholder="النسبة" style="width:65px;flex:none">
-            <span class="text-muted" style="font-size:12.5px;font-weight:700">% (نسبة مئوية)</span>
+            <span class="text-muted" style="font-size:12.5px;font-weight:700">%</span>
           </div>
-          <div style="font-size:12.5px" data-pctamt="${i}">${fmtMoneyEN(contractAmounts(d).base * p.percent / 100)}</div>
+          <div class="flex" style="align-items:center;gap:6px">
+            <input type="number" min="0" step="0.01" value="${(base * p.percent / 100).toFixed(2)}" data-amt="${i}" placeholder="المبلغ" style="width:110px;flex:none">
+            <span class="text-muted" style="font-size:12.5px;font-weight:700">ر.س</span>
+          </div>
         </div>
         <input data-milestone="${i}" value="${p.milestone || ""}" placeholder="تفصيلة الدفعة — مثال: عند توقيع العقد / عند الانتهاء من الصبة" style="width:100%;margin-top:8px;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:12.5px">
       </div>
     `).join("");
+
+    function updatePercentSum() {
+      const sum = Math.round(d.payments.reduce((s, p) => s + Number(p.percent || 0), 0) * 100) / 100;
+      document.getElementById("percentSumLabel").textContent = `مجموع النسب: ${sum}% ${Math.round(sum) !== 100 ? "⚠️ يجب أن يساوي المجموع 100%" : "✅"}`;
+    }
+
     wrap.querySelectorAll("[data-pct]").forEach(inp => inp.oninput = () => {
       const i = Number(inp.dataset.pct);
       d.payments[i].percent = Number(inp.value) || 0;
-      document.querySelector(`[data-pctamt="${i}"]`).textContent = fmtMoneyEN(contractAmounts(d).base * d.payments[i].percent / 100);
-      const sum = d.payments.reduce((s, p) => s + Number(p.percent || 0), 0);
-      document.getElementById("percentSumLabel").textContent = `مجموع النسب: ${sum}% ${sum !== 100 ? "⚠️ يجب أن يساوي المجموع 100%" : "✅"}`;
+      const amtInput = wrap.querySelector(`[data-amt="${i}"]`);
+      if (amtInput) amtInput.value = (contractAmounts(d).base * d.payments[i].percent / 100).toFixed(2);
+      updatePercentSum();
+    });
+    wrap.querySelectorAll("[data-amt]").forEach(inp => inp.oninput = () => {
+      const i = Number(inp.dataset.amt);
+      const b = contractAmounts(d).base;
+      const amt = Number(inp.value) || 0;
+      d.payments[i].percent = b > 0 ? Math.round((amt / b) * 10000) / 100 : 0;
+      const pctInput = wrap.querySelector(`[data-pct="${i}"]`);
+      if (pctInput) pctInput.value = d.payments[i].percent;
+      updatePercentSum();
     });
     wrap.querySelectorAll("[data-milestone]").forEach(inp => inp.oninput = () => {
       d.payments[Number(inp.dataset.milestone)].milestone = inp.value;

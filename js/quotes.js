@@ -411,6 +411,7 @@ function renderQuoteItemRow(qc, it, idx) {
         <label class="chk" title="نسبة الربح — تُضاف على سعر التكلفة لتكوين السعر النهائي للعميل">ربح% <input type="number" min="0" step="0.1" value="${it.profitMargin !== undefined ? it.profitMargin : 30}" data-margin="${key}" style="width:60px"></label>
         <input type="number" min="0" step="0.01" value="${it.qty}" data-qty="${key}" placeholder="الكمية" title="الكمية">
         <div class="total-cell" data-total="${key}" title="السعر النهائي شامل الربح">${fmtMoney(itemTotal(it))}</div>
+        <button class="btn sm" data-dupqitem="${key}" title="عمل نسخة من هذا البند">📋 نسخ</button>
         <button class="btn sm danger" data-rmitem="${key}">حذف</button>
       </div>
     </div>
@@ -528,6 +529,16 @@ function bindQuoteBuilderEvents(el) {
     const [catId, idx] = b.dataset.rmitem.split(":");
     const qc = q.categories.find(c => c.catId === catId);
     qc.items.splice(Number(idx), 1);
+    renderQuoteBuilder(el);
+  });
+
+  el.querySelectorAll("[data-dupqitem]").forEach(b => b.onclick = () => {
+    const [catId, idx] = b.dataset.dupqitem.split(":");
+    const qc = q.categories.find(c => c.catId === catId);
+    const copy = JSON.parse(JSON.stringify(qc.items[Number(idx)]));
+    copy.name = copy.name + " (نسخة)";
+    qc.items.splice(Number(idx) + 1, 0, copy);
+    toast("تم نسخ البند — يمكنك الآن تعديله");
     renderQuoteBuilder(el);
   });
 

@@ -1229,7 +1229,10 @@ function renderCatalogTab(el) {
                     <td style="text-align:center"><input type="checkbox" ${it.install && it.install.enabled ? "checked" : ""} data-editinschk="${cat.id}:${it.id}" style="width:auto"></td>
                     <td><input type="number" min="0" step="0.01" value="${it.install ? it.install.price : 0}" data-editinsprice="${cat.id}:${it.id}" ${it.install && it.install.enabled ? "" : "disabled"} style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;width:90px"></td>
                     <td><input type="number" min="0" step="0.1" value="${it.profitMargin !== undefined ? it.profitMargin : 30}" data-editmargin="${cat.id}:${it.id}" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;width:80px"></td>
-                    <td><button class="btn sm danger" data-delitem="${cat.id}:${it.id}">حذف</button></td>
+                    <td>
+                      <button class="btn sm" data-dupitem="${cat.id}:${it.id}" title="عمل نسخة من هذا البند">📋 نسخ</button>
+                      <button class="btn sm danger" data-delitem="${cat.id}:${it.id}">حذف</button>
+                    </td>
                   </tr>`).join("")}
                 <tr>
                   <td><input placeholder="اسم بند جديد" data-newname="${cat.id}"></td>
@@ -1306,6 +1309,21 @@ function renderCatalogTab(el) {
     const cat = cats.find(c => c.id === catId);
     cat.items = cat.items.filter(i => i.id !== itemId);
     dbSet("priceCatalog", cats);
+    renderSettings(el.parentElement);
+  });
+
+  el.querySelectorAll("[data-dupitem]").forEach(b => b.onclick = () => {
+    const [catId, itemId] = b.dataset.dupitem.split(":");
+    const cats = dbGet("priceCatalog", []);
+    const cat = cats.find(c => c.id === catId);
+    const item = cat.items.find(i => i.id === itemId);
+    const idx = cat.items.findIndex(i => i.id === itemId);
+    const copy = JSON.parse(JSON.stringify(item));
+    copy.id = uid("it");
+    copy.name = item.name + " (نسخة)";
+    cat.items.splice(idx + 1, 0, copy);
+    dbSet("priceCatalog", cats);
+    toast("تم نسخ البند — يمكنك الآن تعديله");
     renderSettings(el.parentElement);
   });
 
