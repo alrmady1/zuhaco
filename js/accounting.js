@@ -456,6 +456,7 @@ function generalExpenseSubtitle(e) {
   const parts = [];
   if (e.subItem) parts.push(e.subItem);
   if (e.facilityName) parts.push("المرفق: " + e.facilityName);
+  if (e.vehicleLabel) parts.push("المركبة: " + e.vehicleLabel);
   return parts.join(" — ");
 }
 
@@ -752,6 +753,30 @@ function openGeneralExpenseModal(el) {
           <div class="field"><label>الشهر المستحق عنه الراتب</label><input type="month" id="g_salaryMonth" value="${todayISO().slice(0, 7)}"></div>
         </div>
       `;
+    } else if (catName === "مركبات") {
+      dateLabel.textContent = "التاريخ";
+      const vehicles = dbGet("vehicles", []);
+      extraBox.innerHTML = `
+        <div class="field"><label>المركبة</label>
+          <select id="g_vehicle">
+            <option value="">— اختر المركبة —</option>
+            ${vehicles.map(v => `<option value="${v.id}">${[v.brand, v.modelTrim].filter(Boolean).join(" ") || v.type || "مركبة"}${v.regNumber ? " — استمارة " + v.regNumber : ""}</option>`).join("")}
+          </select>
+          ${!vehicles.length ? `<div class="hint">لا توجد مركبات مسجلة — أضفها من الإعدادات ← المركبات</div>` : ""}
+        </div>
+      `;
+    } else if (catName === "المرافق") {
+      dateLabel.textContent = "التاريخ";
+      const facilities = dbGet("facilities", []);
+      extraBox.innerHTML = `
+        <div class="field"><label>المرفق</label>
+          <select id="g_facility">
+            <option value="">— اختر المرفق —</option>
+            ${facilities.map(f => `<option value="${f.id}">${f.name}${f.type ? " — " + f.type : ""}</option>`).join("")}
+          </select>
+          ${!facilities.length ? `<div class="hint">لا توجد مرافق مسجلة — أضفها من الإعدادات ← المرافق</div>` : ""}
+        </div>
+      `;
     } else {
       dateLabel.textContent = "التاريخ";
       const cat = catalog.find(c => c.name === catName);
@@ -764,17 +789,6 @@ function openGeneralExpenseModal(el) {
           </select>
         </div>
       ` : "";
-    }
-    const facilities = dbGet("facilities", []);
-    if (facilities.length) {
-      extraBox.innerHTML += `
-        <div class="field"><label>المرفق المرتبط (اختياري)</label>
-          <select id="g_facility">
-            <option value="">— بدون تحديد —</option>
-            ${facilities.map(f => `<option value="${f.id}">${f.name}${f.type ? " — " + f.type : ""}</option>`).join("")}
-          </select>
-        </div>
-      `;
     }
   }
   renderExtraFields();
@@ -801,14 +815,26 @@ function openGeneralExpenseModal(el) {
       entry.employeeName = emp.name;
       entry.salaryMonth = ov.querySelector("#g_salaryMonth").value;
       logSuffix = ` للموظف "${emp.name}"${entry.salaryMonth ? " عن شهر " + salaryMonthLabel(entry.salaryMonth) : ""}`;
+    } else if (category === "مركبات") {
+      const vehSelect = ov.querySelector("#g_vehicle");
+      if (vehSelect && vehSelect.value) {
+        const veh = dbGet("vehicles", []).find(v => v.id === vehSelect.value);
+        if (veh) {
+          const label = [veh.brand, veh.modelTrim].filter(Boolean).join(" ") || veh.type || "مركبة";
+          entry.vehicleId = veh.id;
+          entry.vehicleLabel = label;
+          logSuffix = ` — المركبة: ${label}`;
+        }
+      }
+    } else if (category === "المرافق") {
+      const facilitySelect = ov.querySelector("#g_facility");
+      if (facilitySelect && facilitySelect.value) {
+        const facility = dbGet("facilities", []).find(f => f.id === facilitySelect.value);
+        if (facility) { entry.facilityId = facility.id; entry.facilityName = facility.name; logSuffix = ` — المرفق: ${facility.name}`; }
+      }
     } else {
       const subSelect = ov.querySelector("#g_subItem");
       if (subSelect && subSelect.value) { entry.subItem = subSelect.value; logSuffix = ` (${subSelect.value})`; }
-    }
-    const facilitySelect = ov.querySelector("#g_facility");
-    if (facilitySelect && facilitySelect.value) {
-      const facility = dbGet("facilities", []).find(f => f.id === facilitySelect.value);
-      if (facility) { entry.facilityId = facility.id; entry.facilityName = facility.name; logSuffix += ` — المرفق: ${facility.name}`; }
     }
     list.push(entry);
     dbSet("accGeneral", list);
