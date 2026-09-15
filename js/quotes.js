@@ -400,8 +400,11 @@ function renderQuoteItemRow(qc, it, idx) {
   return `
     <div class="qitem-row" data-item-row="${key}">
       <div class="qitem-name">
-        <strong>${it.name}</strong>
-        <span class="text-muted" style="font-size:11.5px">(الوحدة: ${it.unit})</span>
+        <input value="${it.name}" data-itemname="${key}" style="font-weight:700;border:1px solid var(--border);border-radius:6px;padding:5px 8px;width:100%;margin-bottom:5px">
+        <div class="flex" style="align-items:center;gap:6px">
+          <span class="text-muted" style="font-size:11.5px">الوحدة:</span>
+          <input value="${it.unit}" data-itemunit="${key}" style="border:1px solid var(--border);border-radius:6px;padding:3px 7px;width:80px;font-size:11.5px">
+        </div>
       </div>
       <div class="qitem-controls">
         <label class="chk"><input type="checkbox" ${supIncluded ? "checked" : ""} data-supchk="${key}"> توريد</label>
@@ -547,6 +550,15 @@ function bindQuoteBuilderEvents(el) {
     const qc = q.categories.find(c => c.catId === catId);
     return { catId, idx: Number(idx), it: qc.items[Number(idx)] };
   }
+
+  el.querySelectorAll("[data-itemname]").forEach(inp => inp.oninput = () => {
+    const { it } = getItemRef(inp.dataset.itemname);
+    it.name = inp.value;
+  });
+  el.querySelectorAll("[data-itemunit]").forEach(inp => inp.oninput = () => {
+    const { it } = getItemRef(inp.dataset.itemunit);
+    it.unit = inp.value;
+  });
 
   el.querySelectorAll("[data-qty]").forEach(inp => inp.oninput = () => {
     const { catId, idx, it } = getItemRef(inp.dataset.qty);

@@ -317,7 +317,16 @@ function renderContractBuilder(el) {
   document.getElementById("backList").onclick = goBack;
   document.getElementById("cancelContractBtn").onclick = goBack;
 
-  el.querySelectorAll("[data-type]").forEach(p => p.onclick = () => { d.type = p.dataset.type; renderContractBuilder(el); });
+  el.querySelectorAll("[data-type]").forEach(p => p.onclick = () => {
+    const newType = p.dataset.type;
+    if (newType === d.type) return;
+    if (d.contractText && d.contractText.trim()) {
+      if (!confirm("تغيير نوع العقد سيُعيد توليد نص العقد تلقائياً ليطابق النوع الجديد، وقد يفقد أي تعديل يدوي أضفته على النص — هل تريد المتابعة؟")) return;
+    }
+    d.type = newType;
+    d.contractText = contractTemplateText(d.type, { ...d, paymentsText: paymentsSummaryText(d) });
+    renderContractBuilder(el);
+  });
 
   bindContractClientPicker(el, d, () => renderContractBuilder(el));
   document.getElementById("c_ownerName").oninput = (e) => d.ownerContactName = e.target.value;
