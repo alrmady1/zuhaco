@@ -141,7 +141,7 @@ function renderFacilitiesTab(el) {
                 <td>${f.ownership === "إيجار" ? `<input type="number" min="0" step="0.01" value="${f.rentValue || 0}" data-editf="${f.id}:rentValue" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;width:100px">` : `<span class="text-muted">-</span>`}</td>
                 <td>${f.ownership === "إيجار" ? `<input type="date" value="${f.contractStart || ""}" data-editf="${f.id}:contractStart" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px">` : `<span class="text-muted">-</span>`}</td>
                 <td>${f.ownership === "إيجار" ? `<input type="date" value="${f.contractEnd || ""}" data-editf="${f.id}:contractEnd" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px">` : `<span class="text-muted">-</span>`}</td>
-                <td><button class="btn sm danger" data-delfac="${f.id}">حذف</button></td>
+                <td><button class="btn-icon danger" data-delfac="${f.id}" title="حذف">${ICON_DELETE}</button></td>
               </tr>`).join("") : `<tr><td colspan="7"><div class="empty-state"><div class="ic">🏢</div>لا توجد مرافق مسجلة بعد</div></td></tr>`}
           </tbody>
         </table>
@@ -246,7 +246,7 @@ function renderLeavesTab(el) {
               ${l.pendingGmApproval ? (isGM ? `<button class="btn sm" data-approveleave="${l.id}">بانتظار موافقتك — اعتماد</button>` : `<span class="badge orange">بانتظار موافقة المدير العام</span>`) : ""}
               ${l.notes ? `<span class="text-muted">${l.notes}</span>` : ""}
               ${l.photo ? `<a href="${l.photo}" target="_blank" class="veh-doc-thumb"><img src="${l.photo}"></a>` : ""}
-              <button class="btn sm danger" data-delleave="${l.id}">حذف</button>
+              <button class="btn-icon danger" data-delleave="${l.id}" title="حذف">${ICON_DELETE}</button>
             </div>
           `).join("") : `<p class="text-muted" style="font-size:12px;margin:0">لا توجد إجازات مسجّلة له بعد</p>`}
         </div>`;
@@ -645,7 +645,7 @@ function renderVehiclesTab(el) {
                   ${v.regImage ? `<a href="${v.regImage}" target="_blank" class="veh-doc-thumb"><img src="${v.regImage}"></a>` : `<span class="text-muted" style="font-size:11.5px">لا توجد صورة</span>`}
                   <input type="file" accept="image/*" data-vimg="${v.id}" style="display:block;margin-top:6px;font-size:11px;max-width:130px">
                 </td>
-                <td><button class="btn sm danger" data-delveh="${v.id}">حذف</button></td>
+                <td><button class="btn-icon danger" data-delveh="${v.id}" title="حذف">${ICON_DELETE}</button></td>
               </tr>`).join("") : `<tr><td colspan="11"><div class="empty-state"><div class="ic">🚙</div>لا توجد مركبات مسجلة بعد</div></td></tr>`}
           </tbody>
         </table>
@@ -1142,7 +1142,7 @@ function renderUsersTab(el) {
                 </td>
                 <td><input type="password" data-editpass="${u.id}" value="${u.password || ""}" placeholder="بدون رقم سري" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;width:110px"></td>
                 <td><input type="date" data-edithire="${u.id}" value="${u.hireDate || ""}" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px"></td>
-                <td><button class="btn sm danger" data-deluser="${u.id}">حذف</button></td>
+                <td><button class="btn-icon danger" data-deluser="${u.id}" title="حذف">${ICON_DELETE}</button></td>
               </tr>`).join("")}
           </tbody>
         </table>
@@ -1264,7 +1264,7 @@ function renderCatalogTab(el) {
                     <td><input type="number" min="0" step="0.1" value="${it.profitMargin !== undefined ? it.profitMargin : 30}" data-editmargin="${cat.id}:${it.id}" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;width:80px"></td>
                     <td>
                       <button class="btn sm" data-dupitem="${cat.id}:${it.id}" title="عمل نسخة من هذا البند">📋 نسخ</button>
-                      <button class="btn sm danger" data-delitem="${cat.id}:${it.id}">حذف</button>
+                      <button class="btn-icon danger" data-delitem="${cat.id}:${it.id}" title="حذف">${ICON_DELETE}</button>
                     </td>
                   </tr>`).join("")}
                 <tr>
@@ -1479,7 +1479,7 @@ function renderRiyadhZonesTab(el) {
       <tr>
         <td>${a.neighborhood}</td>
         <td><select data-neighborhoodzone="${a.id}">${zones.map(z => `<option value="${z.id}" ${z.id === a.zone_id ? "selected" : ""}>${z.name}</option>`).join("")}</select></td>
-        <td><button class="btn sm danger" data-neighborhooddel="${a.id}">حذف</button></td>
+        <td><button class="btn-icon danger" data-neighborhooddel="${a.id}" title="حذف">${ICON_DELETE}</button></td>
       </tr>`;
   });
   if (!sorted.length) rowsHtml = `<tr><td colspan="3" class="text-muted" style="text-align:center;padding:14px">لا توجد أحياء مربوطة بعد</td></tr>`;
@@ -1505,7 +1505,7 @@ function renderRiyadhZonesTab(el) {
             <input value="${z.name}" data-zonename="${z.id}" style="flex:1;min-width:130px;font-weight:700">
             <button class="btn sm ${RZ_DRAWING_ZONE === z.id ? "primary" : ""}" data-zonedraw="${z.id}">${RZ_DRAWING_ZONE === z.id ? "جارِ الرسم…" : "رسم الحدود"}</button>
             ${z.boundary && z.boundary.length ? `<button class="btn sm" data-zoneclear="${z.id}">مسح الحدود</button>` : ""}
-            <button class="btn sm danger" data-zonedel="${z.id}">حذف</button>
+            <button class="btn-icon danger" data-zonedel="${z.id}" title="حذف">${ICON_DELETE}</button>
           </div>
         `).join("") || `<div class="text-muted" style="text-align:center;padding:14px">لا توجد مناطق بعد</div>`}
       </div>

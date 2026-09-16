@@ -48,6 +48,7 @@ function renderClientsList(el) {
   const projects = dbGet("projects", []);
   const role = (getCurrentUser() || {}).role;
   const canAddClient = hasPermission(role, "clients_add");
+  const canDeleteClient = hasPermission(role, "clients_delete");
 
   el.innerHTML = `
     <div class="section-title-row">
@@ -80,7 +81,11 @@ function renderClientsList(el) {
                 <td>${c.taxNumber || "-"}</td>
                 <td class="text-muted">${c.address || "-"}</td>
                 <td>${projCount ? `<span class="badge blue">${projCount} مشروع</span>` : ""} ${quoteCount ? `<span class="badge orange">${quoteCount} عرض سعر</span>` : ""} ${contractCount ? `<span class="badge green">${contractCount} عقد</span>` : ""}</td>
-                <td><button class="btn sm" data-openclient="${c.id}">فتح</button></td>
+                <td>
+                  <button class="btn-icon" data-openclient="${c.id}" title="فتح">${ICON_VIEW}</button>
+                  <button class="btn-icon" data-editclient="${c.id}" title="تعديل">${ICON_EDIT}</button>
+                  ${canDeleteClient ? `<button class="btn-icon danger" data-delclient="${c.id}" title="حذف">${ICON_DELETE}</button>` : ""}
+                </td>
               </tr>`;
             }).join("")}
           </tbody>
@@ -95,24 +100,38 @@ function renderClientsList(el) {
   el.querySelectorAll("[data-openclient]").forEach(b => b.onclick = () => {
     CLIENT_VIEW_ID = b.dataset.openclient; CLIENTS_VIEW = "detail"; router();
   });
+  el.querySelectorAll("[data-editclient]").forEach(b => b.onclick = () => {
+    const target = dbGet("clients", []).find(x => x.id === b.dataset.editclient);
+    if (target) openNewClientModal(() => renderClientsList(el), target);
+  });
+  el.querySelectorAll("[data-delclient]").forEach(b => b.onclick = () => {
+    const target = dbGet("clients", []).find(x => x.id === b.dataset.delclient);
+    if (!target) return;
+    if (!confirm(`حذف العميل "${target.name}"؟ لن يؤثر هذا على المشاريع أو العروض المرتبطة به.`)) return;
+    dbSet("clients", dbGet("clients", []).filter(x => x.id !== target.id));
+    logActivity(`تم حذف العميل "${target.name}"`);
+    toast("تم حذف العميل");
+    renderClientsList(el);
+  });
 }
 
-function openNewClientModal(onSaved) {
+function openNewClientModal(onSaved, existingClient) {
+  const isEdit = !!existingClient;
   const html = `
-    <div class="modal-head"><h3>عميل جديد</h3><button class="modal-close" id="mClose">×</button></div>
+    <div class="modal-head"><h3>${isEdit ? "تعديل بيانات العميل" : "عميل جديد"}</h3><button class="modal-close" id="mClose">×</button></div>
     <div class="grid cols-2">
-      <div class="field" style="grid-column:span 2"><label>اسم العميل</label><input id="nc_name"></div>
+      <div class="field" style="grid-column:span 2"><label>اسم العميل</label><input id="nc_name" value="${isEdit ? existingClient.name : ""}"></div>
       <div class="field" style="grid-column:span 2"><label>تصنيف العميل</label>
-        <select id="nc_type">${CLIENT_TYPES.map(t => `<option>${t}</option>`).join("")}</select>
+        <select id="nc_type">${CLIENT_TYPES.map(t => `<option ${isEdit && existingClient.clientType === t ? "selected" : ""}>${t}</option>`).join("")}</select>
       </div>
-      <div class="field"><label>رقم الجوال</label><input id="nc_phone"></div>
-      <div class="field"><label>البريد الإلكتروني</label><input id="nc_email"></div>
-      <div class="field"><label>الرقم الضريبي</label><input id="nc_tax"></div>
-      <div class="field"><label>الحي</label><select id="nc_district">${districtOptionsHtml("")}</select></div>
-      <div class="field" style="grid-column:span 2"><label>العنوان</label><input id="nc_address"></div>
-      <div class="field" style="grid-column:span 2"><label>ملاحظات</label><textarea id="nc_notes"></textarea></div>
+      <div class="field"><label>رقم الجوال</label><input id="nc_phone" value="${isEdit ? (existingClient.phone || "") : ""}"></div>
+      <div class="field"><label>البريد الإلكتروني</label><input id="nc_email" value="${isEdit ? (existingClient.email || "") : ""}"></div>
+      <div class="field"><label>الرقم الضريبي</label><input id="nc_tax" value="${isEdit ? (existingClient.taxNumber || "") : ""}"></div>
+      <div class="field"><label>الحي</label><select id="nc_district">${districtOptionsHtml(isEdit ? (existingClient.district || "") : "")}</select></div>
+      <div class="field" style="grid-column:span 2"><label>العنوان</label><input id="nc_address" value="${isEdit ? (existingClient.address || "") : ""}"></div>
+      <div class="field" style="grid-column:span 2"><label>ملاحظات</label><textarea id="nc_notes">${isEdit ? (existingClient.notes || "") : ""}</textarea></div>
     </div>
-    <div class="flex gap"><button class="btn primary" id="nc_save">حفظ العميل</button><button class="btn" id="nc_cancel">إلغاء</button></div>
+    <div class="flex gap"><button class="btn primary" id="nc_save">${isEdit ? "حفظ التعديلات" : "حفظ العميل"}</button><button class="btn" id="nc_cancel">إلغاء</button></div>
   `;
   const ov = openModalShell(html);
   ov.querySelector("#mClose").onclick = closeModal;
@@ -121,8 +140,8 @@ function openNewClientModal(onSaved) {
     const name = ov.querySelector("#nc_name").value.trim();
     if (!name) { toast("يرجى إدخال اسم العميل"); return; }
     const clients = dbGet("clients", []);
-    const newClient = {
-      id: uid("cl"), name,
+    const clientData = {
+      id: isEdit ? existingClient.id : uid("cl"), name,
       clientType: ov.querySelector("#nc_type").value,
       phone: ov.querySelector("#nc_phone").value.trim(),
       email: ov.querySelector("#nc_email").value.trim(),
@@ -130,14 +149,22 @@ function openNewClientModal(onSaved) {
       district: ov.querySelector("#nc_district").value,
       address: ov.querySelector("#nc_address").value.trim(),
       notes: ov.querySelector("#nc_notes").value.trim(),
-      createdAt: new Date().toISOString(),
+      createdAt: isEdit ? existingClient.createdAt : new Date().toISOString(),
     };
-    clients.push(newClient);
-    dbSet("clients", clients);
-    logActivity(`تم إضافة عميل جديد "${newClient.name}"`);
-    toast("تم إضافة العميل");
+    if (isEdit) {
+      const idx = clients.findIndex(x => x.id === existingClient.id);
+      if (idx >= 0) clients[idx] = clientData;
+      dbSet("clients", clients);
+      logActivity(`تم تعديل بيانات العميل "${clientData.name}"`);
+      toast("تم حفظ التعديلات");
+    } else {
+      clients.push(clientData);
+      dbSet("clients", clients);
+      logActivity(`تم إضافة عميل جديد "${clientData.name}"`);
+      toast("تم إضافة العميل");
+    }
     closeModal();
-    if (typeof onSaved === "function") onSaved(newClient);
+    if (typeof onSaved === "function") onSaved(clientData);
     else router();
   };
 }

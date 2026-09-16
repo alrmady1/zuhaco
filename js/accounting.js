@@ -134,8 +134,8 @@ function renderAccProjects(el) {
                 </td>
                 <td>${e.attachment ? `<a href="${e.attachment.url}" target="_blank" rel="noopener" class="badge blue" style="text-decoration:none">📎 عرض المرفق</a>` : "-"}</td>
                 <td>
-                  ${e.type === "فاتورة ضريبية" ? `<button class="btn sm" data-printinv="${e.id}">طباعة</button>` : `<button class="btn sm" data-viewentry="${e.id}">عرض</button><button class="btn sm" data-editentry="${e.id}">تعديل</button>`}
-                  <button class="btn sm danger" data-delentry="${e.id}">حذف</button>
+                  ${e.type === "فاتورة ضريبية" ? `<button class="btn sm" data-printinv="${e.id}">طباعة</button>` : `<button class="btn-icon" data-viewentry="${e.id}" title="عرض">${ICON_VIEW}</button><button class="btn-icon" data-editentry="${e.id}" title="تعديل">${ICON_EDIT}</button>`}
+                  <button class="btn-icon danger" data-delentry="${e.id}" title="حذف">${ICON_DELETE}</button>
                 </td>
               </tr>`).join("")}
           </tbody>
@@ -601,9 +601,9 @@ function renderGeneralExpensesTab(el) {
                 <td class="text-muted">${e.note || "-"}</td>
                 <td>${e.attachment ? `<a href="${e.attachment.url}" target="_blank" rel="noopener" class="badge blue" style="text-decoration:none">📎 عرض المرفق</a>` : "-"}</td>
                 <td>
-                  <button class="btn sm" data-viewgen="${e.id}">عرض</button>
-                  <button class="btn sm" data-editgen="${e.id}">تعديل</button>
-                  <button class="btn sm danger" data-delgen="${e.id}">حذف</button>
+                  <button class="btn-icon" data-viewgen="${e.id}" title="عرض">${ICON_VIEW}</button>
+                  <button class="btn-icon" data-editgen="${e.id}" title="تعديل">${ICON_EDIT}</button>
+                  <button class="btn-icon danger" data-delgen="${e.id}" title="حذف">${ICON_DELETE}</button>
                 </td>
               </tr>`).join("")}
           </tbody>
@@ -656,8 +656,8 @@ function renderCustodyTab(el) {
         </div>
         <div class="contract-row-amount" style="color:${balance >= 0 ? "var(--success)" : "var(--danger)"}">الرصيد: ${fmtMoney(balance)}</div>
         <div class="contract-row-actions no-print">
-          <button class="btn sm" data-opencustody="${c.id}">فتح</button>
-          <button class="btn sm danger" data-delcustody="${c.id}">حذف</button>
+          <button class="btn-icon" data-opencustody="${c.id}" title="فتح">${ICON_VIEW}</button>
+          <button class="btn-icon danger" data-delcustody="${c.id}" title="حذف">${ICON_DELETE}</button>
         </div>
       </div>`;
     }).join("") : `<div class="card empty-state"><div class="ic">💼</div>لا توجد عُهد مسجلة بعد</div>`}

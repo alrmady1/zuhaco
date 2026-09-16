@@ -203,8 +203,8 @@ function renderContractsList(el) {
         </div>
         <div class="contract-row-amount">${fmtMoneyEN(c.totalAmount)}</div>
         <div class="contract-row-actions no-print">
-          <button class="btn sm" data-viewc="${c.id}">فتح</button>
-          ${canDeleteContract ? `<button class="btn sm danger" data-delc="${c.id}">حذف</button>` : ""}
+          <button class="btn-icon" data-viewc="${c.id}" title="فتح">${ICON_VIEW}</button>
+          ${canDeleteContract ? `<button class="btn-icon danger" data-delc="${c.id}" title="حذف">${ICON_DELETE}</button>` : ""}
         </div>
       </div>`;
     }).join("") : `<div class="card empty-state"><div class="ic">📄</div>لا توجد عقود محفوظة بعد</div>`}

@@ -73,7 +73,7 @@ function renderVisits(el) {
                 <td>${v.requestedTime ? new Date(v.requestedTime).toLocaleString("ar-SA") : "-"}</td>
                 <td>${v.assignedToName || "-"}</td>
                 <td>${statusBadge(v.status)}</td>
-                <td><button class="btn sm" data-open="${v.id}">فتح</button></td>
+                <td><button class="btn-icon" data-open="${v.id}" title="فتح">${ICON_VIEW}</button></td>
               </tr>`).join("")}
           </tbody>
         </table>

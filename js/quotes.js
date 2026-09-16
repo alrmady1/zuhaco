@@ -106,8 +106,8 @@ function renderQuotesList(el) {
                 <td><strong>${fmtMoney(quoteTotal(q))}</strong></td>
                 <td>${fmtDate(q.date)}</td>
                 <td>
-                  <button class="btn sm" data-view="${q.id}">عرض</button>
-                  ${canDeleteQuote ? `<button class="btn sm danger" data-del="${q.id}">حذف</button>` : ""}
+                  <button class="btn-icon" data-view="${q.id}" title="عرض">${ICON_VIEW}</button>
+                  ${canDeleteQuote ? `<button class="btn-icon danger" data-del="${q.id}" title="حذف">${ICON_DELETE}</button>` : ""}
                 </td>
               </tr>`).join("")}
           </tbody>
@@ -415,7 +415,7 @@ function renderQuoteItemRow(qc, it, idx) {
         <input type="number" min="0" step="0.01" value="${it.qty}" data-qty="${key}" placeholder="الكمية" title="الكمية">
         <div class="total-cell" data-total="${key}" title="السعر النهائي شامل الربح">${fmtMoney(itemTotal(it))}</div>
         <button class="btn sm" data-dupqitem="${key}" title="عمل نسخة من هذا البند">📋 نسخ</button>
-        <button class="btn sm danger" data-rmitem="${key}">حذف</button>
+        <button class="btn-icon danger" data-rmitem="${key}" title="حذف">${ICON_DELETE}</button>
       </div>
     </div>
   `;
@@ -749,7 +749,7 @@ function renderViewItemsTable(categories) {
                   <td><input type="number" min="0" step="0.01" value="${itemUnitPrice(it).toFixed(2)}" data-vprice="${key}" style="width:100px"></td>
                   <td data-vtotal="${key}"><strong>${fmtMoney(itemTotal(it))}</strong></td>
                   <td class="no-print">
-                    <button class="btn sm danger" data-vrmitem="${key}">حذف</button>
+                    <button class="btn-icon danger" data-vrmitem="${key}" title="حذف">${ICON_DELETE}</button>
                   </td>
                 </tr>`;
               }).join("") || `<tr><td colspan="7" class="text-muted" style="text-align:center;padding:14px">لا توجد بنود في هذا التصنيف</td></tr>`}

@@ -64,8 +64,8 @@ function renderProjectsList(el) {
           <div class="text-muted" style="font-size:11px;margin-top:3px">${p.completion || 0}% مكتمل</div>
         </div>
         <div class="contract-row-actions no-print">
-          <button class="btn sm" data-openproj="${p.id}">فتح</button>
-          ${canDeleteProject ? `<button class="btn sm danger" data-delproj="${p.id}">حذف</button>` : ""}
+          <button class="btn-icon" data-openproj="${p.id}" title="فتح">${ICON_VIEW}</button>
+          ${canDeleteProject ? `<button class="btn-icon danger" data-delproj="${p.id}" title="حذف">${ICON_DELETE}</button>` : ""}
         </div>
       </div>`).join("") : `<div class="card empty-state"><div class="ic">🏗️</div>لا توجد مشاريع بعد</div>`}
   `;
