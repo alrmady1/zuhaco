@@ -118,6 +118,9 @@ function renderFacilitiesTab(el) {
         <div class="field"><label>قيمة الإيجار (ر.س)</label><input type="number" min="0" step="0.01" id="f_rentValue"></div>
         <div class="field"><label>بداية العقد</label><input type="date" id="f_contractStart"></div>
         <div class="field"><label>نهاية العقد</label><input type="date" id="f_contractEnd"></div>
+        <div class="field"><label>رسوم مكتب (ر.س)</label><input type="number" min="0" step="0.01" id="f_officeFee"></div>
+        <div class="field"><label><input type="checkbox" id="f_includesWater" style="width:auto;display:inline-block"> يشمل الماء</label></div>
+        <div class="field"><label><input type="checkbox" id="f_includesElectricity" style="width:auto;display:inline-block"> يشمل الكهرباء</label></div>
       </div>
       <button class="btn primary" id="addFacilityBtn">+ إضافة مرفق</button>
     </div>
@@ -126,7 +129,7 @@ function renderFacilitiesTab(el) {
       <h3>المرافق المسجلة (${facilities.length})</h3>
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>اسم المرفق</th><th>نوع المرفق</th><th>الملكية</th><th>قيمة الإيجار</th><th>بداية العقد</th><th>نهاية العقد</th><th></th></tr></thead>
+          <thead><tr><th>اسم المرفق</th><th>نوع المرفق</th><th>الملكية</th><th>قيمة الإيجار</th><th>رسوم مكتب</th><th>يشمل الماء</th><th>يشمل الكهرباء</th><th>بداية العقد</th><th>نهاية العقد</th><th></th></tr></thead>
           <tbody>
             ${facilities.length ? facilities.map(f => `
               <tr>
@@ -139,10 +142,13 @@ function renderFacilitiesTab(el) {
                   </select>
                 </td>
                 <td>${f.ownership === "إيجار" ? `<input type="number" min="0" step="0.01" value="${f.rentValue || 0}" data-editf="${f.id}:rentValue" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;width:100px">` : `<span class="text-muted">-</span>`}</td>
+                <td>${f.ownership === "إيجار" ? `<input type="number" min="0" step="0.01" value="${f.officeFee || 0}" data-editf="${f.id}:officeFee" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;width:90px">` : `<span class="text-muted">-</span>`}</td>
+                <td style="text-align:center">${f.ownership === "إيجار" ? `<input type="checkbox" data-editfchk="${f.id}:includesWater" ${f.includesWater ? "checked" : ""} style="width:auto">` : `<span class="text-muted">-</span>`}</td>
+                <td style="text-align:center">${f.ownership === "إيجار" ? `<input type="checkbox" data-editfchk="${f.id}:includesElectricity" ${f.includesElectricity ? "checked" : ""} style="width:auto">` : `<span class="text-muted">-</span>`}</td>
                 <td>${f.ownership === "إيجار" ? `<input type="date" value="${f.contractStart || ""}" data-editf="${f.id}:contractStart" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px">` : `<span class="text-muted">-</span>`}</td>
                 <td>${f.ownership === "إيجار" ? `<input type="date" value="${f.contractEnd || ""}" data-editf="${f.id}:contractEnd" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px">` : `<span class="text-muted">-</span>`}</td>
                 <td><button class="btn-icon danger" data-delfac="${f.id}" title="حذف">${ICON_DELETE}</button></td>
-              </tr>`).join("") : `<tr><td colspan="7"><div class="empty-state"><div class="ic">🏢</div>لا توجد مرافق مسجلة بعد</div></td></tr>`}
+              </tr>`).join("") : `<tr><td colspan="10"><div class="empty-state"><div class="ic">🏢</div>لا توجد مرافق مسجلة بعد</div></td></tr>`}
           </tbody>
         </table>
       </div>
@@ -166,6 +172,9 @@ function renderFacilitiesTab(el) {
       facility.rentValue = Number(document.getElementById("f_rentValue").value) || 0;
       facility.contractStart = document.getElementById("f_contractStart").value || "";
       facility.contractEnd = document.getElementById("f_contractEnd").value || "";
+      facility.officeFee = Number(document.getElementById("f_officeFee").value) || 0;
+      facility.includesWater = document.getElementById("f_includesWater").checked;
+      facility.includesElectricity = document.getElementById("f_includesElectricity").checked;
     }
     list.push(facility);
     dbSet("facilities", list);
@@ -182,7 +191,15 @@ function renderFacilitiesTab(el) {
   el.querySelectorAll("[data-editf]").forEach(inp => inp.onchange = () => {
     const [id, field] = inp.dataset.editf.split(":");
     const { list, f } = getFacility(id);
-    f[field] = field === "rentValue" ? (Number(inp.value) || 0) : inp.value;
+    f[field] = (field === "rentValue" || field === "officeFee") ? (Number(inp.value) || 0) : inp.value;
+    dbSet("facilities", list);
+    toast("تم الحفظ");
+  });
+
+  el.querySelectorAll("[data-editfchk]").forEach(chk => chk.onchange = () => {
+    const [id, field] = chk.dataset.editfchk.split(":");
+    const { list, f } = getFacility(id);
+    f[field] = chk.checked;
     dbSet("facilities", list);
     toast("تم الحفظ");
   });
