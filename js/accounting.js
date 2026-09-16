@@ -356,7 +356,7 @@ function printInvoice(id) {
 }
 
 /* ================= المحاسبة العامة (العهد والمصروفات) ================= */
-let ACC_GENERAL_TAB = "expenses"; // expenses | custody | employees | projects | vat
+let ACC_GENERAL_TAB = "expenses"; // expenses | custody | employees | assets | projects | vat
 let EMPLOYEES_VIEW = "list"; // list | detail
 let EMPLOYEE_VIEW_ID = null;
 
@@ -367,6 +367,7 @@ function renderAccGeneral(el) {
       <div class="tab-btn ${ACC_GENERAL_TAB === "expenses" ? "active" : ""}" data-gtab="expenses">المصاريف الإدارية</div>
       <div class="tab-btn ${ACC_GENERAL_TAB === "custody" ? "active" : ""}" data-gtab="custody">العهد</div>
       <div class="tab-btn ${ACC_GENERAL_TAB === "employees" ? "active" : ""}" data-gtab="employees">الموظفون</div>
+      <div class="tab-btn ${ACC_GENERAL_TAB === "assets" ? "active" : ""}" data-gtab="assets">الأصول</div>
       <div class="tab-btn ${ACC_GENERAL_TAB === "projects" ? "active" : ""}" data-gtab="projects">المشاريع</div>
       <div class="tab-btn ${ACC_GENERAL_TAB === "vat" ? "active" : ""}" data-gtab="vat">الضريبة</div>
     </div>
@@ -377,6 +378,7 @@ function renderAccGeneral(el) {
   const body = document.getElementById("accGeneralBody");
   if (ACC_GENERAL_TAB === "custody") renderCustodyTab(body);
   else if (ACC_GENERAL_TAB === "employees") renderEmployeesTab(body);
+  else if (ACC_GENERAL_TAB === "assets") renderAssetsTab(body);
   else if (ACC_GENERAL_TAB === "projects") renderAccGeneralProjectsTab(body);
   else if (ACC_GENERAL_TAB === "vat") renderAccGeneralVatTab(body);
   else renderGeneralExpensesTab(body);
@@ -1128,6 +1130,88 @@ function openIncidentModal(u, el) {
     closeModal();
     renderEmployeesTab(el);
   };
+}
+
+/* ================= تبويب الأصول (المركبات المملوكة وإهلاكها) ================= */
+// إهلاك بطريقة القسط الثابت — نفس المعادلة المستخدمة في قسم التنظيف بالضبط
+// (src/shared/depreciation.ts) حتى تتطابق الأرقام عند تجميعها لاحقاً في
+// موقع "قوائم الشركة الرئيسية".
+function computeAssetDepreciation(purchasePrice, purchaseDate, usefulLifeYears, salvageValue, asOfDate) {
+  asOfDate = asOfDate || new Date();
+  const depreciableBase = Math.max((Number(purchasePrice) || 0) - (Number(salvageValue) || 0), 0);
+  const totalMonths = Math.max(Math.round((Number(usefulLifeYears) || 0) * 12), 1);
+  const annual = usefulLifeYears > 0 ? depreciableBase / usefulLifeYears : 0;
+  const monthly = annual / 12;
+
+  const purchase = new Date(purchaseDate);
+  let monthsElapsed = 0;
+  if (!isNaN(purchase.getTime())) {
+    monthsElapsed = (asOfDate.getFullYear() - purchase.getFullYear()) * 12 + (asOfDate.getMonth() - purchase.getMonth());
+    if (asOfDate.getDate() < purchase.getDate()) monthsElapsed -= 1;
+    monthsElapsed = Math.min(Math.max(monthsElapsed, 0), totalMonths);
+  }
+
+  const accumulated = Math.round(monthly * monthsElapsed * 100) / 100;
+  const bookValue = Math.max(Math.round(((Number(purchasePrice) || 0) - accumulated) * 100) / 100, Number(salvageValue) || 0);
+
+  return {
+    annualDepreciation: Math.round(annual * 100) / 100,
+    monthlyDepreciation: Math.round(monthly * 100) / 100,
+    monthsElapsed,
+    accumulatedDepreciation: accumulated,
+    bookValue,
+  };
+}
+
+function renderAssetsTab(el) {
+  const vehicles = dbGet("vehicles", []).filter(v => v.ownership === "ملكية الشركة");
+  const trackedVehicles = vehicles.filter(v => Number(v.purchasePrice) > 0 && v.purchaseDate);
+  const untrackedCount = vehicles.length - trackedVehicles.length;
+
+  const rows = trackedVehicles.map(v => {
+    const dep = computeAssetDepreciation(v.purchasePrice, v.purchaseDate, v.usefulLifeYears, v.salvageValue);
+    return { v, dep };
+  });
+
+  const totalPurchase = rows.reduce((s, r) => s + Number(r.v.purchasePrice || 0), 0);
+  const totalAccumulated = rows.reduce((s, r) => s + r.dep.accumulatedDepreciation, 0);
+  const totalBookValue = rows.reduce((s, r) => s + r.dep.bookValue, 0);
+
+  el.innerHTML = `
+    <div class="card">
+      <h3 class="mt-0">الأصول الثابتة</h3>
+      <p class="text-muted" style="font-size:12.5px;margin-top:-6px">المركبات المملوكة للشركة (الإعدادات ← المركبات ← "ملكية الشركة") مع بيانات شراء مكتملة — تُحتسب إهلاكاً بطريقة القسط الثابت</p>
+    </div>
+
+    <div class="grid cols-3" style="margin-bottom:18px">
+      <div class="stat-card"><div class="label">إجمالي سعر الشراء</div><div class="value">${fmtMoney(totalPurchase)}</div></div>
+      <div class="stat-card"><div class="label">إجمالي الإهلاك المتراكم</div><div class="value danger">${fmtMoney(totalAccumulated)}</div></div>
+      <div class="stat-card"><div class="label">إجمالي القيمة الدفترية الحالية</div><div class="value success">${fmtMoney(totalBookValue)}</div></div>
+    </div>
+
+    <div class="card">
+      <h3>سجل الأصول</h3>
+      ${rows.length ? `
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>المركبة</th><th>تاريخ الشراء</th><th>سعر الشراء</th><th>العمر الافتراضي</th><th>الإهلاك السنوي</th><th>الإهلاك المتراكم</th><th>القيمة الدفترية الحالية</th></tr></thead>
+          <tbody>
+            ${rows.map(({ v, dep }) => `
+              <tr>
+                <td><strong>${[v.brand, v.modelTrim].filter(Boolean).join(" ") || "مركبة"}</strong>${v.regNumber ? `<div class="text-muted" style="font-size:11px">استمارة ${v.regNumber}</div>` : ""}</td>
+                <td>${fmtDate(v.purchaseDate)}</td>
+                <td>${fmtMoney(v.purchasePrice)}</td>
+                <td>${v.usefulLifeYears || 0} سنة</td>
+                <td>${fmtMoney(dep.annualDepreciation)}</td>
+                <td>${fmtMoney(dep.accumulatedDepreciation)}</td>
+                <td><strong>${fmtMoney(dep.bookValue)}</strong></td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>` : `<div class="empty-state"><div class="ic">🏗️</div>لا توجد أصول مسجلة بعد</div>`}
+      ${untrackedCount > 0 ? `<p class="text-muted" style="font-size:12px;margin-top:12px">${untrackedCount} مركبة مملوكة بلا بيانات شراء كاملة (سعر/تاريخ الشراء) — أكملها من الإعدادات ← المركبات لتظهر هنا.</p>` : ""}
+    </div>
+  `;
 }
 
 function openGeneralExpenseViewModal(e) {
