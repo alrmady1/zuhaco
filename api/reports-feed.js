@@ -4,7 +4,7 @@ import { ensureSchema, getValue } from '../lib/db.js';
 // (تجميع الضريبة والقوائم المالية لكيان واحد من قسمي المقاولات والتنظيف). محمية بمفتاح
 // سرّي ثابت (وليس بجلسة مستخدم عادية) لأن المستهلك خادم آخر لا متصفح مستخدم — تفادياً
 // لانتهاء صلاحية جلسات الـ 30 يوماً المستخدمة في باقي النظام.
-const REPORT_KEYS = ['accProjects', 'accGeneral', 'contracts', 'projects', 'clients'];
+const REPORT_KEYS = ['accProjects', 'accGeneral', 'contracts', 'projects', 'clients', 'vehicles', 'users', 'custodies', 'employeeIncidents'];
 
 export default async function handler(req, res) {
   try {
@@ -19,6 +19,8 @@ export default async function handler(req, res) {
     for (const key of REPORT_KEYS) {
       out[key] = (await getValue(key)) ?? [];
     }
+    // لا يجوز تسريب كلمة سر تسجيل الدخول ضمن بيانات الموظفين المحاسبية
+    out.users = out.users.map(u => { const { password, ...safe } = u; return safe; });
     return res.status(200).json(out);
   } catch (e) {
     console.error('reports-feed api error', e);
