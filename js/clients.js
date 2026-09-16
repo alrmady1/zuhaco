@@ -16,6 +16,24 @@ function sameClientName(a, b) {
   return (a || "").trim().toLowerCase() === (b || "").trim().toLowerCase();
 }
 
+// حقول إضافية حسب تصنيف العميل: الرقم الضريبي + العنوان الوطني لغير الأفراد، وبيانات الشخص المسؤول للشركات فقط
+function clientExtraFieldsHtml(prefix, c, type) {
+  let html = "";
+  if (type !== "فرد") {
+    html += `
+      <div class="field"><label>الرقم الضريبي</label><input id="${prefix}_tax" value="${c ? (c.taxNumber || "") : ""}"></div>
+      <div class="field"><label>العنوان الوطني</label><input id="${prefix}_nationalAddress" value="${c ? (c.nationalAddress || "") : ""}"></div>
+    `;
+  }
+  if (type === "شركة") {
+    html += `
+      <div class="field"><label>اسم الشخص المسؤول</label><input id="${prefix}_contactName" value="${c ? (c.contactPersonName || "") : ""}"></div>
+      <div class="field"><label>منصبه الوظيفي</label><input id="${prefix}_contactTitle" value="${c ? (c.contactPersonTitle || "") : ""}"></div>
+    `;
+  }
+  return html;
+}
+
 // قائمة أحياء الرياض مجمّعة حسب منطقتها (مُدارة من الإعدادات ← مناطق الرياض)
 function districtOptionsHtml(selected) {
   const zones = getRiyadhZones();
@@ -67,7 +85,7 @@ function renderClientsList(el) {
       ${clients.length ? `
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>اسم العميل</th><th>النوع</th><th>الجوال</th><th>الرقم الضريبي</th><th>العنوان</th><th>المشاريع</th><th></th></tr></thead>
+          <thead><tr><th>اسم العميل</th><th>النوع</th><th>الجوال</th><th>الرقم الضريبي</th><th>الحي</th><th>المشاريع</th><th></th></tr></thead>
           <tbody>
             ${clients.map(c => {
               const projCount = projects.filter(p => sameClientName(p.client, c.name)).length;
@@ -78,8 +96,8 @@ function renderClientsList(el) {
                 <td><strong>${c.name}</strong></td>
                 <td>${clientTypeBadge(c.clientType)}</td>
                 <td>${c.phone || "-"}</td>
-                <td>${c.taxNumber || "-"}</td>
-                <td class="text-muted">${c.address || "-"}</td>
+                <td>${c.clientType === "فرد" ? "-" : (c.taxNumber || "-")}</td>
+                <td class="text-muted">${c.district || "-"}</td>
                 <td>${projCount ? `<span class="badge blue">${projCount} مشروع</span>` : ""} ${quoteCount ? `<span class="badge orange">${quoteCount} عرض سعر</span>` : ""} ${contractCount ? `<span class="badge green">${contractCount} عقد</span>` : ""}</td>
                 <td>
                   <button class="btn-icon" data-openclient="${c.id}" title="فتح">${ICON_VIEW}</button>
@@ -117,37 +135,50 @@ function renderClientsList(el) {
 
 function openNewClientModal(onSaved, existingClient) {
   const isEdit = !!existingClient;
+  const initialType = isEdit ? (existingClient.clientType || "فرد") : "فرد";
   const html = `
     <div class="modal-head"><h3>${isEdit ? "تعديل بيانات العميل" : "عميل جديد"}</h3><button class="modal-close" id="mClose">×</button></div>
     <div class="grid cols-2">
       <div class="field" style="grid-column:span 2"><label>اسم العميل</label><input id="nc_name" value="${isEdit ? existingClient.name : ""}"></div>
       <div class="field" style="grid-column:span 2"><label>تصنيف العميل</label>
-        <select id="nc_type">${CLIENT_TYPES.map(t => `<option ${isEdit && existingClient.clientType === t ? "selected" : ""}>${t}</option>`).join("")}</select>
+        <select id="nc_type">${CLIENT_TYPES.map(t => `<option ${initialType === t ? "selected" : ""}>${t}</option>`).join("")}</select>
       </div>
       <div class="field"><label>رقم الجوال</label><input id="nc_phone" value="${isEdit ? (existingClient.phone || "") : ""}"></div>
       <div class="field"><label>البريد الإلكتروني</label><input id="nc_email" value="${isEdit ? (existingClient.email || "") : ""}"></div>
-      <div class="field"><label>الرقم الضريبي</label><input id="nc_tax" value="${isEdit ? (existingClient.taxNumber || "") : ""}"></div>
-      <div class="field"><label>الحي</label><select id="nc_district">${districtOptionsHtml(isEdit ? (existingClient.district || "") : "")}</select></div>
-      <div class="field" style="grid-column:span 2"><label>العنوان</label><input id="nc_address" value="${isEdit ? (existingClient.address || "") : ""}"></div>
-      <div class="field" style="grid-column:span 2"><label>ملاحظات</label><textarea id="nc_notes">${isEdit ? (existingClient.notes || "") : ""}</textarea></div>
+      <div class="field" style="grid-column:span 2"><label>الحي</label><select id="nc_district">${districtOptionsHtml(isEdit ? (existingClient.district || "") : "")}</select></div>
     </div>
+    <div class="grid cols-2" id="nc_extraFields">${clientExtraFieldsHtml("nc", isEdit ? existingClient : null, initialType)}</div>
+    <div class="field"><label>ملاحظات</label><textarea id="nc_notes">${isEdit ? (existingClient.notes || "") : ""}</textarea></div>
     <div class="flex gap"><button class="btn primary" id="nc_save">${isEdit ? "حفظ التعديلات" : "حفظ العميل"}</button><button class="btn" id="nc_cancel">إلغاء</button></div>
   `;
   const ov = openModalShell(html);
   ov.querySelector("#mClose").onclick = closeModal;
   ov.querySelector("#nc_cancel").onclick = closeModal;
+
+  const typeSelect = ov.querySelector("#nc_type");
+  const extraBox = ov.querySelector("#nc_extraFields");
+  typeSelect.onchange = () => {
+    extraBox.innerHTML = clientExtraFieldsHtml("nc", isEdit ? existingClient : null, typeSelect.value);
+  };
+
   ov.querySelector("#nc_save").onclick = () => {
     const name = ov.querySelector("#nc_name").value.trim();
     if (!name) { toast("يرجى إدخال اسم العميل"); return; }
+    const taxInput = ov.querySelector("#nc_tax");
+    const natAddrInput = ov.querySelector("#nc_nationalAddress");
+    const contactNameInput = ov.querySelector("#nc_contactName");
+    const contactTitleInput = ov.querySelector("#nc_contactTitle");
     const clients = dbGet("clients", []);
     const clientData = {
       id: isEdit ? existingClient.id : uid("cl"), name,
-      clientType: ov.querySelector("#nc_type").value,
+      clientType: typeSelect.value,
       phone: ov.querySelector("#nc_phone").value.trim(),
       email: ov.querySelector("#nc_email").value.trim(),
-      taxNumber: ov.querySelector("#nc_tax").value.trim(),
       district: ov.querySelector("#nc_district").value,
-      address: ov.querySelector("#nc_address").value.trim(),
+      taxNumber: taxInput ? taxInput.value.trim() : "",
+      nationalAddress: natAddrInput ? natAddrInput.value.trim() : "",
+      contactPersonName: contactNameInput ? contactNameInput.value.trim() : "",
+      contactPersonTitle: contactTitleInput ? contactTitleInput.value.trim() : "",
       notes: ov.querySelector("#nc_notes").value.trim(),
       createdAt: isEdit ? existingClient.createdAt : new Date().toISOString(),
     };
@@ -197,11 +228,8 @@ function renderClientDetail(el) {
           <div class="field"><label>رقم الجوال</label><input id="ec_phone" value="${c.phone || ""}"></div>
           <div class="field"><label>البريد الإلكتروني</label><input id="ec_email" value="${c.email || ""}"></div>
         </div>
-        <div class="grid cols-2">
-          <div class="field"><label>الرقم الضريبي</label><input id="ec_tax" value="${c.taxNumber || ""}"></div>
-          <div class="field"><label>الحي</label><select id="ec_district">${districtOptionsHtml(c.district || "")}</select></div>
-        </div>
-        <div class="field"><label>العنوان</label><input id="ec_address" value="${c.address || ""}"></div>
+        <div class="field"><label>الحي</label><select id="ec_district">${districtOptionsHtml(c.district || "")}</select></div>
+        <div class="grid cols-2" id="ec_extraFields">${clientExtraFieldsHtml("ec", c, c.clientType || "فرد")}</div>
         <div class="field"><label>ملاحظات</label><textarea id="ec_notes">${c.notes || ""}</textarea></div>
         <div class="flex gap">
           <button class="btn primary" id="ec_save">💾 حفظ التعديلات</button>
@@ -273,18 +301,30 @@ function renderClientDetail(el) {
 
   document.getElementById("backClients").onclick = () => { CLIENTS_VIEW = "list"; router(); };
 
+  const ecTypeSelect = document.getElementById("ec_type");
+  const ecExtraBox = document.getElementById("ec_extraFields");
+  ecTypeSelect.onchange = () => {
+    ecExtraBox.innerHTML = clientExtraFieldsHtml("ec", c, ecTypeSelect.value);
+  };
+
   document.getElementById("ec_save").onclick = () => {
     const name = document.getElementById("ec_name").value.trim();
     if (!name) { toast("يرجى إدخال اسم العميل"); return; }
+    const ecTax = document.getElementById("ec_tax");
+    const ecNatAddr = document.getElementById("ec_nationalAddress");
+    const ecContactName = document.getElementById("ec_contactName");
+    const ecContactTitle = document.getElementById("ec_contactTitle");
     const list = dbGet("clients", []);
     const target = list.find(x => x.id === c.id);
     target.name = name;
-    target.clientType = document.getElementById("ec_type").value;
+    target.clientType = ecTypeSelect.value;
     target.phone = document.getElementById("ec_phone").value.trim();
     target.email = document.getElementById("ec_email").value.trim();
-    target.taxNumber = document.getElementById("ec_tax").value.trim();
     target.district = document.getElementById("ec_district").value;
-    target.address = document.getElementById("ec_address").value.trim();
+    target.taxNumber = ecTax ? ecTax.value.trim() : "";
+    target.nationalAddress = ecNatAddr ? ecNatAddr.value.trim() : "";
+    target.contactPersonName = ecContactName ? ecContactName.value.trim() : "";
+    target.contactPersonTitle = ecContactTitle ? ecContactTitle.value.trim() : "";
     target.notes = document.getElementById("ec_notes").value.trim();
     dbSet("clients", list);
     logActivity(`تم تعديل بيانات العميل "${target.name}"`);
