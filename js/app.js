@@ -312,6 +312,9 @@ function renderApp() {
 function openSidebar() {
   document.getElementById("sidebarAside").classList.add("open");
   document.getElementById("sidebarBackdrop").classList.add("open");
+  // يُسجَّل هذا في السجل التاريخي (history) ليتمكن زر/إيماءة الرجوع في المتصفح
+  // (خصوصاً على الجوال) من إغلاق القائمة بدل مغادرة الصفحة وهي لا تزال مفتوحة.
+  history.pushState({ sidebarOpen: true }, "");
 }
 function closeSidebar() {
   const aside = document.getElementById("sidebarAside");
@@ -324,6 +327,10 @@ function toggleSidebar() {
   if (!aside) return;
   if (aside.classList.contains("open")) closeSidebar(); else openSidebar();
 }
+window.addEventListener("popstate", () => {
+  const aside = document.getElementById("sidebarAside");
+  if (aside && aside.classList.contains("open")) closeSidebar();
+});
 
 /* ---------- التنبيهات ---------- */
 function renderNotifBell() {
