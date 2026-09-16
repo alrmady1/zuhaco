@@ -356,7 +356,9 @@ function printInvoice(id) {
 }
 
 /* ================= المحاسبة العامة (العهد والمصروفات) ================= */
-let ACC_GENERAL_TAB = "expenses"; // expenses | custody | projects | vat
+let ACC_GENERAL_TAB = "expenses"; // expenses | custody | employees | projects | vat
+let EMPLOYEES_VIEW = "list"; // list | detail
+let EMPLOYEE_VIEW_ID = null;
 
 function renderAccGeneral(el) {
   el.innerHTML = `
@@ -364,6 +366,7 @@ function renderAccGeneral(el) {
     <div class="tabs">
       <div class="tab-btn ${ACC_GENERAL_TAB === "expenses" ? "active" : ""}" data-gtab="expenses">المصاريف الإدارية</div>
       <div class="tab-btn ${ACC_GENERAL_TAB === "custody" ? "active" : ""}" data-gtab="custody">العهد</div>
+      <div class="tab-btn ${ACC_GENERAL_TAB === "employees" ? "active" : ""}" data-gtab="employees">الموظفون</div>
       <div class="tab-btn ${ACC_GENERAL_TAB === "projects" ? "active" : ""}" data-gtab="projects">المشاريع</div>
       <div class="tab-btn ${ACC_GENERAL_TAB === "vat" ? "active" : ""}" data-gtab="vat">الضريبة</div>
     </div>
@@ -373,6 +376,7 @@ function renderAccGeneral(el) {
 
   const body = document.getElementById("accGeneralBody");
   if (ACC_GENERAL_TAB === "custody") renderCustodyTab(body);
+  else if (ACC_GENERAL_TAB === "employees") renderEmployeesTab(body);
   else if (ACC_GENERAL_TAB === "projects") renderAccGeneralProjectsTab(body);
   else if (ACC_GENERAL_TAB === "vat") renderAccGeneralVatTab(body);
   else renderGeneralExpensesTab(body);
@@ -817,6 +821,312 @@ function openAddCustodyTxnModal(custodyId, type, el) {
     toast(type === "إيداع" ? "تم إضافة الرصيد" : "تم تسجيل المصروف");
     closeModal();
     openCustodyDetailModal(custodyId, el);
+  };
+}
+
+/* ================= تبويب الموظفين (بيانات شخصية، إجازات، عهد، سلفيات، رواتب، مخالفات) ================= */
+function renderEmployeesTab(el) {
+  if (EMPLOYEES_VIEW === "detail" && EMPLOYEE_VIEW_ID) renderEmployeeDetail(el);
+  else renderEmployeesList(el);
+}
+
+function renderEmployeesList(el) {
+  const users = dbGet("users", []).slice().sort((a, b) => (a.name || "").localeCompare(b.name || "", "ar"));
+  el.innerHTML = `
+    <div class="card">
+      <h3 class="mt-0">الموظفون</h3>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>الاسم</th><th>المسمى الوظيفي</th><th>الحالة</th><th>الراتب الأساسي</th><th>رصيد الإجازة المتبقي</th><th></th></tr></thead>
+          <tbody>
+            ${users.length ? users.map(u => `
+              <tr>
+                <td><strong>${u.name}</strong></td>
+                <td>${u.role}</td>
+                <td>${u.status === "منتهي الخدمة" ? `<span class="badge red">منتهي الخدمة</span>` : `<span class="badge green">نشط</span>`}</td>
+                <td>${u.baseSalary ? fmtMoney(u.baseSalary) : `<span class="text-muted">غير محدد</span>`}</td>
+                <td>${employeeRemainingLeaveBalance(u.id)} يوم</td>
+                <td><button class="btn-icon" data-openemp="${u.id}" title="فتح">${ICON_VIEW}</button></td>
+              </tr>`).join("") : `<tr><td colspan="6"><div class="empty-state"><div class="ic">👤</div>لا يوجد موظفون بعد — أضفهم من الإعدادات ← التحكم بالمستخدمين</div></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  el.querySelectorAll("[data-openemp]").forEach(b => b.onclick = () => {
+    EMPLOYEE_VIEW_ID = b.dataset.openemp;
+    EMPLOYEES_VIEW = "detail";
+    renderEmployeesTab(el);
+  });
+}
+
+function renderEmployeeDetail(el) {
+  const users = dbGet("users", []);
+  const u = users.find(x => x.id === EMPLOYEE_VIEW_ID);
+  if (!u) { EMPLOYEES_VIEW = "list"; renderEmployeesTab(el); return; }
+
+  const isGM = (getCurrentUser() || {}).role === "مدير عام";
+  const vehicles = dbGet("vehicles", []).filter(v => v.employeeId === u.id);
+  const custodies = dbGet("custodies", []).filter(c => c.employeeId === u.id).sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+  const advances = dbGet("accGeneral", []).filter(e => e.category === "سلفية" && e.advanceEmployeeId === u.id).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  const incidents = dbGet("employeeIncidents", []).filter(i => i.employeeId === u.id).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+  const pendingAdvances = advances.filter(a => a.advanceStatus === "deduct" && !a.settled);
+  const pendingAdvancesTotal = pendingAdvances.reduce((s, a) => s + Number(a.amount || 0), 0);
+  const pendingViolations = incidents.filter(i => i.type === "مخالفة" && Number(i.deductionAmount) > 0 && !i.settled);
+  const pendingViolationsTotal = pendingViolations.reduce((s, i) => s + Number(i.deductionAmount || 0), 0);
+  const baseSalary = Number(u.baseSalary || 0);
+  const netSalary = baseSalary - pendingAdvancesTotal - pendingViolationsTotal;
+
+  const entitlement = employeeLeaveEntitlement(u.id);
+  const usedLeave = employeeUsedAnnualLeave(u.id);
+  const remainingLeave = employeeRemainingLeaveBalance(u.id);
+  const tenureYears = u.hireDate ? ((Date.now() - new Date(u.hireDate).getTime()) / (365.25 * 86400000)).toFixed(1) : null;
+
+  el.innerHTML = `
+    <div class="flex between" style="margin-bottom:14px">
+      <button class="btn" id="empBack">رجوع لقائمة الموظفين</button>
+    </div>
+
+    <div class="section-title-row">
+      <div><h2>${u.name}</h2><p>${u.role}${u.status === "منتهي الخدمة" ? ` — <span style="color:var(--danger)">منتهي الخدمة بتاريخ ${fmtDate(u.terminationDate)}</span>` : ""}</p></div>
+    </div>
+
+    <div class="grid cols-2">
+      <div class="card">
+        <h3>البيانات الشخصية</h3>
+        <div class="kv-row"><span class="k">اسم المستخدم</span><span class="v">${u.username || "-"}</span></div>
+        <div class="kv-row"><span class="k">المسمى الوظيفي</span><span class="v">${u.role}</span></div>
+        <div class="kv-row"><span class="k">تاريخ التعيين</span><span class="v">${u.hireDate ? fmtDate(u.hireDate) : "-"}</span></div>
+        <div class="kv-row"><span class="k">سنوات الخدمة</span><span class="v">${tenureYears !== null ? tenureYears + " سنة" : "-"}</span></div>
+        <div class="field" style="margin-top:10px"><label>الراتب الأساسي (ر.س)${isGM ? "" : " — يعدّله المدير العام فقط"}</label>
+          <input type="number" min="0" step="0.01" id="emp_baseSalary" value="${baseSalary}" ${isGM ? "" : "disabled"}>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>رصيد الإجازة السنوية</h3>
+        <div class="kv-row"><span class="k">الاستحقاق السنوي</span><span class="v">${entitlement} يوم</span></div>
+        <div class="kv-row"><span class="k">المستخدم هذا العام</span><span class="v">${usedLeave} يوم</span></div>
+        <div class="kv-row"><span class="k">المتبقي</span><span class="v" style="color:${remainingLeave < 0 ? "var(--danger)" : "var(--success)"}">${remainingLeave} يوم</span></div>
+      </div>
+    </div>
+
+    <div class="grid cols-2">
+      <div class="card">
+        <h3>المركبات المسندة له (${vehicles.length})</h3>
+        ${vehicles.length ? vehicles.map(v => `
+          <div class="kv-row"><span class="k">${[v.brand, v.modelTrim].filter(Boolean).join(" ") || v.category || "مركبة"}</span><span class="v">${v.regNumber ? "استمارة " + v.regNumber : "-"}</span></div>
+        `).join("") : `<p class="text-muted" style="font-size:12.5px">لا توجد مركبات مسندة له</p>`}
+      </div>
+
+      <div class="card">
+        <h3>حركة العهدة (${custodies.length})</h3>
+        ${custodies.length ? custodies.map(c => `
+          <div class="flex between" style="padding:7px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:12.5px">${c.scopeType === "project" ? "مشروع: " + (c.projectName || "-") : "مصاريف عامة"} — <span class="badge ${c.status === "مفتوحة" ? "orange" : "gray"}">${c.status}</span></span>
+            <span class="flex gap center">
+              <strong style="font-size:12.5px;color:${custodyBalance(c) >= 0 ? "var(--success)" : "var(--danger)"}">${fmtMoney(custodyBalance(c))}</strong>
+              <button class="btn-icon" data-opencus="${c.id}" title="فتح">${ICON_VIEW}</button>
+            </span>
+          </div>
+        `).join("") : `<p class="text-muted" style="font-size:12.5px">لا توجد عهد مسجلة له</p>`}
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>السلفيات (${advances.length})</h3>
+      ${advances.length ? `
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>المبلغ</th><th>التاريخ</th><th>الحالة</th><th>الخصم</th></tr></thead>
+          <tbody>
+            ${advances.map(a => `
+              <tr>
+                <td><strong>${fmtMoney(a.amount)}</strong></td>
+                <td>${fmtDate(a.date)}</td>
+                <td>${a.advanceStatus === "exempt" ? `<span class="badge gray">معفية</span>` : `<span class="badge orange">تُخصم من الراتب</span>`}</td>
+                <td>${a.advanceStatus === "deduct" ? (a.settled ? `<span class="badge green">خُصمت</span>` : `<span class="badge red">معلّقة</span>`) : "-"}</td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>` : `<p class="text-muted" style="font-size:12.5px">لا توجد سلفيات مسجلة له</p>`}
+    </div>
+
+    <div class="card">
+      <h3 class="mt-0">ملخص الراتب</h3>
+      <div class="grid cols-4">
+        <div class="stat-card"><div class="label">الراتب الأساسي</div><div class="value">${fmtMoney(baseSalary)}</div></div>
+        <div class="stat-card"><div class="label">خصم سلفيات معلّقة</div><div class="value danger">${fmtMoney(pendingAdvancesTotal)}</div></div>
+        <div class="stat-card"><div class="label">خصم مخالفات معلّقة</div><div class="value danger">${fmtMoney(pendingViolationsTotal)}</div></div>
+        <div class="stat-card"><div class="label">صافي الراتب المستحق</div><div class="value success">${fmtMoney(netSalary)}</div></div>
+      </div>
+      <button class="btn primary" id="empPaySalary" style="margin-top:14px" ${baseSalary <= 0 ? "disabled" : ""}>💾 تسجيل صرف الراتب</button>
+      <p class="text-muted" style="font-size:11.5px;margin-top:6px">يُنشئ حركة "رواتب" في المصاريف الإدارية بالصافي، ويعتبر السلفيات والمخالفات المعلّقة أعلاه "مخصومة".</p>
+    </div>
+
+    <div class="card">
+      <div class="flex between" style="align-items:center;margin-bottom:10px">
+        <h3 class="mt-0">المخالفات والإنذارات (${incidents.length})</h3>
+        <button class="btn sm primary" id="empAddIncident">+ تسجيل مخالفة/إنذار</button>
+      </div>
+      ${incidents.length ? incidents.map(i => `
+        <div class="flex between wrap" style="gap:8px;border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:8px">
+          <div>
+            <span class="badge ${i.type === "مخالفة" ? "red" : "orange"}">${i.type}</span>
+            <span style="font-size:12.5px;margin-inline-start:6px">${i.description || ""}</span>
+            <div class="text-muted" style="font-size:11.5px;margin-top:3px">${fmtDate(i.date)}${i.deductionAmount ? " — خصم " + fmtMoney(i.deductionAmount) + (i.settled ? " (خُصم)" : " (معلّق)") : ""}</div>
+          </div>
+          <button class="btn-icon danger" data-delincident="${i.id}" title="حذف">${ICON_DELETE}</button>
+        </div>
+      `).join("") : `<p class="text-muted" style="font-size:12.5px">لا توجد مخالفات أو إنذارات مسجلة</p>`}
+    </div>
+
+    ${isGM ? `
+    <div class="card">
+      <h3 class="mt-0">إنهاء الخدمة</h3>
+      ${u.status === "منتهي الخدمة" ? `
+        <p class="text-muted" style="font-size:12.5px">أُنهيت خدمة هذا الموظف بتاريخ ${fmtDate(u.terminationDate)}${u.terminationReason ? " — السبب: " + u.terminationReason : ""}</p>
+        <button class="btn" id="empReactivate">إعادة تفعيل الموظف</button>
+      ` : `
+        <p class="text-muted" style="font-size:12.5px">إنهاء عقد الموظف يوقف حالته في هذه الصفحة مع الاحتفاظ الكامل بسجلاته (العهد، السلفيات، الإجازات). هذا الإجراء لا يمنعه تلقائياً من تسجيل الدخول — إن أردت إلغاء وصوله للنظام فأوقف ذلك يدوياً من الإعدادات ← التحكم بالمستخدمين.</p>
+        <div class="grid cols-2">
+          <div class="field"><label>تاريخ انتهاء الخدمة</label><input type="date" id="emp_termDate" value="${todayISO()}"></div>
+          <div class="field"><label>السبب (اختياري)</label><input id="emp_termReason"></div>
+        </div>
+        <button class="btn danger" id="empTerminate">إنهاء عقد الموظف</button>
+      `}
+    </div>` : ""}
+  `;
+
+  document.getElementById("empBack").onclick = () => { EMPLOYEES_VIEW = "list"; EMPLOYEE_VIEW_ID = null; renderEmployeesTab(el); };
+
+  const salaryInput = document.getElementById("emp_baseSalary");
+  if (salaryInput && isGM) salaryInput.onchange = () => {
+    const list = dbGet("users", []);
+    const target = list.find(x => x.id === u.id);
+    target.baseSalary = Number(salaryInput.value) || 0;
+    dbSet("users", list);
+    logActivity(`تم تحديث الراتب الأساسي للموظف "${u.name}" إلى ${fmtMoney(target.baseSalary)}`);
+    toast("تم حفظ الراتب الأساسي");
+  };
+
+  el.querySelectorAll("[data-opencus]").forEach(b => b.onclick = () => openCustodyDetailModal(b.dataset.opencus, el));
+
+  document.getElementById("empAddIncident").onclick = () => openIncidentModal(u, el);
+
+  el.querySelectorAll("[data-delincident]").forEach(b => b.onclick = () => {
+    const list = dbGet("employeeIncidents", []);
+    const inc = list.find(x => x.id === b.dataset.delincident);
+    if (!inc) return;
+    if (!confirm(`حذف هذا السجل (${inc.type})؟`)) return;
+    dbSet("employeeIncidents", list.filter(x => x.id !== inc.id));
+    logActivity(`تم حذف ${inc.type} مسجّلة على الموظف "${u.name}"`);
+    renderEmployeesTab(el);
+  });
+
+  const payBtn = document.getElementById("empPaySalary");
+  if (payBtn) payBtn.onclick = () => {
+    if (!confirm(`تسجيل صرف راتب بقيمة ${fmtMoney(netSalary)} للموظف "${u.name}"؟ سيتم اعتبار السلفيات والمخالفات المعلّقة أعلاه "مخصومة".`)) return;
+    const genList = dbGet("accGeneral", []);
+    genList.push({
+      id: uid("ge"), category: "رواتب", amount: netSalary,
+      vatApplicable: false, vatAmount: 0,
+      date: todayISO(), note: `صافي بعد خصم سلفيات (${fmtMoney(pendingAdvancesTotal)}) ومخالفات (${fmtMoney(pendingViolationsTotal)})`,
+      paymentMethod: "",
+      attachment: null,
+      employeeId: u.id, employeeName: u.name, salaryMonth: todayISO().slice(0, 7),
+    });
+    dbSet("accGeneral", genList);
+
+    if (pendingAdvances.length) {
+      const advList = dbGet("accGeneral", []);
+      pendingAdvances.forEach(a => { const t = advList.find(x => x.id === a.id); if (t) t.settled = true; });
+      dbSet("accGeneral", advList);
+    }
+    if (pendingViolations.length) {
+      const incList = dbGet("employeeIncidents", []);
+      pendingViolations.forEach(i => { const t = incList.find(x => x.id === i.id); if (t) t.settled = true; });
+      dbSet("employeeIncidents", incList);
+    }
+
+    logActivity(`تم تسجيل صرف راتب للموظف "${u.name}" بقيمة ${fmtMoney(netSalary)}`);
+    toast("تم تسجيل الراتب");
+    renderEmployeesTab(el);
+  };
+
+  const termBtn = document.getElementById("empTerminate");
+  if (termBtn) termBtn.onclick = () => {
+    if (!confirm(`هل أنت متأكد من إنهاء عقد الموظف "${u.name}"؟`)) return;
+    const list = dbGet("users", []);
+    const target = list.find(x => x.id === u.id);
+    target.status = "منتهي الخدمة";
+    target.terminationDate = document.getElementById("emp_termDate").value || todayISO();
+    target.terminationReason = document.getElementById("emp_termReason").value.trim();
+    dbSet("users", list);
+    logActivity(`تم إنهاء عقد الموظف "${u.name}"`);
+    toast("تم إنهاء عقد الموظف");
+    renderEmployeesTab(el);
+  };
+
+  const reactivateBtn = document.getElementById("empReactivate");
+  if (reactivateBtn) reactivateBtn.onclick = () => {
+    if (!confirm(`إعادة تفعيل الموظف "${u.name}"؟`)) return;
+    const list = dbGet("users", []);
+    const target = list.find(x => x.id === u.id);
+    target.status = "نشط";
+    target.terminationDate = "";
+    target.terminationReason = "";
+    dbSet("users", list);
+    logActivity(`تمت إعادة تفعيل الموظف "${u.name}"`);
+    toast("تمت إعادة التفعيل");
+    renderEmployeesTab(el);
+  };
+}
+
+function openIncidentModal(u, el) {
+  const html = `
+    <div class="modal-head"><h3>تسجيل مخالفة / إنذار — ${u.name}</h3><button class="modal-close" id="mClose">×</button></div>
+    <div class="field"><label>النوع</label>
+      <select id="inc_type">
+        <option value="مخالفة">مخالفة</option>
+        <option value="إنذار">إنذار</option>
+      </select>
+    </div>
+    <div class="grid cols-2">
+      <div class="field"><label>التاريخ</label><input type="date" id="inc_date" value="${todayISO()}"></div>
+      <div class="field" id="inc_deductionWrap"><label>مبلغ الخصم من الراتب (اختياري)</label><input type="number" min="0" step="0.01" id="inc_deduction"></div>
+    </div>
+    <div class="field"><label>الوصف / السبب</label><textarea id="inc_desc"></textarea></div>
+    <div class="flex gap"><button class="btn primary" id="inc_save">حفظ</button><button class="btn" id="inc_cancel">إلغاء</button></div>
+  `;
+  const ov = openModalShell(html);
+  ov.querySelector("#mClose").onclick = closeModal;
+  ov.querySelector("#inc_cancel").onclick = closeModal;
+
+  const typeSelect = ov.querySelector("#inc_type");
+  const deductionWrap = ov.querySelector("#inc_deductionWrap");
+  function syncDeductionVisibility() { deductionWrap.style.display = typeSelect.value === "مخالفة" ? "" : "none"; }
+  syncDeductionVisibility();
+  typeSelect.onchange = syncDeductionVisibility;
+
+  ov.querySelector("#inc_save").onclick = () => {
+    const type = typeSelect.value;
+    const description = ov.querySelector("#inc_desc").value.trim();
+    if (!description) { toast("يرجى إدخال الوصف / السبب"); return; }
+    const deductionAmount = type === "مخالفة" ? (Number(ov.querySelector("#inc_deduction").value) || 0) : 0;
+    const list = dbGet("employeeIncidents", []);
+    list.push({
+      id: uid("inc"), employeeId: u.id, employeeName: u.name,
+      type, date: ov.querySelector("#inc_date").value || todayISO(),
+      description, deductionAmount, settled: false,
+      createdAt: new Date().toISOString(),
+    });
+    dbSet("employeeIncidents", list);
+    logActivity(`تم تسجيل ${type} على الموظف "${u.name}"${deductionAmount ? " بخصم " + fmtMoney(deductionAmount) : ""}`);
+    toast(`تم تسجيل ${type}`);
+    closeModal();
+    renderEmployeesTab(el);
   };
 }
 

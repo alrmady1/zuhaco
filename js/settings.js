@@ -227,18 +227,10 @@ function renderLeavesTab(el) {
   const isGM = (getCurrentUser() || {}).role === "مدير عام";
   const currentYear = new Date().getFullYear();
 
-  function usedAnnualBalance(userId) {
-    return leaves.filter(l => l.employeeId === userId && l.deductFromBalance && (l.startDate || "").slice(0, 4) === String(currentYear))
-      .reduce((s, l) => s + Number(l.daysCount || 0), 0);
-  }
-  function entitlementFor(userId) {
-    return annualLeaveEntitlementDays((users.find(u => u.id === userId) || {}).hireDate);
-  }
-  function remainingBalance(userId) { return entitlementFor(userId) - usedAnnualBalance(userId); }
-  function usedSickDaysThisYear(userId) {
-    return leaves.filter(l => l.employeeId === userId && l.leaveType === "sick" && (l.startDate || "").slice(0, 4) === String(currentYear))
-      .reduce((s, l) => s + Number(l.daysCount || 0), 0);
-  }
+  function usedAnnualBalance(userId) { return employeeUsedAnnualLeave(userId, currentYear); }
+  function entitlementFor(userId) { return employeeLeaveEntitlement(userId); }
+  function remainingBalance(userId) { return employeeRemainingLeaveBalance(userId, currentYear); }
+  function usedSickDaysThisYear(userId) { return employeeUsedSickDays(userId, currentYear); }
 
   function leavesListHtml() {
     if (!users.length) return `<div class="empty-state"><div class="ic">👤</div>لا يوجد مستخدمون بعد</div>`;

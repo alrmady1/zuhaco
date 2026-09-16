@@ -424,6 +424,25 @@ function daysBetweenInclusive(startStr, endStr) {
   return Math.round((new Date(endStr).getTime() - new Date(startStr).getTime()) / 86400000) + 1;
 }
 
+/* ---------- رصيد إجازات الموظف (مشتركة بين تبويب الإجازات وتبويب الموظفين في المحاسبة) ---------- */
+function employeeLeaveEntitlement(userId) {
+  const u = dbGet("users", []).find(x => x.id === userId);
+  return annualLeaveEntitlementDays(u ? u.hireDate : null);
+}
+function employeeUsedAnnualLeave(userId, year) {
+  year = year || new Date().getFullYear();
+  return dbGet("leaves", []).filter(l => l.employeeId === userId && l.deductFromBalance && (l.startDate || "").slice(0, 4) === String(year))
+    .reduce((s, l) => s + Number(l.daysCount || 0), 0);
+}
+function employeeRemainingLeaveBalance(userId, year) {
+  return employeeLeaveEntitlement(userId) - employeeUsedAnnualLeave(userId, year);
+}
+function employeeUsedSickDays(userId, year) {
+  year = year || new Date().getFullYear();
+  return dbGet("leaves", []).filter(l => l.employeeId === userId && l.leaveType === "sick" && (l.startDate || "").slice(0, 4) === String(year))
+    .reduce((s, l) => s + Number(l.daysCount || 0), 0);
+}
+
 // يضيف عدد أيام (شاملاً تاريخ البدء كيوم أول) إلى تاريخ YYYY-MM-DD
 function addInclusiveDays(dateStr, days) {
   const d = new Date(dateStr);
