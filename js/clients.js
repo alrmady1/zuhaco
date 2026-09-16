@@ -29,6 +29,7 @@ function clientExtraFieldsHtml(prefix, c, type) {
     html += `
       <div class="field"><label>اسم الشخص المسؤول</label><input id="${prefix}_contactName" value="${c ? (c.contactPersonName || "") : ""}"></div>
       <div class="field"><label>منصبه الوظيفي</label><input id="${prefix}_contactTitle" value="${c ? (c.contactPersonTitle || "") : ""}"></div>
+      <div class="field"><label>رقم التواصل</label><input id="${prefix}_contactPhone" value="${c ? (c.contactPersonPhone || "") : ""}"></div>
     `;
   }
   return html;
@@ -168,6 +169,7 @@ function openNewClientModal(onSaved, existingClient) {
     const natAddrInput = ov.querySelector("#nc_nationalAddress");
     const contactNameInput = ov.querySelector("#nc_contactName");
     const contactTitleInput = ov.querySelector("#nc_contactTitle");
+    const contactPhoneInput = ov.querySelector("#nc_contactPhone");
     const clients = dbGet("clients", []);
     const clientData = {
       id: isEdit ? existingClient.id : uid("cl"), name,
@@ -179,6 +181,7 @@ function openNewClientModal(onSaved, existingClient) {
       nationalAddress: natAddrInput ? natAddrInput.value.trim() : "",
       contactPersonName: contactNameInput ? contactNameInput.value.trim() : "",
       contactPersonTitle: contactTitleInput ? contactTitleInput.value.trim() : "",
+      contactPersonPhone: contactPhoneInput ? contactPhoneInput.value.trim() : "",
       notes: ov.querySelector("#nc_notes").value.trim(),
       createdAt: isEdit ? existingClient.createdAt : new Date().toISOString(),
     };
@@ -314,6 +317,7 @@ function renderClientDetail(el) {
     const ecNatAddr = document.getElementById("ec_nationalAddress");
     const ecContactName = document.getElementById("ec_contactName");
     const ecContactTitle = document.getElementById("ec_contactTitle");
+    const ecContactPhone = document.getElementById("ec_contactPhone");
     const list = dbGet("clients", []);
     const target = list.find(x => x.id === c.id);
     target.name = name;
@@ -325,6 +329,7 @@ function renderClientDetail(el) {
     target.nationalAddress = ecNatAddr ? ecNatAddr.value.trim() : "";
     target.contactPersonName = ecContactName ? ecContactName.value.trim() : "";
     target.contactPersonTitle = ecContactTitle ? ecContactTitle.value.trim() : "";
+    target.contactPersonPhone = ecContactPhone ? ecContactPhone.value.trim() : "";
     target.notes = document.getElementById("ec_notes").value.trim();
     dbSet("clients", list);
     logActivity(`تم تعديل بيانات العميل "${target.name}"`);
