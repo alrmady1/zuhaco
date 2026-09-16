@@ -534,7 +534,7 @@ function renderLeavesTab(el) {
 /* ---------- تبويب المركبات ---------- */
 const VEHICLE_OWNERSHIP_OPTIONS = ["ملكية الشركة", "مستأجرة", "تقسيط"];
 const VEHICLE_RENTAL_PERIODS = ["شهري", "يومي"];
-const VEHICLE_NUMERIC_FIELDS = ["rentalAmount", "downPayment", "installmentAmount", "installmentsCount", "installmentDurationMonths", "finalPayment"];
+const VEHICLE_NUMERIC_FIELDS = ["rentalAmount", "downPayment", "installmentAmount", "installmentsCount", "installmentDurationMonths", "finalPayment", "purchasePrice", "usefulLifeYears", "salvageValue"];
 
 function renderVehiclesTab(el) {
   const vehicles = dbGet("vehicles", []);
@@ -580,6 +580,25 @@ function renderVehiclesTab(el) {
           </div>
           <label style="font-size:10.5px;color:var(--text-muted);margin-bottom:-3px">الدفعة الأخيرة</label>
           <input type="number" min="0" step="0.01" value="${v.finalPayment || ""}" data-editv="${v.id}:finalPayment" style="border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-size:11.5px">
+        </div>`;
+    }
+    if (v.ownership === "ملكية الشركة") {
+      return `
+        <div class="flex" style="flex-direction:column;gap:5px;min-width:170px">
+          <label style="font-size:10.5px;color:var(--text-muted);margin-bottom:-3px">سعر الشراء</label>
+          <input type="number" min="0" step="0.01" value="${v.purchasePrice || ""}" data-editv="${v.id}:purchasePrice" style="border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-size:11.5px">
+          <label style="font-size:10.5px;color:var(--text-muted);margin-bottom:-3px">تاريخ الشراء</label>
+          <input type="date" value="${v.purchaseDate || ""}" data-editv="${v.id}:purchaseDate" style="border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-size:11.5px">
+          <div class="flex" style="gap:5px">
+            <div style="flex:1">
+              <label style="font-size:10.5px;color:var(--text-muted);margin-bottom:-3px">العمر الافتراضي (سنوات)</label>
+              <input type="number" min="0" value="${v.usefulLifeYears || ""}" data-editv="${v.id}:usefulLifeYears" style="border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-size:11.5px;width:100%">
+            </div>
+            <div style="flex:1">
+              <label style="font-size:10.5px;color:var(--text-muted);margin-bottom:-3px">القيمة التخريدية</label>
+              <input type="number" min="0" step="0.01" value="${v.salvageValue || ""}" data-editv="${v.id}:salvageValue" style="border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-size:11.5px;width:100%">
+            </div>
+          </div>
         </div>`;
     }
     return `<span class="text-muted" style="font-size:11.5px">المالك: ${companyName}</span>`;
@@ -687,6 +706,16 @@ function renderVehiclesTab(el) {
           <div class="field"><label>مدة التقسيط (بالأشهر)</label><input type="number" min="0" id="v_installmentDurationMonths"></div>
           <div class="field"><label>الدفعة الأخيرة (ر.س)</label><input type="number" min="0" step="0.01" id="v_finalPayment"></div>
         </div>`;
+    } else if (ownershipSelect.value === "ملكية الشركة") {
+      ownershipNote.style.display = "none";
+      rentalFieldsBox.innerHTML = `
+        <div class="grid cols-3">
+          <div class="field"><label>سعر الشراء (ر.س)</label><input type="number" min="0" step="0.01" id="v_purchasePrice"></div>
+          <div class="field"><label>تاريخ الشراء</label><input type="date" id="v_purchaseDate"></div>
+          <div class="field"><label>العمر الافتراضي (سنوات)</label><input type="number" min="0" id="v_usefulLifeYears" placeholder="مثال: 5"></div>
+          <div class="field"><label>القيمة التخريدية (ر.س)</label><input type="number" min="0" step="0.01" id="v_salvageValue" placeholder="0"></div>
+        </div>
+        <p class="text-muted" style="font-size:11.5px;margin-top:-8px">تُستخدم هذه البيانات لاحتساب إهلاك المركبة كأصل ثابت في القوائم المالية الموحّدة — اتركها فارغة إن كنت لا تريد احتساب إهلاك لهذه المركبة.</p>`;
     } else {
       rentalFieldsBox.innerHTML = "";
       ownershipNote.style.display = "";
@@ -728,6 +757,11 @@ function renderVehiclesTab(el) {
       vehicle.installmentsCount = Number(document.getElementById("v_installmentsCount").value) || 0;
       vehicle.installmentDurationMonths = Number(document.getElementById("v_installmentDurationMonths").value) || 0;
       vehicle.finalPayment = Number(document.getElementById("v_finalPayment").value) || 0;
+    } else if (ownership === "ملكية الشركة") {
+      vehicle.purchasePrice = Number(document.getElementById("v_purchasePrice").value) || 0;
+      vehicle.purchaseDate = document.getElementById("v_purchaseDate").value || "";
+      vehicle.usefulLifeYears = Number(document.getElementById("v_usefulLifeYears").value) || 0;
+      vehicle.salvageValue = Number(document.getElementById("v_salvageValue").value) || 0;
     }
     const list = dbGet("vehicles", []);
     list.push(vehicle);
