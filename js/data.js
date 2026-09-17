@@ -112,6 +112,22 @@ function fileToDataURL(file) {
 /* ---------- الأدوار والصلاحيات ---------- */
 const ROLES = ["مدير عام", "مدير النظام", "محاسب", "مهندس", "مراقب موقع", "مسؤول مشتريات"];
 
+/* ---------- أنواع الهوية ---------- */
+const ID_TYPES = ["هوية وطنية", "إقامة", "جواز سفر", "فيزا"];
+
+/* ---------- حساب العمر من تاريخ الميلاد ---------- */
+function calcAge(dob) {
+  if (!dob) return null;
+  const [y, m, d] = dob.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  const birth = new Date(y, m - 1, d);
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const hadBirthdayThisYear = (today.getMonth() > birth.getMonth()) || (today.getMonth() === birth.getMonth() && today.getDate() >= birth.getDate());
+  if (!hadBirthdayThisYear) age--;
+  return age >= 0 ? age : null;
+}
+
 const PERMISSIONS = {
   "مدير عام": ["dashboard", "projects", "clients", "quotes", "visits", "reports", "acc_projects", "acc_general", "acc_vat", "contracts", "settings"],
   "مدير النظام": ["dashboard", "projects", "clients", "quotes", "visits", "reports", "acc_projects", "acc_general", "acc_vat", "contracts", "settings"],

@@ -1185,7 +1185,10 @@ function renderUsersTab(el) {
                 </td>
                 <td><input type="password" data-editpass="${u.id}" value="${u.password || ""}" placeholder="بدون رقم سري" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;width:110px"></td>
                 <td><input type="date" data-edithire="${u.id}" value="${u.hireDate || ""}" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px"></td>
-                <td><button class="btn-icon danger" data-deluser="${u.id}" title="حذف">${ICON_DELETE}</button></td>
+                <td>
+                  <button class="btn sm" data-empinfo="${u.id}" title="البيانات الشخصية">🪪 الهوية</button>
+                  <button class="btn-icon danger" data-deluser="${u.id}" title="حذف">${ICON_DELETE}</button>
+                </td>
               </tr>`).join("")}
           </tbody>
         </table>
@@ -1275,6 +1278,90 @@ function renderUsersTab(el) {
     if (target) logActivity(`تم حذف المستخدم "${target.name}"`);
     renderSettings(el.parentElement);
   });
+
+  el.querySelectorAll("[data-empinfo]").forEach(b => b.onclick = () => openEmployeePersonalModal(b.dataset.empinfo, el));
+}
+
+/* ---------- بيانات شخصية للموظف (هوية، جنسية، تاريخ ميلاد/عمر، صور الهوية) ---------- */
+function openEmployeePersonalModal(userId, usersTabEl) {
+  const u = dbGet("users", []).find(x => x.id === userId);
+  if (!u) return;
+  let idPhotos = (u.idPhotos || []).slice();
+  const initialAge = calcAge(u.dob);
+
+  const html = `
+    <div class="modal-head"><h3>البيانات الشخصية — ${u.name}</h3><button class="modal-close" id="mClose">×</button></div>
+    <div class="grid cols-3">
+      <div class="field"><label>نوع الهوية</label>
+        <select id="emp_idType">
+          <option value="">— اختر —</option>
+          ${ID_TYPES.map(t => `<option value="${t}" ${u.idType === t ? "selected" : ""}>${t}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field"><label>رقم الهوية</label><input id="emp_idNumber" value="${u.idNumber || ""}"></div>
+      <div class="field"><label>الجنسية</label><input id="emp_nationality" value="${u.nationality || ""}"></div>
+      <div class="field"><label>تاريخ الميلاد</label><input type="date" id="emp_dob" value="${u.dob || ""}"></div>
+      <div class="field"><label>العمر</label><input id="emp_age" value="${initialAge !== null ? initialAge : ""}" disabled placeholder="يُحسب تلقائياً"></div>
+      <div class="field"><label>تاريخ انتهاء الهوية</label><input type="date" id="emp_idExpiry" value="${u.idExpiry || ""}"></div>
+    </div>
+    <div class="field">
+      <label>صور الهوية</label>
+      <input type="file" id="emp_idPhotos" multiple accept="image/*">
+      <div id="emp_idPhotosList" class="photo-grid"></div>
+    </div>
+    <div class="flex gap" style="margin-top:6px">
+      <button class="btn primary" id="emp_save">حفظ</button>
+      <button class="btn" id="emp_cancel">إلغاء</button>
+    </div>
+  `;
+  const ov = openModalShell(html, true);
+
+  function renderIdPhotos() {
+    ov.querySelector("#emp_idPhotosList").innerHTML = idPhotos.map((url, i) => `
+      <div class="photo-item">
+        <img src="${url}">
+        <button class="rm" data-rmidphoto="${i}">حذف</button>
+      </div>
+    `).join("");
+    ov.querySelectorAll("[data-rmidphoto]").forEach(b => b.onclick = () => {
+      idPhotos.splice(Number(b.dataset.rmidphoto), 1);
+      renderIdPhotos();
+    });
+  }
+  renderIdPhotos();
+
+  ov.querySelector("#mClose").onclick = closeModal;
+  ov.querySelector("#emp_cancel").onclick = closeModal;
+
+  ov.querySelector("#emp_dob").oninput = (e) => {
+    const age = calcAge(e.target.value);
+    ov.querySelector("#emp_age").value = age !== null ? age : "";
+  };
+
+  ov.querySelector("#emp_idPhotos").onchange = async (e) => {
+    for (const f of e.target.files) idPhotos.push(await fileToDataURL(f));
+    ov.querySelector("#emp_idPhotos").value = "";
+    renderIdPhotos();
+  };
+
+  ov.querySelector("#emp_save").onclick = () => {
+    const list = dbGet("users", []);
+    const target = list.find(x => x.id === userId);
+    if (!target) { closeModal(); return; }
+    target.idType = ov.querySelector("#emp_idType").value;
+    target.idNumber = ov.querySelector("#emp_idNumber").value.trim();
+    target.nationality = ov.querySelector("#emp_nationality").value.trim();
+    target.dob = ov.querySelector("#emp_dob").value;
+    target.idExpiry = ov.querySelector("#emp_idExpiry").value;
+    target.idPhotos = idPhotos;
+    dbSet("users", list);
+    logActivity(`تم تحديث البيانات الشخصية للموظف "${target.name}"`);
+    toast("تم حفظ البيانات الشخصية");
+    closeModal();
+    const cur = getCurrentUser();
+    if (cur && cur.id === target.id) setCurrentUser(target);
+    renderSettings(usersTabEl.parentElement);
+  };
 }
 
 /* ---------- تبويب بنود عروض الأسعار ---------- */
