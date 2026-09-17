@@ -359,6 +359,7 @@ function printInvoice(id) {
 let ACC_GENERAL_TAB = "expenses"; // expenses | custody | employees | assets | projects | vat
 let EMPLOYEES_VIEW = "list"; // list | detail
 let EMPLOYEE_VIEW_ID = null;
+let EMPLOYEES_LIST_MODE = "grid"; // grid | rows
 
 function renderAccGeneral(el) {
   el.innerHTML = `
@@ -832,34 +833,108 @@ function renderEmployeesTab(el) {
   else renderEmployeesList(el);
 }
 
+/* ملخص مالي سريع للموظف: يُستخدم في بطاقات/أسطر قائمة الموظفين */
+function employeeFinancialSummary(u) {
+  const pendingAdvancesTotal = dbGet("accGeneral", [])
+    .filter(e => e.category === "سلفية" && e.advanceEmployeeId === u.id && e.advanceStatus === "deduct" && !e.settled)
+    .reduce((s, a) => s + Number(a.amount || 0), 0);
+  const pendingViolationsTotal = dbGet("employeeIncidents", [])
+    .filter(i => i.employeeId === u.id && i.type === "مخالفة" && Number(i.deductionAmount) > 0 && !i.settled)
+    .reduce((s, i) => s + Number(i.deductionAmount || 0), 0);
+  const custodyTotal = dbGet("custodies", [])
+    .filter(c => c.employeeId === u.id && c.status === "مفتوحة")
+    .reduce((s, c) => s + custodyBalance(c), 0);
+  const baseSalary = Number(u.baseSalary || 0);
+  const netSalary = baseSalary - pendingAdvancesTotal - pendingViolationsTotal;
+  return { baseSalary, pendingAdvancesTotal, pendingViolationsTotal, custodyTotal, netSalary };
+}
+
 function renderEmployeesList(el) {
   const users = dbGet("users", []).slice().sort((a, b) => (a.name || "").localeCompare(b.name || "", "ar"));
-  el.innerHTML = `
-    <div class="card">
-      <h3 class="mt-0">الموظفون</h3>
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead><tr><th>الاسم</th><th>المسمى الوظيفي</th><th>الحالة</th><th>الراتب الأساسي</th><th>رصيد الإجازة المتبقي</th><th></th></tr></thead>
-          <tbody>
-            ${users.length ? users.map(u => `
-              <tr>
-                <td><strong>${u.name}</strong></td>
-                <td>${u.role}</td>
-                <td>${u.status === "منتهي الخدمة" ? `<span class="badge red">منتهي الخدمة</span>` : `<span class="badge green">نشط</span>`}</td>
-                <td>${u.baseSalary ? fmtMoney(u.baseSalary) : `<span class="text-muted">غير محدد</span>`}</td>
-                <td>${employeeRemainingLeaveBalance(u.id)} يوم</td>
-                <td><button class="btn-icon" data-openemp="${u.id}" title="فتح">${ICON_VIEW}</button></td>
-              </tr>`).join("") : `<tr><td colspan="6"><div class="empty-state"><div class="ic">👤</div>لا يوجد موظفون بعد — أضفهم من الإعدادات ← التحكم بالمستخدمين</div></td></tr>`}
-          </tbody>
-        </table>
+
+  const header = `
+    <div class="section-title-row">
+      <div><h2 class="mt-0" style="font-size:16px">الموظفون</h2>
+      <p>الراتب الشهري وصافيه بعد الخصميات والسلفيات والعهدة المفتوحة لكل موظف — اضغط على أي موظف للاطلاع على التفاصيل</p></div>
+      <div class="flex gap center">
+        <div class="view-toggle">
+          <button data-listmode="rows" title="عرض أسطر" class="${EMPLOYEES_LIST_MODE === "rows" ? "active" : ""}">${ICON_LIST}</button>
+          <button data-listmode="grid" title="عرض بطاقات" class="${EMPLOYEES_LIST_MODE === "grid" ? "active" : ""}">${ICON_GRID}</button>
+        </div>
       </div>
     </div>
   `;
-  el.querySelectorAll("[data-openemp]").forEach(b => b.onclick = () => {
-    EMPLOYEE_VIEW_ID = b.dataset.openemp;
+
+  if (!users.length) {
+    el.innerHTML = header + `<div class="card"><div class="empty-state"><div class="ic">👤</div>لا يوجد موظفون بعد — أضفهم من الإعدادات ← التحكم بالمستخدمين</div></div>`;
+    wireListModeToggle();
+    return;
+  }
+
+  if (EMPLOYEES_LIST_MODE === "rows") {
+    el.innerHTML = header + `
+      <div class="card">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>الاسم</th><th>المسمى الوظيفي</th><th>الراتب الشهري</th><th>رصيد الإجازة</th><th>سلفيات معلّقة</th><th>خصميات هذا الشهر</th><th>العهدة المفتوحة</th><th>صافي الراتب المتوقع</th></tr></thead>
+            <tbody>
+              ${users.map(u => {
+                const s = employeeFinancialSummary(u);
+                return `
+                <tr data-openemp="${u.id}" style="cursor:pointer">
+                  <td><strong>${u.name}</strong>${u.status === "منتهي الخدمة" ? ` <span class="badge red">منتهي الخدمة</span>` : ""}</td>
+                  <td>${u.role}</td>
+                  <td>${fmtMoney(s.baseSalary)}</td>
+                  <td>${employeeRemainingLeaveBalance(u.id)} يوم</td>
+                  <td>${fmtMoney(s.pendingAdvancesTotal)}</td>
+                  <td>${fmtMoney(s.pendingViolationsTotal)}</td>
+                  <td>${fmtMoney(s.custodyTotal)}</td>
+                  <td><strong>${fmtMoney(s.netSalary)}</strong></td>
+                </tr>`;
+              }).join("")}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  } else {
+    el.innerHTML = header + `
+      <div class="employees-grid">
+        ${users.map(u => {
+          const s = employeeFinancialSummary(u);
+          return `
+          <div class="emp-card" data-openemp="${u.id}">
+            <div class="emp-card-head">
+              <div class="emp-avatar">${initials(u.name)}</div>
+              <div class="emp-card-name">${u.name}${u.status === "منتهي الخدمة" ? ` <span class="badge red">منتهي الخدمة</span>` : ""}</div>
+            </div>
+            <div class="emp-tiles">
+              <div class="emp-tile success"><div class="t-label">رصيد الإجازة</div><div class="t-value">${employeeRemainingLeaveBalance(u.id)} يوم</div></div>
+              <div class="emp-tile"><div class="t-label">سلفيات معلّقة</div><div class="t-value">${fmtMoney(s.pendingAdvancesTotal)}</div></div>
+              <div class="emp-tile"><div class="t-label">الراتب الشهري</div><div class="t-value">${fmtMoney(s.baseSalary)}</div></div>
+              <div class="emp-tile danger"><div class="t-label">خصميات هذا الشهر</div><div class="t-value">${fmtMoney(s.pendingViolationsTotal)}</div></div>
+              <div class="emp-tile"><div class="t-label">العهدة المفتوحة</div><div class="t-value">${fmtMoney(s.custodyTotal)}</div></div>
+            </div>
+            <div class="emp-net"><span>صافي الراتب المتوقع</span><strong>${fmtMoney(s.netSalary)}</strong></div>
+          </div>`;
+        }).join("")}
+      </div>
+    `;
+  }
+
+  el.querySelectorAll("[data-openemp]").forEach(node => node.onclick = () => {
+    EMPLOYEE_VIEW_ID = node.dataset.openemp;
     EMPLOYEES_VIEW = "detail";
     renderEmployeesTab(el);
   });
+  wireListModeToggle();
+
+  function wireListModeToggle() {
+    el.querySelectorAll("[data-listmode]").forEach(b => b.onclick = () => {
+      EMPLOYEES_LIST_MODE = b.dataset.listmode;
+      renderEmployeesList(el);
+    });
+  }
 }
 
 function renderEmployeeDetail(el) {

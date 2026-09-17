@@ -496,3 +496,32 @@ table.data-table tr:hover td { background: #fafbfc; }
 .flex.center { align-items: center; }
 .flex.wrap { flex-wrap: wrap; }
 .leaflet-tooltip.rz-zone-tooltip { font-weight: 700; }
+
+/* ---------- صفحة الموظفين (المحاسبة العامة) — عرض بطاقات / أسطر ---------- */
+.view-toggle { display: flex; gap: 4px; border: 1px solid var(--border); border-radius: 8px; padding: 3px; background: #fff; }
+.view-toggle button { border: none; background: none; padding: 6px 9px; border-radius: 6px; cursor: pointer; color: var(--text-muted); display: flex; }
+.view-toggle button.active { background: var(--primary); color: #fff; }
+
+.employees-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.emp-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px;
+  box-shadow: var(--shadow); cursor: pointer; transition: box-shadow .15s, border-color .15s;
+}
+.emp-card:hover { border-color: var(--primary); box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+.emp-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.emp-avatar {
+  width: 34px; height: 34px; border-radius: 50%; background: var(--primary-light); color: var(--primary);
+  display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12.5px; flex: none;
+}
+.emp-card-name { font-weight: 800; font-size: 14.5px; }
+.emp-tiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 10px; }
+.emp-tile { grid-column: span 2; background: #f4f5f7; border-radius: 8px; padding: 8px 10px; }
+.emp-tile:nth-child(4), .emp-tile:nth-child(5) { grid-column: span 3; }
+.emp-tile.success { background: #e5f6ec; }
+.emp-tile.danger { background: #fbe6e2; }
+.emp-tile .t-label { font-size: 10.5px; color: var(--text-muted); margin-bottom: 3px; }
+.emp-tile .t-value { font-size: 13px; font-weight: 800; }
+.emp-tile.success .t-value { color: var(--success); }
+.emp-tile.danger .t-value { color: var(--danger); }
+.emp-net { display: flex; justify-content: space-between; align-items: center; background: #e3ecfa; color: #1d4ed8; border-radius: 8px; padding: 9px 12px; font-size: 12.5px; font-weight: 700; }
+.emp-net strong { font-size: 14px; }
