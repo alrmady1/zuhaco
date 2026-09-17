@@ -76,6 +76,21 @@ function openNewReportModal() {
         <textarea id="r_extraDetails" placeholder="وضّح الأعمال الإضافية التي طلبها المالك..." style="margin-top:8px;display:none"></textarea>
       </div>
       <div class="field" style="grid-column:span 2">
+        <div class="flex between" style="align-items:center">
+          <label style="margin-bottom:0">جدول حضور العمال اليومي</label>
+          <button type="button" class="btn sm" id="r_toggleAttendance">+ إضافة جدول الحضور</button>
+        </div>
+        <div id="r_attendanceBox" style="display:none;margin-top:8px">
+          <div id="r_attendanceRows"></div>
+          <div class="text-muted" style="font-size:12px;margin-top:4px">إجمالي عدد العمال: <strong id="r_attTotal">0</strong></div>
+          <button type="button" class="btn sm" id="r_addAttRow" style="margin-top:6px">+ إضافة صنعة</button>
+          <datalist id="r_tradeList">
+            <option value="كهربائي"><option value="سباك"><option value="بنّاء"><option value="نجار">
+            <option value="حداد"><option value="مبيّض (دهان)"><option value="عامل عادي"><option value="مشرف">
+          </datalist>
+        </div>
+      </div>
+      <div class="field" style="grid-column:span 2">
         <label>صور التقرير (مع إمكانية إضافة تعليق على كل صورة)</label>
         <input type="file" id="r_photos" multiple accept="image/*">
         <div id="r_photosList" class="photo-grid"></div>
@@ -93,6 +108,33 @@ function openNewReportModal() {
   ov.querySelector("#r_extraChk").onchange = (e) => {
     ov.querySelector("#r_extraDetails").style.display = e.target.checked ? "block" : "none";
   };
+
+  let attendance = [];
+  const attBox = ov.querySelector("#r_attendanceBox");
+  ov.querySelector("#r_toggleAttendance").onclick = () => {
+    const showing = attBox.style.display !== "none";
+    if (showing) { attBox.style.display = "none"; return; }
+    attBox.style.display = "block";
+    if (!attendance.length) { attendance.push({ trade: "", count: 1 }); redrawAttendance(); }
+  };
+  ov.querySelector("#r_addAttRow").onclick = () => { attendance.push({ trade: "", count: 1 }); redrawAttendance(); };
+
+  function updateAttTotal() {
+    ov.querySelector("#r_attTotal").textContent = attendance.reduce((s, r) => s + (Number(r.count) || 0), 0);
+  }
+  function redrawAttendance() {
+    const wrap = ov.querySelector("#r_attendanceRows");
+    wrap.innerHTML = attendance.map((row, i) => `
+      <div class="flex gap" style="margin-bottom:6px;align-items:center">
+        <input list="r_tradeList" placeholder="المهنة/الصنعة" value="${row.trade}" data-atttrade="${i}" style="flex:2">
+        <input type="number" min="0" value="${row.count}" data-attcount="${i}" style="flex:1;max-width:90px">
+        <button type="button" class="btn-icon danger" data-attrm="${i}" title="حذف">${ICON_DELETE}</button>
+      </div>`).join("");
+    wrap.querySelectorAll("[data-atttrade]").forEach(inp => inp.oninput = () => { attendance[Number(inp.dataset.atttrade)].trade = inp.value; });
+    wrap.querySelectorAll("[data-attcount]").forEach(inp => inp.oninput = () => { attendance[Number(inp.dataset.attcount)].count = Number(inp.value) || 0; updateAttTotal(); });
+    wrap.querySelectorAll("[data-attrm]").forEach(b => b.onclick = () => { attendance.splice(Number(b.dataset.attrm), 1); redrawAttendance(); });
+    updateAttTotal();
+  }
 
   let photos = [];
   ov.querySelector("#r_photos").onchange = async (e) => {
@@ -132,6 +174,7 @@ function openNewReportModal() {
       materialsRequested: ov.querySelector("#r_materials").value.trim(),
       ownerExtraWork: ov.querySelector("#r_extraChk").checked,
       ownerExtraWorkDetails: ov.querySelector("#r_extraChk").checked ? ov.querySelector("#r_extraDetails").value.trim() : "",
+      attendance: attendance.filter(a => a.trade.trim() || Number(a.count) > 0),
       photos,
       createdAt: new Date().toISOString(),
     });
@@ -171,6 +214,19 @@ function openReportViewModal(id) {
       <div style="margin-top:6px;background:#fdecd6;border-radius:8px;padding:10px 12px">
         <strong style="font-size:13px">⚠️ طلب المالك أعمال إضافية</strong>
         <p style="font-size:13px;margin:6px 0 0">${r.ownerExtraWorkDetails || "-"}</p>
+      </div>` : ""}
+    ${r.attendance && r.attendance.length ? `
+      <div style="margin-top:12px">
+        <strong>حضور العمال اليومي</strong>
+        <div class="table-wrap" style="margin-top:6px">
+          <table class="data-table">
+            <thead><tr><th>المهنة/الصنعة</th><th>العدد</th></tr></thead>
+            <tbody>
+              ${r.attendance.map(a => `<tr><td>${a.trade || "-"}</td><td>${a.count}</td></tr>`).join("")}
+              <tr><td><strong>الإجمالي</strong></td><td><strong>${r.attendance.reduce((s, a) => s + (Number(a.count) || 0), 0)}</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>` : ""}
     ${r.photos && r.photos.length ? `
       <strong>صور التقرير</strong>
