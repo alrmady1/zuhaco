@@ -901,6 +901,13 @@ function renderEmployeeDetail(el) {
         <div class="kv-row"><span class="k">المسمى الوظيفي</span><span class="v">${u.role}</span></div>
         <div class="kv-row"><span class="k">تاريخ التعيين</span><span class="v">${u.hireDate ? fmtDate(u.hireDate) : "-"}</span></div>
         <div class="kv-row"><span class="k">سنوات الخدمة</span><span class="v">${tenureYears !== null ? tenureYears + " سنة" : "-"}</span></div>
+        <div class="kv-row"><span class="k">نوع الهوية</span><span class="v">${u.idType || "-"}</span></div>
+        <div class="kv-row"><span class="k">رقم الهوية</span><span class="v">${u.idNumber || "-"}</span></div>
+        <div class="kv-row"><span class="k">الجنسية</span><span class="v">${u.nationality || "-"}</span></div>
+        <div class="kv-row"><span class="k">تاريخ الميلاد</span><span class="v">${u.dob ? fmtDate(u.dob) + (calcAge(u.dob) !== null ? ` (${calcAge(u.dob)} سنة)` : "") : "-"}</span></div>
+        <div class="kv-row"><span class="k">تاريخ انتهاء الهوية</span><span class="v">${u.idExpiry ? fmtDate(u.idExpiry) : "-"}</span></div>
+        <div class="kv-row"><span class="k">صور الهوية</span><span class="v">${(u.idPhotos || []).length ? (u.idPhotos.length + " صورة") : "-"}</span></div>
+        <button class="btn sm" id="empEditPersonal" style="margin-top:8px">تعديل البيانات الشخصية</button>
         <div class="field" style="margin-top:10px"><label>الراتب الأساسي (ر.س)${isGM ? "" : " — يعدّله المدير العام فقط"}</label>
           <input type="number" min="0" step="0.01" id="emp_baseSalary" value="${baseSalary}" ${isGM ? "" : "disabled"}>
         </div>
@@ -1002,6 +1009,8 @@ function renderEmployeeDetail(el) {
   `;
 
   document.getElementById("empBack").onclick = () => { EMPLOYEES_VIEW = "list"; EMPLOYEE_VIEW_ID = null; renderEmployeesTab(el); };
+
+  document.getElementById("empEditPersonal").onclick = () => openEmployeePersonalModal(u.id, () => renderEmployeesTab(el));
 
   const salaryInput = document.getElementById("emp_baseSalary");
   if (salaryInput && isGM) salaryInput.onchange = () => {
