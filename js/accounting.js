@@ -906,7 +906,7 @@ function renderEmployeeDetail(el) {
         <div class="kv-row"><span class="k">الجنسية</span><span class="v">${u.nationality || "-"}</span></div>
         <div class="kv-row"><span class="k">تاريخ الميلاد</span><span class="v">${u.dob ? fmtDate(u.dob) + (calcAge(u.dob) !== null ? ` (${calcAge(u.dob)} سنة)` : "") : "-"}</span></div>
         <div class="kv-row"><span class="k">تاريخ انتهاء الهوية</span><span class="v">${u.idExpiry ? fmtDate(u.idExpiry) : "-"}</span></div>
-        <div class="kv-row"><span class="k">صور الهوية</span><span class="v">${(u.idPhotos || []).length ? (u.idPhotos.length + " صورة") : "-"}</span></div>
+        <div class="kv-row"><span class="k">صور الهوية</span><span class="v">${(u.idPhotos || []).length ? u.idPhotos.map(p => `<a href="${p}" target="_blank" class="veh-doc-thumb" style="margin-inline-start:4px"><img src="${p}"></a>`).join("") : "-"}</span></div>
         <button class="btn sm" id="empEditPersonal" style="margin-top:8px">تعديل البيانات الشخصية</button>
         <div class="field" style="margin-top:10px"><label>الراتب الأساسي (ر.س)${isGM ? "" : " — يعدّله المدير العام فقط"}</label>
           <input type="number" min="0" step="0.01" id="emp_baseSalary" value="${baseSalary}" ${isGM ? "" : "disabled"}>
