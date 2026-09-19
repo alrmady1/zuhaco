@@ -190,13 +190,13 @@ function renderContractsList(el) {
   el.innerHTML = `
     <div class="section-title-row">
       <div><h2>العقود</h2><p>نماذج عقود جاهزة لمشاريع إنشائية أو ترميم أو تشطيبات</p></div>
-      ${canAddContract ? `<button class="btn primary" id="newContractBtn"><span style="font-size:15px">➕</span> إضافة عقد</button>` : ""}
+      ${canAddContract ? `<button class="btn primary" id="newContractBtn">${svgIcon("plus")} إضافة عقد</button>` : ""}
     </div>
     ${contracts.length ? contracts.map(c => {
       const typeInfo = CONTRACT_TYPES.find(t => t.key === c.type) || {};
       return `
       <div class="contract-row" data-viewc="${c.id}">
-        <div class="contract-row-icon">📄</div>
+        <div class="contract-row-icon">${svgIcon("file", 20)}</div>
         <div class="contract-row-info">
           <div class="contract-row-title">${c.clientName}</div>
           <div class="contract-row-sub">${typeInfo.label || c.type} · ${fmtDate(c.date)} · ${c.paymentsCount} دفعات</div>
@@ -207,7 +207,7 @@ function renderContractsList(el) {
           ${canDeleteContract ? `<button class="btn-icon danger" data-delc="${c.id}" title="حذف">${ICON_DELETE}</button>` : ""}
         </div>
       </div>`;
-    }).join("") : `<div class="card empty-state"><div class="ic">📄</div>لا توجد عقود محفوظة بعد</div>`}
+    }).join("") : `<div class="card empty-state"><div class="ic">${svgIcon("file", 40)}</div>لا توجد عقود محفوظة بعد</div>`}
   `;
   const newContractBtn = document.getElementById("newContractBtn");
   if (newContractBtn) newContractBtn.onclick = () => { DRAFT_CONTRACT = newDraftContract(); CONTRACTS_VIEW = "builder"; router(); };
@@ -237,7 +237,7 @@ function renderContractBuilder(el) {
       <div><h2>${d.id ? "تعديل عقد" : "إنشاء عقد جديد"}</h2><p>اختر نموذج العقد وأدخل بيانات العميل والدفعات</p></div>
       <button class="btn" id="backList">إلغاء والرجوع</button>
     </div>
-    ${d.id ? `<div class="card" style="background:#fdf6ec;border-color:#f2dfb8"><span style="font-size:12.5px;color:var(--warning)">⚠️ تنبيه: هذا عقد محفوظ وقد يكون سارياً بالفعل — تأكد من إبلاغ الطرف الآخر بأي تعديل جوهري عليه.</span></div>` : ""}
+    ${d.id ? `<div class="card" style="background:#fdf6ec;border-color:#f2dfb8"><span style="font-size:12.5px;color:var(--warning)">${svgIcon("alert", 15)} تنبيه: هذا عقد محفوظ وقد يكون سارياً بالفعل — تأكد من إبلاغ الطرف الآخر بأي تعديل جوهري عليه.</span></div>` : ""}
 
     <div class="card">
       <h3>نوع العقد</h3>
@@ -294,7 +294,7 @@ function renderContractBuilder(el) {
         <div class="kv-row"><span class="k">الإجمالي شامل الضريبة</span><span class="v" id="c_grandTotal">${fmtMoneyEN(contractAmounts(d).grand)}</span></div>
       </div>
       <div id="paymentsRows"></div>
-      <div class="text-muted" style="font-size:12.5px;margin-top:6px" id="percentSumLabel">مجموع النسب: ${percentSum}% ${percentSum !== 100 ? "⚠️ يجب أن يساوي المجموع 100%" : "✅"}</div>
+      <div class="text-muted" style="font-size:12.5px;margin-top:6px" id="percentSumLabel">مجموع النسب: ${percentSum}% ${percentSum !== 100 ? `${svgIcon("alert", 14)} يجب أن يساوي المجموع 100%` : svgIcon("check-circle", 14)}</div>
     </div>
 
     <div class="card">
@@ -305,7 +305,7 @@ function renderContractBuilder(el) {
       <div class="field"><textarea id="c_text" style="min-height:340px;font-family:'Cairo',sans-serif;white-space:pre-wrap;line-height:1.9">${d.contractText || contractTemplateText(d.type, { ...d, paymentsText: paymentsSummaryText(d) })}</textarea></div>
     </div>
 
-    <div class="flex gap"><button class="btn primary" id="saveContractBtn">💾 حفظ العقد</button><button class="btn" id="cancelContractBtn">إلغاء</button></div>
+    <div class="flex gap"><button class="btn primary" id="saveContractBtn">${svgIcon("save")} حفظ العقد</button><button class="btn" id="cancelContractBtn">إلغاء</button></div>
   `;
 
   renderPaymentsRows();
@@ -389,7 +389,7 @@ function renderContractBuilder(el) {
 
     function updatePercentSum() {
       const sum = Math.round(d.payments.reduce((s, p) => s + Number(p.percent || 0), 0) * 100) / 100;
-      document.getElementById("percentSumLabel").textContent = `مجموع النسب: ${sum}% ${Math.round(sum) !== 100 ? "⚠️ يجب أن يساوي المجموع 100%" : "✅"}`;
+      document.getElementById("percentSumLabel").innerHTML = `مجموع النسب: ${sum}% ${Math.round(sum) !== 100 ? `${svgIcon("alert", 14)} يجب أن يساوي المجموع 100%` : svgIcon("check-circle", 14)}`;
     }
 
     wrap.querySelectorAll("[data-pct]").forEach(inp => inp.oninput = () => {
@@ -448,8 +448,8 @@ function renderContractView(el) {
       <div><h2>${(CONTRACT_TYPES.find(t => t.key === c.type) || {}).label}</h2><p>${c.clientName}</p></div>
       <div class="flex gap">
         <button class="btn" id="backList2">رجوع</button>
-        ${canEdit ? `<button class="btn" id="editContract">✏️ تعديل</button>` : ""}
-        <button class="btn primary" id="printContract">🖨️ طباعة</button>
+        ${canEdit ? `<button class="btn" id="editContract">${ICON_EDIT} تعديل</button>` : ""}
+        <button class="btn primary" id="printContract">${svgIcon("printer")} طباعة</button>
       </div>
     </div>
     <div class="card">

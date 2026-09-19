@@ -50,11 +50,11 @@ function renderProjectsList(el) {
   el.innerHTML = `
     <div class="section-title-row">
       <div><h2>المشاريع</h2><p>إدارة مشاريع المؤسسة وربطها بالعملاء والعقود وجداول الكميات المعتمدة</p></div>
-      ${canAddProject ? `<button class="btn primary" id="newProjectBtn"><span style="font-size:15px">➕</span> إضافة مشروع</button>` : ""}
+      ${canAddProject ? `<button class="btn primary" id="newProjectBtn">${svgIcon("plus")} إضافة مشروع</button>` : ""}
     </div>
     ${projects.length ? projects.map(p => `
       <div class="contract-row" data-openproj="${p.id}">
-        <div class="contract-row-icon">🏗️</div>
+        <div class="contract-row-icon">${svgIcon("building", 20)}</div>
         <div class="contract-row-info">
           <div class="contract-row-title">${p.name}</div>
           <div class="contract-row-sub">${p.client || "بدون عميل"} · ${projectTypeLabel(p.projectType)} · ${locationDisplay(p.location)} · ${statusBadge2(p.status)} ${delayedBadgeHtml(p)}</div>
@@ -67,7 +67,7 @@ function renderProjectsList(el) {
           <button class="btn-icon" data-openproj="${p.id}" title="فتح">${ICON_VIEW}</button>
           ${canDeleteProject ? `<button class="btn-icon danger" data-delproj="${p.id}" title="حذف">${ICON_DELETE}</button>` : ""}
         </div>
-      </div>`).join("") : `<div class="card empty-state"><div class="ic">🏗️</div>لا توجد مشاريع بعد</div>`}
+      </div>`).join("") : `<div class="card empty-state"><div class="ic">${svgIcon("building", 40)}</div>لا توجد مشاريع بعد</div>`}
   `;
 
   const newProjectBtn = document.getElementById("newProjectBtn");
@@ -168,8 +168,8 @@ function isProjectDelayed(p) {
 function delayedBadgeHtml(p) {
   const s = projectDeadlineStatus(p);
   if (!s) return "";
-  if (s.state === "delayed") return `<span class="badge red">⚠️ متأخر عن الموعد المحدد (${Math.abs(s.daysRemaining)} يوم)</span>`;
-  if (s.state === "warning") return `<span class="badge orange">⏰ تبقى ${s.daysRemaining} يوم على الموعد المحدد</span>`;
+  if (s.state === "delayed") return `<span class="badge red">${svgIcon("alert", 15)} متأخر عن الموعد المحدد (${Math.abs(s.daysRemaining)} يوم)</span>`;
+  if (s.state === "warning") return `<span class="badge orange">${svgIcon("clock", 15)} تبقى ${s.daysRemaining} يوم على الموعد المحدد</span>`;
   return "";
 }
 
@@ -178,10 +178,10 @@ function deadlineBannerHtml(p) {
   const s = projectDeadlineStatus(p);
   if (!s || s.state === "ok") return "";
   if (s.state === "delayed") {
-    return `<div style="margin-top:10px;background:#fbe6e2;border-radius:8px;padding:10px 12px;font-size:12.5px;color:var(--danger);font-weight:700">⚠️ المشروع متأخر عن الموعد المحدد لانتهائه بمقدار ${Math.abs(s.daysRemaining)} يوم</div>`;
+    return `<div style="margin-top:10px;background:#fbe6e2;border-radius:8px;padding:10px 12px;font-size:12.5px;color:var(--danger);font-weight:700">${svgIcon("alert", 15)} المشروع متأخر عن الموعد المحدد لانتهائه بمقدار ${Math.abs(s.daysRemaining)} يوم</div>`;
   }
   const pct = s.totalDays ? Math.round((s.daysRemaining / s.totalDays) * 100) : null;
-  return `<div style="margin-top:10px;background:#fdecd6;border-radius:8px;padding:10px 12px;font-size:12.5px;color:var(--warning);font-weight:700">⏰ متبقٍ على الموعد المحدد لانتهاء المشروع ${s.daysRemaining} يوم${pct !== null ? ` (أقل من ${pct}% من إجمالي مدة المشروع)` : ""}</div>`;
+  return `<div style="margin-top:10px;background:#fdecd6;border-radius:8px;padding:10px 12px;font-size:12.5px;color:var(--warning);font-weight:700">${svgIcon("clock", 15)} متبقٍ على الموعد المحدد لانتهاء المشروع ${s.daysRemaining} يوم${pct !== null ? ` (أقل من ${pct}% من إجمالي مدة المشروع)` : ""}</div>`;
 }
 
 /* ---------- منتقي العميل (نسخة خاصة بالمشاريع) ---------- */
@@ -279,7 +279,7 @@ function renderProjectBuilder(el) {
         <label>موقع المشروع (رابط خرائط جوجل)</label>
         <div class="flex gap">
           <input id="p_location" placeholder="https://maps.app.goo.gl/... أو عنوان نصي" value="${d.location}" style="flex:1">
-          <button class="btn sm" id="p_useMyLocation" type="button" title="استخدام موقعي الحالي">📍 موقعي الحالي</button>
+          <button class="btn sm" id="p_useMyLocation" type="button" title="استخدام موقعي الحالي">${svgIcon("pin")} موقعي الحالي</button>
         </div>
         <div class="hint">افتح الموقع في خرائط جوجل، اضغط "مشاركة"، ثم انسخ الرابط والصقه هنا — أو اكتب العنوان نصاً</div>
       </div>
@@ -330,7 +330,7 @@ function renderProjectBuilder(el) {
     <div class="card">
       <h3>المخططات</h3>
       <input type="file" id="p_plans" multiple accept=".dwg,.dxf,.pdf,application/pdf">
-      <div id="p_plansList" class="flex wrap" style="margin-top:8px">${d.planFiles.map(f => `<span class="file-chip">📎 ${f.name}</span>`).join("")}</div>
+      <div id="p_plansList" class="flex wrap" style="margin-top:8px">${d.planFiles.map(f => `<span class="file-chip">${svgIcon("paperclip", 14)} ${f.name}</span>`).join("")}</div>
     </div>
 
     <div class="card">
@@ -338,7 +338,7 @@ function renderProjectBuilder(el) {
       <textarea id="p_notes" placeholder="أي تفاصيل أخرى متعلقة بالمشروع...">${d.notes}</textarea>
     </div>
 
-    <div class="flex gap"><button class="btn primary" id="saveProjectBtn">💾 حفظ المشروع</button><button class="btn" id="cancelProjectBtn">إلغاء</button></div>
+    <div class="flex gap"><button class="btn primary" id="saveProjectBtn">${svgIcon("save")} حفظ المشروع</button><button class="btn" id="cancelProjectBtn">إلغاء</button></div>
   `;
 
   bindProjectClientPicker(el, d, () => renderProjectBuilder(el));
@@ -381,7 +381,7 @@ function renderProjectBuilder(el) {
 
   document.getElementById("p_plans").onchange = (e) => {
     for (const f of e.target.files) d.planFiles.push({ name: f.name, type: f.type, size: f.size });
-    document.getElementById("p_plansList").innerHTML = d.planFiles.map(f => `<span class="file-chip">📎 ${f.name}</span>`).join("");
+    document.getElementById("p_plansList").innerHTML = d.planFiles.map(f => `<span class="file-chip">${svgIcon("paperclip", 14)} ${f.name}</span>`).join("");
   };
 
   document.getElementById("saveProjectBtn").onclick = () => {
@@ -460,7 +460,7 @@ function renderProjectDetail(el) {
           <label>الموقع (رابط خرائط جوجل)</label>
           <div class="flex gap">
             <input id="pd_location" placeholder="https://maps.app.goo.gl/... أو عنوان نصي" value="${p.location || ""}" style="flex:1">
-            <button class="btn sm" id="pd_useMyLocation" type="button" title="استخدام موقعي الحالي">📍 موقعي الحالي</button>
+            <button class="btn sm" id="pd_useMyLocation" type="button" title="استخدام موقعي الحالي">${svgIcon("pin")} موقعي الحالي</button>
           </div>
           <div id="pd_locationLink" style="margin-top:6px">${p.location ? locationDisplay(p.location) : ""}</div>
         </div>
@@ -491,7 +491,7 @@ function renderProjectDetail(el) {
         <hr style="border:none;border-top:1px dashed var(--border);margin:14px 0">
         <label style="font-size:12.5px;font-weight:700;display:block;margin-bottom:6px">أو رفع صيغة عقد خارجي (ملف)</label>
         <input type="file" id="pd_contractFile" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
-        <div style="margin-top:8px">${p.externalContractFile ? `<span class="file-chip">📎 ${p.externalContractFile.name} <span data-rmcontractfile style="cursor:pointer;color:var(--danger);margin-inline-start:6px">✕</span></span>` : ""}</div>
+        <div style="margin-top:8px">${p.externalContractFile ? `<span class="file-chip">${svgIcon("paperclip", 14)} ${p.externalContractFile.name} <span data-rmcontractfile style="cursor:pointer;color:var(--danger);margin-inline-start:6px">${svgIcon("close", 12)}</span></span>` : ""}</div>
       </div>
       <div class="card">
         <h3>جدول الكميات المعتمد</h3>
@@ -505,7 +505,7 @@ function renderProjectDetail(el) {
         <hr style="border:none;border-top:1px dashed var(--border);margin:14px 0">
         <label style="font-size:12.5px;font-weight:700;display:block;margin-bottom:6px">أو رفع ملف كميات خارجي</label>
         <input type="file" id="pd_boqFile" accept=".pdf,.xls,.xlsx,.csv">
-        <div style="margin-top:8px">${p.externalBoqFile ? `<span class="file-chip">📎 ${p.externalBoqFile.name} <span data-rmboqfile style="cursor:pointer;color:var(--danger);margin-inline-start:6px">✕</span></span>` : ""}</div>
+        <div style="margin-top:8px">${p.externalBoqFile ? `<span class="file-chip">${svgIcon("paperclip", 14)} ${p.externalBoqFile.name} <span data-rmboqfile style="cursor:pointer;color:var(--danger);margin-inline-start:6px">${svgIcon("close", 12)}</span></span>` : ""}</div>
       </div>
     </div>
 
@@ -519,7 +519,7 @@ function renderProjectDetail(el) {
     <div class="card">
       <h3>المخططات</h3>
       <input type="file" id="pd_plans" multiple accept=".dwg,.dxf,.pdf,application/pdf">
-      <div id="pd_plansList" class="flex wrap" style="margin-top:8px">${(p.planFiles || []).map((f, i) => `<span class="file-chip">📎 ${f.name} <span data-rmplan="${i}" style="cursor:pointer;color:var(--danger);margin-inline-start:6px">✕</span></span>`).join("")}</div>
+      <div id="pd_plansList" class="flex wrap" style="margin-top:8px">${(p.planFiles || []).map((f, i) => `<span class="file-chip">${svgIcon("paperclip", 14)} ${f.name} <span data-rmplan="${i}" style="cursor:pointer;color:var(--danger);margin-inline-start:6px">${svgIcon("close", 12)}</span></span>`).join("")}</div>
     </div>
 
     <div class="card">

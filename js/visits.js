@@ -77,7 +77,7 @@ function renderVisits(el) {
               </tr>`).join("")}
           </tbody>
         </table>
-      </div>` : `<div class="empty-state"><div class="ic">📍</div>لا توجد طلبات زيارة بعد</div>`}
+      </div>` : `<div class="empty-state"><div class="ic">${svgIcon("pin", 40)}</div>لا توجد طلبات زيارة بعد</div>`}
     </div>
   `;
 
@@ -100,7 +100,7 @@ function contactIconsHtml(phone) {
 function locationDisplay(loc) {
   if (!loc) return "-";
   if (/^https?:\/\//i.test(loc.trim())) {
-    return `<a href="${loc}" target="_blank" rel="noopener" class="badge blue" style="text-decoration:none">📍 فتح في خرائط جوجل</a>`;
+    return `<a href="${loc}" target="_blank" rel="noopener" class="badge blue" style="text-decoration:none">${svgIcon("pin")} فتح في خرائط جوجل</a>`;
   }
   return loc;
 }
@@ -180,7 +180,7 @@ function openVisitModal(prefill) {
     let plans = (prefill.plans || []).slice();
     let photos = (prefill.photos || []).slice();
     let linkedClientId = prefill.linkedClientId || "";
-    ov.querySelector("#v_plansList").innerHTML = plans.map(p => `<span class="file-chip">📎 ${p.name}</span>`).join("");
+    ov.querySelector("#v_plansList").innerHTML = plans.map(p => `<span class="file-chip">${svgIcon("paperclip", 14)} ${p.name}</span>`).join("");
     renderPhotoGrid(ov.querySelector("#v_photosList"), photos, false);
 
     ov.querySelector("#mClose").onclick = closeModal;
@@ -226,7 +226,7 @@ function openVisitModal(prefill) {
       for (const f of e.target.files) {
         plans.push({ name: f.name, type: f.type, size: f.size });
       }
-      ov.querySelector("#v_plansList").innerHTML = plans.map((p, i) => `<span class="file-chip">📎 ${p.name}</span>`).join("");
+      ov.querySelector("#v_plansList").innerHTML = plans.map((p, i) => `<span class="file-chip">${svgIcon("paperclip", 14)} ${p.name}</span>`).join("");
     };
     ov.querySelector("#v_photos").onchange = async (e) => {
       for (const f of e.target.files) {
@@ -297,7 +297,7 @@ function openVisitModal(prefill) {
       <div class="kv-row"><span class="k">المشرف المكلف</span><span class="v">${v.assignedToName || "-"}</span></div>
     </div>
     ${v.notes ? `<p class="text-muted" style="font-size:13px">ملاحظات الطلب: ${v.notes}</p>` : ""}
-    ${v.planFiles && v.planFiles.length ? `<div class="field"><label>المخططات المرفقة</label>${v.planFiles.map(p => `<span class="file-chip">📎 ${p.name}</span>`).join("")}</div>` : ""}
+    ${v.planFiles && v.planFiles.length ? `<div class="field"><label>المخططات المرفقة</label>${v.planFiles.map(p => `<span class="file-chip">${svgIcon("paperclip", 14)} ${p.name}</span>`).join("")}</div>` : ""}
     ${v.refPhotos && v.refPhotos.length ? `<div class="field"><label>صور مرفقة مع الطلب</label><div class="photo-grid">${v.refPhotos.map(p => `<div class="photo-item"><img src="${p.url}"></div>`).join("")}</div></div>` : ""}
 
     <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
@@ -317,7 +317,7 @@ function openVisitModal(prefill) {
     <div class="field">
       <label>رفع الملفات/المخططات المستلمة من العميل أثناء الزيارة</label>
       <input type="file" id="v_receivedFiles" multiple accept=".dwg,.dxf,.pdf,application/pdf,image/*">
-      <div id="v_receivedList" class="flex wrap">${(v.receivedFiles || []).map(f => `<span class="file-chip">📎 ${f.name}</span>`).join("")}</div>
+      <div id="v_receivedList" class="flex wrap">${(v.receivedFiles || []).map(f => `<span class="file-chip">${svgIcon("paperclip", 14)} ${f.name}</span>`).join("")}</div>
     </div>
 
     <div class="flex gap" style="margin-top:6px">
@@ -341,7 +341,7 @@ function openVisitModal(prefill) {
   };
   ov.querySelector("#v_receivedFiles").onchange = (e) => {
     for (const f of e.target.files) newReceivedFiles.push({ name: f.name, type: f.type, size: f.size });
-    ov.querySelector("#v_receivedList").innerHTML = newReceivedFiles.map(f => `<span class="file-chip">📎 ${f.name}</span>`).join("");
+    ov.querySelector("#v_receivedList").innerHTML = newReceivedFiles.map(f => `<span class="file-chip">${svgIcon("paperclip", 14)} ${f.name}</span>`).join("");
   };
 
   ov.querySelector("#v_saveResult").onclick = () => {

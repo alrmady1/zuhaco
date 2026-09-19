@@ -132,7 +132,7 @@ function renderAccProjects(el) {
                   ${e.vendorName ? `<br><span style="font-size:11px">التاجر: ${e.vendorName}${e.invoiceRefNumber ? " — فاتورة رقم " + e.invoiceRefNumber : ""}</span>` : ""}
                   ${e.paymentMethod ? `<br><span class="badge gray" style="font-size:10.5px">${e.paymentMethod}</span>` : ""}
                 </td>
-                <td>${e.attachment ? `<a href="${e.attachment.url}" target="_blank" rel="noopener" class="badge blue" style="text-decoration:none">📎 عرض المرفق</a>` : "-"}</td>
+                <td>${e.attachment ? `<a href="${e.attachment.url}" target="_blank" rel="noopener" class="badge blue" style="text-decoration:none">${svgIcon("paperclip", 14)} عرض المرفق</a>` : "-"}</td>
                 <td>
                   ${e.type === "فاتورة ضريبية" ? `<button class="btn sm" data-printinv="${e.id}">طباعة</button>` : `<button class="btn-icon" data-viewentry="${e.id}" title="عرض">${ICON_VIEW}</button><button class="btn-icon" data-editentry="${e.id}" title="تعديل">${ICON_EDIT}</button>`}
                   <button class="btn-icon danger" data-delentry="${e.id}" title="حذف">${ICON_DELETE}</button>
@@ -140,7 +140,7 @@ function renderAccProjects(el) {
               </tr>`).join("")}
           </tbody>
         </table>
-      </div>` : `<div class="empty-state"><div class="ic">💵</div>لا توجد حركات مالية لهذا المشروع بعد</div>`}
+      </div>` : `<div class="empty-state"><div class="ic">${svgIcon("dollar", 40)}</div>لا توجد حركات مالية لهذا المشروع بعد</div>`}
     </div>
   `;
 
@@ -177,7 +177,7 @@ function openAccEntryViewModal(e) {
     ${e.invoiceRefNumber ? `<div class="kv-row"><span class="k">رقم الفاتورة</span><span class="v">${e.invoiceRefNumber}</span></div>` : ""}
     ${e.paymentMethod ? `<div class="kv-row"><span class="k">طريقة السداد/الاستلام</span><span class="v">${e.paymentMethod}</span></div>` : ""}
     ${e.note ? `<div class="kv-row"><span class="k">ملاحظات</span><span class="v">${e.note}</span></div>` : ""}
-    ${e.attachment ? `<div class="kv-row"><span class="k">المرفق</span><span class="v"><a href="${e.attachment.url}" target="_blank" rel="noopener">📎 ${e.attachment.name || "عرض المرفق"}</a></span></div>` : ""}
+    ${e.attachment ? `<div class="kv-row"><span class="k">المرفق</span><span class="v"><a href="${e.attachment.url}" target="_blank" rel="noopener">${svgIcon("paperclip", 14)} ${e.attachment.name || "عرض المرفق"}</a></span></div>` : ""}
     <div class="flex gap" style="margin-top:14px"><button class="btn" id="v_close">إغلاق</button></div>
   `;
   const ov = openModalShell(html);
@@ -221,7 +221,7 @@ function openAccEntryModal(el, existingEntry) {
         <div class="field">
           <label>صورة الفاتورة أو إيصال التحويل (اختياري)</label>
           <input type="file" id="e_attachment" accept=".pdf,image/*">
-          <div id="e_attachmentPreview" class="flex wrap" style="margin-top:8px">${attachment ? `<span class="file-chip">📎 ${attachment.name || "المرفق الحالي"}</span>` : ""}</div>
+          <div id="e_attachmentPreview" class="flex wrap" style="margin-top:8px">${attachment ? `<span class="file-chip">${svgIcon("paperclip", 14)} ${attachment.name || "المرفق الحالي"}</span>` : ""}</div>
         </div>
       `;
       wireAttachment();
@@ -231,7 +231,7 @@ function openAccEntryModal(el, existingEntry) {
         <div class="field">
           <label>إيصال التحويل أو الاستلام (اختياري)</label>
           <input type="file" id="e_attachment" accept=".pdf,image/*">
-          <div id="e_attachmentPreview" class="flex wrap" style="margin-top:8px">${attachment ? `<span class="file-chip">📎 ${attachment.name || "المرفق الحالي"}</span>` : ""}</div>
+          <div id="e_attachmentPreview" class="flex wrap" style="margin-top:8px">${attachment ? `<span class="file-chip">${svgIcon("paperclip", 14)} ${attachment.name || "المرفق الحالي"}</span>` : ""}</div>
         </div>
       `;
       wireAttachment();
@@ -248,7 +248,7 @@ function openAccEntryModal(el, existingEntry) {
       if (!file) { attachment = null; ov.querySelector("#e_attachmentPreview").innerHTML = ""; return; }
       const url = await fileToDataURL(file);
       attachment = { name: file.name, type: file.type, url };
-      ov.querySelector("#e_attachmentPreview").innerHTML = `<span class="file-chip">📎 ${file.name}</span>`;
+      ov.querySelector("#e_attachmentPreview").innerHTML = `<span class="file-chip">${svgIcon("paperclip", 14)} ${file.name}</span>`;
     };
   }
 
@@ -347,7 +347,7 @@ function printInvoice(id) {
     <div class="kv-row"><span class="k">المبلغ قبل الضريبة</span><span class="v">${fmtMoney(inv.amountBeforeTax)}</span></div>
     <div class="kv-row"><span class="k">ضريبة القيمة المضافة (15%)</span><span class="v">${fmtMoney(inv.vatAmount)}</span></div>
     <div class="grand-total-box" style="margin-top:10px"><div>الإجمالي المستحق</div><div class="num">${fmtMoney(inv.amount)}</div></div>
-    <div class="flex gap no-print" style="margin-top:16px"><button class="btn primary" id="printBtn">🖨️ طباعة</button><button class="btn" id="i_close">إغلاق</button></div>
+    <div class="flex gap no-print" style="margin-top:16px"><button class="btn primary" id="printBtn">${svgIcon("printer")} طباعة</button><button class="btn" id="i_close">إغلاق</button></div>
   `;
   const ov = openModalShell(html);
   ov.querySelector("#mClose").onclick = closeModal;
@@ -398,7 +398,7 @@ function renderAccGeneralProjectsTab(el) {
   }
 
   function tableFor(list, emptyMsg) {
-    if (!list.length) return `<div class="empty-state"><div class="ic">📁</div>${emptyMsg}</div>`;
+    if (!list.length) return `<div class="empty-state"><div class="ic">${svgIcon("folder", 40)}</div>${emptyMsg}</div>`;
     let totalRev = 0, totalExp = 0;
     const rows = list.map(p => {
       const s = statsFor(p.id); totalRev += s.revenue; totalExp += s.expenses;
@@ -463,7 +463,7 @@ function renderAccGeneralVatTab(el) {
           </select>
         </div>
         <button class="btn" id="tvatGo">عرض</button>
-        <button class="btn primary" id="tvatPrint" style="margin-inline-start:auto">🖨️ طباعة التقرير</button>
+        <button class="btn primary" id="tvatPrint" style="margin-inline-start:auto">${svgIcon("printer")} طباعة التقرير</button>
       </div>
       <p class="text-muted" style="font-size:12px;margin:10px 0 0">تفصيل جاهز لتعبئة إقرار ضريبة القيمة المضافة الربع سنوي في بوابة هيئة الزكاة والضريبة والجمارك (ZATCA) — التقديم الفعلي يتم يدوياً عبر بوابة الهيئة.</p>
     </div>
@@ -486,7 +486,7 @@ function renderAccGeneralVatTab(el) {
               </tr>`).join("")}
           </tbody>
         </table>
-      </div>` : `<div class="empty-state"><div class="ic">💰</div>لا توجد إيرادات خاضعة للضريبة في هذا الربع</div>`}
+      </div>` : `<div class="empty-state"><div class="ic">${svgIcon("dollar", 40)}</div>لا توجد إيرادات خاضعة للضريبة في هذا الربع</div>`}
     </div>
 
     <div class="card">
@@ -506,7 +506,7 @@ function renderAccGeneralVatTab(el) {
               </tr>`).join("")}
           </tbody>
         </table>
-      </div>` : `<div class="empty-state"><div class="ic">🧾</div>لا توجد مشتريات خاضعة للضريبة في هذا الربع</div>`}
+      </div>` : `<div class="empty-state"><div class="ic">${svgIcon("file-text", 40)}</div>لا توجد مشتريات خاضعة للضريبة في هذا الربع</div>`}
     </div>
 
     <div class="grid cols-2" style="margin-bottom:18px">
@@ -560,7 +560,7 @@ function salaryMonthLabel(ym) {
 
 function generalExpenseSortTh(label, key) {
   const active = GEN_EXP_SORT.key === key;
-  const arrow = active ? (GEN_EXP_SORT.dir === "asc" ? " ▲" : " ▼") : "";
+  const arrow = active ? (GEN_EXP_SORT.dir === "asc" ? ` ${svgIcon("chevron-up", 12)}` : ` ${svgIcon("chevron-down", 12)}`) : "";
   return `<th class="sortable-th" data-sortkey="${key}">${label}${arrow}</th>`;
 }
 
@@ -606,7 +606,7 @@ function renderGeneralExpensesTab(el) {
                 <td>${e.paymentMethod ? `<span class="badge blue">${e.paymentMethod}</span>` : "-"}</td>
                 <td>${fmtDate(e.date)}</td>
                 <td class="text-muted">${e.note || "-"}</td>
-                <td>${e.attachment ? `<a href="${e.attachment.url}" target="_blank" rel="noopener" class="badge blue" style="text-decoration:none">📎 عرض المرفق</a>` : "-"}</td>
+                <td>${e.attachment ? `<a href="${e.attachment.url}" target="_blank" rel="noopener" class="badge blue" style="text-decoration:none">${svgIcon("paperclip", 14)} عرض المرفق</a>` : "-"}</td>
                 <td>
                   <button class="btn-icon" data-viewgen="${e.id}" title="عرض">${ICON_VIEW}</button>
                   <button class="btn-icon" data-editgen="${e.id}" title="تعديل">${ICON_EDIT}</button>
@@ -615,7 +615,7 @@ function renderGeneralExpensesTab(el) {
               </tr>`).join("")}
           </tbody>
         </table>
-      </div>` : `<div class="empty-state"><div class="ic">🏢</div>لا توجد مصاريف إدارية مسجلة بعد</div>`}
+      </div>` : `<div class="empty-state"><div class="ic">${svgIcon("building", 40)}</div>لا توجد مصاريف إدارية مسجلة بعد</div>`}
     </div>
   `;
 
@@ -656,7 +656,7 @@ function renderCustodyTab(el) {
       const balance = custodyBalance(c);
       return `
       <div class="contract-row" data-opencustody="${c.id}">
-        <div class="contract-row-icon">💼</div>
+        <div class="contract-row-icon">${svgIcon("briefcase", 20)}</div>
         <div class="contract-row-info">
           <div class="contract-row-title">${c.employeeName}</div>
           <div class="contract-row-sub">${c.scopeType === "project" ? "مشروع: " + (c.projectName || "-") : "مصاريف عامة"} · ${c.purpose || ""} · <span class="badge ${c.status === "مفتوحة" ? "orange" : "gray"}">${c.status}</span></div>
@@ -667,7 +667,7 @@ function renderCustodyTab(el) {
           <button class="btn-icon danger" data-delcustody="${c.id}" title="حذف">${ICON_DELETE}</button>
         </div>
       </div>`;
-    }).join("") : `<div class="card empty-state"><div class="ic">💼</div>لا توجد عُهد مسجلة بعد</div>`}
+    }).join("") : `<div class="card empty-state"><div class="ic">${svgIcon("briefcase", 40)}</div>لا توجد عُهد مسجلة بعد</div>`}
   `;
 
   document.getElementById("addCustodyBtn").onclick = () => openNewCustodyModal(el);
@@ -866,7 +866,7 @@ function renderEmployeesList(el) {
   `;
 
   if (!users.length) {
-    el.innerHTML = header + `<div class="card"><div class="empty-state"><div class="ic">👤</div>لا يوجد موظفون بعد — أضفهم من الإعدادات ← التحكم بالمستخدمين</div></div>`;
+    el.innerHTML = header + `<div class="card"><div class="empty-state"><div class="ic">${svgIcon("user", 40)}</div>لا يوجد موظفون بعد — أضفهم من الإعدادات ← التحكم بالمستخدمين</div></div>`;
     wireListModeToggle();
     return;
   }
@@ -1045,7 +1045,7 @@ function renderEmployeeDetail(el) {
         <div class="stat-card"><div class="label">خصم مخالفات معلّقة</div><div class="value danger">${fmtMoney(pendingViolationsTotal)}</div></div>
         <div class="stat-card"><div class="label">صافي الراتب المستحق</div><div class="value success">${fmtMoney(netSalary)}</div></div>
       </div>
-      <button class="btn primary" id="empPaySalary" style="margin-top:14px" ${baseSalary <= 0 ? "disabled" : ""}>💾 تسجيل صرف الراتب</button>
+      <button class="btn primary" id="empPaySalary" style="margin-top:14px" ${baseSalary <= 0 ? "disabled" : ""}>${svgIcon("save")} تسجيل صرف الراتب</button>
       <p class="text-muted" style="font-size:11.5px;margin-top:6px">يُنشئ حركة "رواتب" في المصاريف الإدارية بالصافي، ويعتبر السلفيات والمخالفات المعلّقة أعلاه "مخصومة".</p>
     </div>
 
@@ -1292,7 +1292,7 @@ function renderAssetsTab(el) {
               </tr>`).join("")}
           </tbody>
         </table>
-      </div>` : `<div class="empty-state"><div class="ic">🏗️</div>لا توجد أصول مسجلة بعد</div>`}
+      </div>` : `<div class="empty-state"><div class="ic">${svgIcon("building", 40)}</div>لا توجد أصول مسجلة بعد</div>`}
       ${untrackedCount > 0 ? `<p class="text-muted" style="font-size:12px;margin-top:12px">${untrackedCount} مركبة مملوكة بلا بيانات شراء كاملة (سعر/تاريخ الشراء) — أكملها من الإعدادات ← المركبات لتظهر هنا.</p>` : ""}
     </div>
   `;
@@ -1308,7 +1308,7 @@ function openGeneralExpenseViewModal(e) {
     <div class="kv-row"><span class="k">ضريبة القيمة المضافة</span><span class="v">${e.vatApplicable ? `خاضع (${fmtMoney(e.vatAmount || Number(e.amount) * VAT_RATE)})` : "غير خاضع"}</span></div>
     ${e.paymentMethod ? `<div class="kv-row"><span class="k">طريقة الدفع</span><span class="v">${e.paymentMethod}</span></div>` : ""}
     ${e.note ? `<div class="kv-row"><span class="k">ملاحظات</span><span class="v">${e.note}</span></div>` : ""}
-    ${e.attachment ? `<div class="kv-row"><span class="k">المرفق</span><span class="v"><a href="${e.attachment.url}" target="_blank" rel="noopener">📎 ${e.attachment.name || "عرض المرفق"}</a></span></div>` : ""}
+    ${e.attachment ? `<div class="kv-row"><span class="k">المرفق</span><span class="v"><a href="${e.attachment.url}" target="_blank" rel="noopener">${svgIcon("paperclip", 14)} ${e.attachment.name || "عرض المرفق"}</a></span></div>` : ""}
     <div class="flex gap" style="margin-top:14px"><button class="btn" id="v_close">إغلاق</button></div>
   `;
   const ov = openModalShell(html);
@@ -1340,7 +1340,7 @@ function openGeneralExpenseModal(el, existingEntry) {
     <div class="field">
       <label>إرفاق ملف الفاتورة أو المستند (اختياري)</label>
       <input type="file" id="g_attachment" accept=".pdf,image/*">
-      <div id="g_attachmentPreview" class="flex wrap" style="margin-top:8px">${isEdit && existingEntry.attachment ? `<span class="file-chip">📎 ${existingEntry.attachment.name || "المرفق الحالي"}</span>` : ""}</div>
+      <div id="g_attachmentPreview" class="flex wrap" style="margin-top:8px">${isEdit && existingEntry.attachment ? `<span class="file-chip">${svgIcon("paperclip", 14)} ${existingEntry.attachment.name || "المرفق الحالي"}</span>` : ""}</div>
     </div>
     <div class="flex gap"><button class="btn primary" id="g_save">حفظ</button><button class="btn" id="g_cancel">إلغاء</button></div>
   `;
@@ -1354,7 +1354,7 @@ function openGeneralExpenseModal(el, existingEntry) {
     if (!file) { attachment = null; ov.querySelector("#g_attachmentPreview").innerHTML = ""; return; }
     const url = await fileToDataURL(file);
     attachment = { name: file.name, type: file.type, url };
-    ov.querySelector("#g_attachmentPreview").innerHTML = `<span class="file-chip">📎 ${file.name}</span>`;
+    ov.querySelector("#g_attachmentPreview").innerHTML = `<span class="file-chip">${svgIcon("paperclip", 14)} ${file.name}</span>`;
   };
 
   const catSelect = ov.querySelector("#g_cat");

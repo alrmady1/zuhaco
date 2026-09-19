@@ -109,7 +109,7 @@ function renderClientsList(el) {
             }).join("")}
           </tbody>
         </table>
-      </div>` : `<div class="empty-state"><div class="ic">👤</div>لا يوجد عملاء مطابقون</div>`}
+      </div>` : `<div class="empty-state"><div class="ic">${svgIcon("user", 40)}</div>لا يوجد عملاء مطابقون</div>`}
     </div>
   `;
 
@@ -235,7 +235,7 @@ function renderClientDetail(el) {
         <div class="grid cols-2" id="ec_extraFields">${clientExtraFieldsHtml("ec", c, c.clientType || "فرد")}</div>
         <div class="field"><label>ملاحظات</label><textarea id="ec_notes">${c.notes || ""}</textarea></div>
         <div class="flex gap">
-          <button class="btn primary" id="ec_save">💾 حفظ التعديلات</button>
+          <button class="btn primary" id="ec_save">${svgIcon("save")} حفظ التعديلات</button>
           ${canDeleteClient ? `<button class="btn danger" id="ec_delete" style="margin-inline-start:auto">حذف العميل</button>` : ""}
         </div>
       </div>

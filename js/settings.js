@@ -73,7 +73,7 @@ function renderAppearanceTab(el) {
       <label class="chk"><input type="checkbox" id="th_icons" ${t.showMenuIcons !== false ? "checked" : ""}> إظهار أيقونات القائمة الجانبية</label>
     </div>
 
-    <button class="btn primary" id="th_save">💾 حفظ وتطبيق المظهر</button>
+    <button class="btn primary" id="th_save">${svgIcon("save")} حفظ وتطبيق المظهر</button>
     <button class="btn" id="th_reset" type="button">إعادة الافتراضي</button>
   `;
 
@@ -148,7 +148,7 @@ function renderFacilitiesTab(el) {
                 <td>${f.ownership === "إيجار" ? `<input type="date" value="${f.contractStart || ""}" data-editf="${f.id}:contractStart" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px">` : `<span class="text-muted">-</span>`}</td>
                 <td>${f.ownership === "إيجار" ? `<input type="date" value="${f.contractEnd || ""}" data-editf="${f.id}:contractEnd" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px">` : `<span class="text-muted">-</span>`}</td>
                 <td><button class="btn-icon danger" data-delfac="${f.id}" title="حذف">${ICON_DELETE}</button></td>
-              </tr>`).join("") : `<tr><td colspan="10"><div class="empty-state"><div class="ic">🏢</div>لا توجد مرافق مسجلة بعد</div></td></tr>`}
+              </tr>`).join("") : `<tr><td colspan="10"><div class="empty-state"><div class="ic">${svgIcon("building", 40)}</div>لا توجد مرافق مسجلة بعد</div></td></tr>`}
           </tbody>
         </table>
       </div>
@@ -233,7 +233,7 @@ function renderLeavesTab(el) {
   function usedSickDaysThisYear(userId) { return employeeUsedSickDays(userId, currentYear); }
 
   function leavesListHtml() {
-    if (!users.length) return `<div class="empty-state"><div class="ic">👤</div>لا يوجد مستخدمون بعد</div>`;
+    if (!users.length) return `<div class="empty-state"><div class="ic">${svgIcon("user", 40)}</div>لا يوجد مستخدمون بعد</div>`;
     return users.map(u => {
       const personLeaves = dbGet("leaves", []).filter(l => l.employeeId === u.id).sort((a, b) => (b.startDate > a.startDate ? 1 : -1));
       const daysThisYear = personLeaves.filter(l => (l.startDate || "").slice(0, 4) === String(currentYear)).reduce((s, l) => s + Number(l.daysCount || 0), 0);
@@ -275,7 +275,7 @@ function renderLeavesTab(el) {
                 <td>${u.name}</td>
                 <td class="text-muted">${u.role}</td>
                 ${WEEKDAYS.map(d => `<td style="text-align:center"><input type="checkbox" data-dayoff="${u.id}:${d.key}" ${(u.weeklyDaysOff || []).includes(d.key) ? "checked" : ""} style="width:auto"></td>`).join("")}
-              </tr>`).join("") : `<tr><td colspan="${2 + WEEKDAYS.length}"><div class="empty-state"><div class="ic">👤</div>لا يوجد مستخدمون بعد</div></td></tr>`}
+              </tr>`).join("") : `<tr><td colspan="${2 + WEEKDAYS.length}"><div class="empty-state"><div class="ic">${svgIcon("user", 40)}</div>لا يوجد مستخدمون بعد</div></td></tr>`}
           </tbody>
         </table>
       </div>
@@ -387,7 +387,7 @@ function renderLeavesTab(el) {
       const file = e.target.files[0];
       if (!file) { leavePhoto = null; document.getElementById("lv_photoPreview").innerHTML = ""; return; }
       leavePhoto = await fileToDataURL(file);
-      document.getElementById("lv_photoPreview").innerHTML = `<span class="file-chip">📎 ${file.name}</span>`;
+      document.getElementById("lv_photoPreview").innerHTML = `<span class="file-chip">${svgIcon("paperclip", 14)} ${file.name}</span>`;
     };
 
     function refreshExtra() {
@@ -674,7 +674,7 @@ function renderVehiclesTab(el) {
                   <input type="file" accept="image/*" data-vimg="${v.id}" style="display:block;margin-top:6px;font-size:11px;max-width:130px">
                 </td>
                 <td><button class="btn-icon danger" data-delveh="${v.id}" title="حذف">${ICON_DELETE}</button></td>
-              </tr>`).join("") : `<tr><td colspan="11"><div class="empty-state"><div class="ic">🚙</div>لا توجد مركبات مسجلة بعد</div></td></tr>`}
+              </tr>`).join("") : `<tr><td colspan="11"><div class="empty-state"><div class="ic">${svgIcon("truck", 40)}</div>لا توجد مركبات مسجلة بعد</div></td></tr>`}
           </tbody>
         </table>
       </div>
@@ -831,14 +831,14 @@ function renderExpenseCatalogSettingsTab(el) {
         <div class="cat-block" data-catid="${cat.id}">
           <div class="cat-head">
             <div class="flex" style="align-items:center;gap:8px">
-              <button class="btn sm" data-toggleexpcat="${cat.id}" style="padding:4px 9px">${EXPENSE_CAT_COLLAPSED[cat.id] ? "▸" : "▾"}</button>
+              <button class="btn sm" data-toggleexpcat="${cat.id}" style="padding:4px 9px">${EXPENSE_CAT_COLLAPSED[cat.id] ? svgIcon("chevron-left", 14) : svgIcon("chevron-down", 14)}</button>
               <strong>${cat.name}</strong>
               <span class="badge gray">${cat.items.length} بند فرعي</span>
             </div>
             <div class="flex" style="align-items:center;gap:6px">
               <button class="btn sm" data-addexpitem="${cat.id}">+ إضافة بند فرعي</button>
-              <button class="btn sm" data-editexpcat="${cat.id}" title="تعديل الاسم">✏️</button>
-              <button class="btn sm danger" data-delexpcat="${cat.id}" title="حذف">🗑️</button>
+              <button class="btn sm" data-editexpcat="${cat.id}" title="تعديل الاسم">${ICON_EDIT}</button>
+              <button class="btn sm danger" data-delexpcat="${cat.id}" title="حذف">${ICON_DELETE}</button>
             </div>
           </div>
           ${!EXPENSE_CAT_COLLAPSED[cat.id] ? `
@@ -846,8 +846,8 @@ function renderExpenseCatalogSettingsTab(el) {
               <div class="exp-item-row">
                 <span>${it.name}</span>
                 <span class="flex" style="gap:6px">
-                  <button class="btn sm" data-editexpitem="${cat.id}:${it.id}" title="تعديل">✏️</button>
-                  <button class="btn sm danger" data-delexpitem="${cat.id}:${it.id}" title="حذف">🗑️</button>
+                  <button class="btn sm" data-editexpitem="${cat.id}:${it.id}" title="تعديل">${ICON_EDIT}</button>
+                  <button class="btn sm danger" data-delexpitem="${cat.id}:${it.id}" title="حذف">${ICON_DELETE}</button>
                 </span>
               </div>`).join("") : `<div class="text-muted" style="font-size:12px;padding:6px 4px">لا توجد بنود فرعية بعد</div>`}
           ` : ""}
@@ -953,7 +953,7 @@ function renderActivityLogTab(el) {
     </div>
     <div class="card">
       <div class="flex between" style="align-items:center;flex-wrap:wrap;gap:10px">
-        ${canDelete ? `<button class="btn danger" id="delSelectedLogBtn">🗑️ حذف المحدد</button>` : `<span></span>`}
+        ${canDelete ? `<button class="btn danger" id="delSelectedLogBtn">${ICON_DELETE} حذف المحدد</button>` : `<span></span>`}
         <div class="field" style="max-width:340px;margin-bottom:0;flex:1">
           <input id="activityLogSearch" placeholder="ابحث بنوع العملية أو اسم المستخدم..." value="${ACTIVITY_LOG_SEARCH}">
         </div>
@@ -968,7 +968,7 @@ function renderActivityLogTab(el) {
             <div class="activity-log-msg">${x.message}</div>
             <div class="activity-log-meta">بواسطة ${x.userName} — ${activityLogTimeText(x.createdAt)}</div>
           </div>
-        </div>`).join("") : `<div class="empty-state"><div class="ic">🕓</div>لا توجد عمليات مسجلة بعد</div>`}
+        </div>`).join("") : `<div class="empty-state"><div class="ic">${svgIcon("clock", 40)}</div>لا توجد عمليات مسجلة بعد</div>`}
     </div>
   `;
 
@@ -1084,14 +1084,14 @@ function renderCompanyTab(el) {
           <div class="hint">يُختار من المستخدمين المسجلين في صفحة الإعدادات ← التحكم بالمستخدمين</div>
         </div>
       </div>
-      <button class="btn primary" id="cp_save">💾 حفظ بيانات المؤسسة</button>
+      <button class="btn primary" id="cp_save">${svgIcon("save")} حفظ بيانات المؤسسة</button>
     </div>
 
     ${(getCurrentUser() || {}).role === "مدير عام" ? `
     <div class="card" style="background:#fdf6ec;border-color:#f2dfb8">
       <h3 class="mt-0">مزامنة بيانات هذا الجهاز مع الخادم</h3>
       <p class="text-muted" style="font-size:12.5px">إن كان هذا الجهاز لا يزال يحتفظ ببيانات محلية قديمة (من قبل الانتقال لقاعدة البيانات المركزية) غير موجودة حالياً على الخادم — مثل مشاريع أو عملاء أُدخلوا من هذا الجهاز تحديداً — يمكنك رفعها الآن لدمجها مع بيانات الخادم.</p>
-      <p style="font-size:12.5px;color:var(--warning);font-weight:700">⚠️ تنبيه: أي بيانات في هذا الجهاز تحمل نفس المفتاح (مثل قائمة المشاريع كاملة) ستستبدل ما هو موجود حالياً على الخادم لذلك المفتاح. استخدم هذا فقط إذا كنت متأكداً أن بيانات هذا الجهاز أحدث/أكمل.</p>
+      <p style="font-size:12.5px;color:var(--warning);font-weight:700">${svgIcon("alert", 15)} تنبيه: أي بيانات في هذا الجهاز تحمل نفس المفتاح (مثل قائمة المشاريع كاملة) ستستبدل ما هو موجود حالياً على الخادم لذلك المفتاح. استخدم هذا فقط إذا كنت متأكداً أن بيانات هذا الجهاز أحدث/أكمل.</p>
       <button class="btn" id="syncDeviceBtn">رفع ودمج بيانات هذا الجهاز</button>
       <span id="syncDeviceStatus" class="text-muted" style="font-size:12.5px;margin-inline-start:10px"></span>
     </div>` : ""}
@@ -1186,7 +1186,7 @@ function renderUsersTab(el) {
                 <td><input type="password" data-editpass="${u.id}" value="${u.password || ""}" placeholder="بدون رقم سري" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;width:110px"></td>
                 <td><input type="date" data-edithire="${u.id}" value="${u.hireDate || ""}" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px"></td>
                 <td>
-                  <button class="btn sm" data-empinfo="${u.id}" title="البيانات الشخصية">🪪 الهوية</button>
+                  <button class="btn sm" data-empinfo="${u.id}" title="البيانات الشخصية">${svgIcon("id-card")} الهوية</button>
                   <button class="btn-icon danger" data-deluser="${u.id}" title="حذف">${ICON_DELETE}</button>
                 </td>
               </tr>`).join("")}
@@ -1393,7 +1393,7 @@ function renderCatalogTab(el) {
                     <td><input type="number" min="0" step="0.01" value="${it.install ? it.install.price : 0}" data-editinsprice="${cat.id}:${it.id}" ${it.install && it.install.enabled ? "" : "disabled"} style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;width:90px"></td>
                     <td><input type="number" min="0" step="0.1" value="${it.profitMargin !== undefined ? it.profitMargin : 30}" data-editmargin="${cat.id}:${it.id}" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;width:80px"></td>
                     <td>
-                      <button class="btn sm" data-dupitem="${cat.id}:${it.id}" title="عمل نسخة من هذا البند">📋 نسخ</button>
+                      <button class="btn sm" data-dupitem="${cat.id}:${it.id}" title="عمل نسخة من هذا البند">${svgIcon("copy")} نسخ</button>
                       <button class="btn-icon danger" data-delitem="${cat.id}:${it.id}" title="حذف">${ICON_DELETE}</button>
                     </td>
                   </tr>`).join("")}
@@ -1411,7 +1411,7 @@ function renderCatalogTab(el) {
             </table>
           </div>
         </div>
-      `).join("") || `<div class="empty-state"><div class="ic">🗂️</div>لا توجد تصنيفات بعد</div>`}
+      `).join("") || `<div class="empty-state"><div class="ic">${svgIcon("layers", 40)}</div>لا توجد تصنيفات بعد</div>`}
     </div>
   `;
 

@@ -45,7 +45,7 @@ function renderReports(el) {
             <div class="text-muted" style="font-size:12.5px">${(r.notes || "").slice(0, 140)}${(r.notes || "").length > 140 ? "…" : ""}</div>
           </div>
         </div>
-      `).join("") : `<div class="empty-state"><div class="ic">📋</div>لا توجد تقارير مطابقة</div>`}
+      `).join("") : `<div class="empty-state"><div class="ic">${svgIcon("clipboard", 40)}</div>لا توجد تقارير مطابقة</div>`}
     </div>
   `;
 
@@ -212,7 +212,7 @@ function openReportViewModal(id) {
     <div style="margin-top:6px"><strong>طلب مواد / نواقص</strong><p style="font-size:13px">${r.materialsRequested || "-"}</p></div>
     ${r.ownerExtraWork ? `
       <div style="margin-top:6px;background:#fdecd6;border-radius:8px;padding:10px 12px">
-        <strong style="font-size:13px">⚠️ طلب المالك أعمال إضافية</strong>
+        <strong style="font-size:13px">${svgIcon("alert", 15)} طلب المالك أعمال إضافية</strong>
         <p style="font-size:13px;margin:6px 0 0">${r.ownerExtraWorkDetails || "-"}</p>
       </div>` : ""}
     ${r.attendance && r.attendance.length ? `

@@ -3,27 +3,27 @@
    ========================================================= */
 
 const MENU = [
-  { key: "dashboard", label: "لوحة التحكم", icon: "🏠" },
-  { key: "projects", label: "المشاريع", icon: "🏗️" },
-  { key: "quotes", label: "عروض الأسعار", icon: "🧾" },
+  { key: "dashboard", label: "لوحة التحكم", icon: svgIcon("home", 18) },
+  { key: "projects", label: "المشاريع", icon: svgIcon("building", 18) },
+  { key: "quotes", label: "عروض الأسعار", icon: svgIcon("file-text", 18) },
   {
-    key: "supervisors", label: "مهام المشرفين", icon: "👷",
+    key: "supervisors", label: "مهام المشرفين", icon: svgIcon("users", 18),
     children: [
       { key: "visits", label: "زيارة موقع" },
       { key: "reports", label: "تقارير المشرفين" },
     ],
   },
   {
-    key: "accounting", label: "المحاسبة", icon: "💰",
+    key: "accounting", label: "المحاسبة", icon: svgIcon("dollar", 18),
     children: [
       { key: "acc_projects", label: "محاسبة المشاريع" },
       { key: "acc_general", label: "المحاسبة العامة" },
       { key: "acc_vat", label: "ضريبة القيمة المضافة" },
     ],
   },
-  { key: "contracts", label: "العقود", icon: "📄" },
-  { key: "clients", label: "العملاء", icon: "👤" },
-  { key: "settings", label: "الإعدادات", icon: "⚙️" },
+  { key: "contracts", label: "العقود", icon: svgIcon("file", 18) },
+  { key: "clients", label: "العملاء", icon: svgIcon("user", 18) },
+  { key: "settings", label: "الإعدادات", icon: svgIcon("settings", 18) },
 ];
 
 const PAGE_TITLES = {
@@ -264,13 +264,13 @@ function renderApp() {
       <div class="main">
         <div class="topbar">
           <div class="flex gap center">
-            <button class="hamburger-btn" id="hamburgerBtn" type="button" title="القائمة">☰</button>
+            <button class="hamburger-btn" id="hamburgerBtn" type="button" title="القائمة">${svgIcon("menu", 20)}</button>
             <h2 id="pageTitle">لوحة التحكم</h2>
           </div>
           <div class="flex gap center">
             <div class="notif-bell-wrap">
               <button class="notif-bell" id="notifBellBtn" type="button" title="التنبيهات">
-                🔔<span class="notif-badge" id="notifBadge" style="display:none"></span>
+                ${svgIcon("bell", 18)}<span class="notif-badge" id="notifBadge" style="display:none"></span>
               </button>
               <div class="notif-panel" id="notifPanel" style="display:none"></div>
             </div>
@@ -416,7 +416,7 @@ function renderSidebar() {
       const isOpen = visibleChildren.some(c => c.key === currentRoute);
       html += `<div class="nav-group ${isOpen ? "open" : ""}">
         <div class="nav-link" data-group-toggle>
-          <span class="ic">${item.icon}</span><span>${item.label}</span><span class="nav-caret">◀</span>
+          <span class="ic">${item.icon}</span><span>${item.label}</span><span class="nav-caret">${svgIcon("chevron-left", 14)}</span>
         </div>
         <div class="nav-sub">
           ${visibleChildren.map(c => `<div class="nav-link ${currentRoute === c.key ? "active" : ""}" data-route="${c.key}">${c.label}</div>`).join("")}
@@ -448,7 +448,7 @@ function router() {
 
   if (!canAccess(user.role, route)) {
     document.getElementById("content").innerHTML = `
-      <div class="empty-state card"><div class="ic">🚫</div><h3>لا تملك صلاحية الوصول لهذه الصفحة</h3>
+      <div class="empty-state card"><div class="ic">${svgIcon("ban", 40)}</div><h3>لا تملك صلاحية الوصول لهذه الصفحة</h3>
       <p>مسماك الوظيفي: <strong>${user.role}</strong></p></div>`;
     document.getElementById("pageTitle").textContent = "غير مصرح";
     return;
@@ -511,7 +511,7 @@ function renderDashboard(el) {
               <strong style="font-size:13px">${p.completion}%</strong>
             </div>
             <div class="progress-track"><div class="progress-fill ${p.completion >= 80 ? "success" : p.completion < 40 ? "warning" : ""}" style="width:${p.completion}%"></div></div>
-          </div>`).join("") : `<div class="empty-state"><div class="ic">📁</div>لا توجد مشاريع بعد</div>`}
+          </div>`).join("") : `<div class="empty-state"><div class="ic">${svgIcon("folder", 40)}</div>لا توجد مشاريع بعد</div>`}
       </div>
 
       <div class="card">
@@ -524,7 +524,7 @@ function renderDashboard(el) {
               <div style="font-size:13px">نسبة الإنجاز: <strong>${r.progress}%</strong></div>
               <div class="text-muted" style="font-size:12px">${(r.notes || "").slice(0, 90)}${(r.notes || "").length > 90 ? "…" : ""}</div>
             </div>
-          </div>`).join("") : `<div class="empty-state"><div class="ic">📋</div>لا توجد تقارير مرفوعة بعد</div>`}
+          </div>`).join("") : `<div class="empty-state"><div class="ic">${svgIcon("clipboard", 40)}</div>لا توجد تقارير مرفوعة بعد</div>`}
       </div>
     </div>
   `;

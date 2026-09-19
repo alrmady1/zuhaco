@@ -473,10 +473,20 @@ table.data-table tr:hover td { background: #fafbfc; }
 
 .print-only { display: none; }
 @media print {
-  .sidebar, .topbar, .no-print { display: none !important; }
-  .content { padding: 0; }
+  @page { size: A4; margin: 10mm; }
+  /* html/body بارتفاع 100% وoverflow مخفي وحاويات flex كانت تقصّ الطباعة على صفحة واحدة — نعيدها لتدفق عادي متعدد الصفحات */
+  html, body { height: auto !important; overflow: visible !important; background: #fff !important; zoom: 1 !important; }
+  .sidebar, .sidebar-backdrop, .topbar, .no-print, .toast { display: none !important; }
+  .app-shell, .main { display: block !important; min-height: 0 !important; }
+  .content { padding: 0 !important; }
   .print-only { display: block; }
-  body { background: #fff; }
+  .card { box-shadow: none !important; }
+  .table-wrap { overflow: visible !important; }
+  table.data-table { width: 100%; }
+  table.data-table thead { display: table-header-group; }
+  table.data-table tr { break-inside: avoid; page-break-inside: avoid; }
+  .grand-total-box, .quote-header-card { break-inside: avoid; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 
 .toast {
@@ -525,3 +535,15 @@ table.data-table tr:hover td { background: #fafbfc; }
 .emp-tile.danger .t-value { color: var(--danger); }
 .emp-net { display: flex; justify-content: space-between; align-items: center; background: #e3ecfa; color: #1d4ed8; border-radius: 8px; padding: 9px 12px; font-size: 12.5px; font-weight: 700; }
 .emp-net strong { font-size: 14px; }
+
+/* ---------- أيقونات SVG مفرغة (بدل الإيموجي) ---------- */
+svg.ico { flex-shrink: 0; vertical-align: -3px; }
+.nav-link .ic { display: inline-flex; align-items: center; justify-content: center; }
+.nav-caret { display: inline-flex; align-items: center; }
+.hamburger-btn svg, .notif-bell svg { display: block; }
+.empty-state .ic { display: flex; justify-content: center; color: var(--text-muted); opacity: .75; }
+.empty-state .ic svg { stroke-width: 1.5; }
+.contract-row-icon svg { display: block; }
+.quote-final-table .drag-handle svg { vertical-align: -3px; }
+.badge svg.ico, .file-chip svg.ico { vertical-align: -2px; margin-inline-end: 2px; }
+.btn.sm svg.ico { width: 14px; height: 14px; }

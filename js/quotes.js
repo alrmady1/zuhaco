@@ -121,7 +121,7 @@ function renderQuotesList(el) {
               </tr>`).join("")}
           </tbody>
         </table>
-      </div>` : `<div class="empty-state"><div class="ic">🧾</div>لا توجد عروض أسعار محفوظة بعد</div>`}
+      </div>` : `<div class="empty-state"><div class="ic">${svgIcon("file-text", 40)}</div>لا توجد عروض أسعار محفوظة بعد</div>`}
     </div>
   `;
 
@@ -370,7 +370,7 @@ function renderQuoteBuilder(el) {
           <label>موقع المشروع (رابط خرائط جوجل)</label>
           <div class="flex gap">
             <input id="f_location" placeholder="https://maps.app.goo.gl/... أو عنوان نصي" value="${q.location}" style="flex:1">
-            <button class="btn sm" id="f_useMyLocation" type="button" title="استخدام موقعي الحالي">📍 موقعي الحالي</button>
+            <button class="btn sm" id="f_useMyLocation" type="button" title="استخدام موقعي الحالي">${svgIcon("pin")} موقعي الحالي</button>
           </div>
           <div class="hint">افتح الموقع في خرائط جوجل، اضغط "مشاركة"، ثم انسخ الرابط والصقه هنا — أو اكتب العنوان نصاً</div>
         </div>
@@ -390,7 +390,7 @@ function renderQuoteBuilder(el) {
     </div>
 
     <div id="catBlocks">
-      ${q.categories.map(qc => renderCatBlock(qc, catalog)).join("") || `<div class="card empty-state"><div class="ic">📦</div>اختر تصنيفاً أعلاه للبدء بإضافة البنود</div>`}
+      ${q.categories.map(qc => renderCatBlock(qc, catalog)).join("") || `<div class="card empty-state"><div class="ic">${svgIcon("box", 40)}</div>اختر تصنيفاً أعلاه للبدء بإضافة البنود</div>`}
     </div>
 
     <div class="grand-total-box">
@@ -405,7 +405,7 @@ function renderQuoteBuilder(el) {
     </div>
 
     <div class="flex gap" style="margin-top:16px">
-      <button class="btn primary" id="saveQuoteBtn">${isEdit ? "💾 حفظ التعديلات" : "💾 حفظ عرض السعر"}</button>
+      <button class="btn primary" id="saveQuoteBtn">${svgIcon("save")} ${isEdit ? "حفظ التعديلات" : "حفظ عرض السعر"}</button>
       <button class="btn" id="cancelQuoteBtn">إلغاء</button>
     </div>
   `;
@@ -469,7 +469,7 @@ function renderQuoteItemRow(qc, it, idx) {
         <input type="number" min="0" step="0.01" value="${itemUnitPrice(it).toFixed(2)}" data-fprice="${key}" placeholder="السعر" title="السعر النهائي للوحدة كما يظهر للعميل">
         <input type="number" min="0" step="0.01" value="${it.qty}" data-qty="${key}" placeholder="الكمية" title="الكمية">
         <div class="total-cell" data-total="${key}" title="الإجمالي">${fmtMoney(itemTotal(it))}</div>
-        <button class="btn sm" data-dupqitem="${key}" title="عمل نسخة من هذا البند">📋 نسخ</button>
+        <button class="btn sm" data-dupqitem="${key}" title="عمل نسخة من هذا البند">${svgIcon("copy")} نسخ</button>
         <button class="btn-icon danger" data-rmitem="${key}" title="حذف">${ICON_DELETE}</button>
       </div>
     </div>`;
@@ -492,7 +492,7 @@ function renderQuoteItemRow(qc, it, idx) {
         <label class="chk" title="نسبة الربح — تُضاف على سعر التكلفة لتكوين السعر النهائي للعميل">ربح% <input type="number" min="0" step="0.1" value="${it.profitMargin !== undefined ? it.profitMargin : 30}" data-margin="${key}" style="width:60px"></label>
         <input type="number" min="0" step="0.01" value="${it.qty}" data-qty="${key}" placeholder="الكمية" title="الكمية">
         <div class="total-cell" data-total="${key}" title="السعر النهائي شامل الربح">${fmtMoney(itemTotal(it))}</div>
-        <button class="btn sm" data-dupqitem="${key}" title="عمل نسخة من هذا البند">📋 نسخ</button>
+        <button class="btn sm" data-dupqitem="${key}" title="عمل نسخة من هذا البند">${svgIcon("copy")} نسخ</button>
         <button class="btn-icon danger" data-rmitem="${key}" title="حذف">${ICON_DELETE}</button>
       </div>
     </div>
@@ -781,8 +781,8 @@ function renderQuoteView(el) {
       <div><h2>عرض سعر رقم ${q.number}</h2><p>${fmtDate(q.date)} — يمكنك تعديل الكميات والأسعار وإضافة بنود مباشرة قبل الطباعة</p></div>
       <div class="flex gap">
         <button class="btn" id="backList2">رجوع</button>
-        ${hasPermission((getCurrentUser() || {}).role, "quotes_add") ? `<button class="btn" id="editQuoteBtn">✏️ تعديل العرض</button>` : ""}
-        <button class="btn primary" id="printQuote">🖨️ طباعة</button>
+        ${hasPermission((getCurrentUser() || {}).role, "quotes_add") ? `<button class="btn" id="editQuoteBtn">${ICON_EDIT} تعديل العرض</button>` : ""}
+        <button class="btn primary" id="printQuote">${svgIcon("printer")} طباعة</button>
       </div>
     </div>
 
@@ -811,7 +811,7 @@ function renderQuoteView(el) {
     </div>
 
     <div id="vCatBlocks">
-      ${q.categories.length ? renderViewItemsTable(q.categories) : `<div class="card empty-state"><div class="ic">📦</div>لا توجد بنود بعد — أضف تصنيفاً من الأعلى</div>`}
+      ${q.categories.length ? renderViewItemsTable(q.categories) : `<div class="card empty-state"><div class="ic">${svgIcon("box", 40)}</div>لا توجد بنود بعد — أضف تصنيفاً من الأعلى</div>`}
     </div>
 
     <div class="grand-total-box">
@@ -836,14 +836,14 @@ function renderQuoteView(el) {
 function renderViewItemsTable(categories) {
   return `
     <div class="card quote-items-card">
-      <p class="text-muted no-print" style="font-size:11.5px;margin:-4px 0 10px">💡 اسحب صف بند أو تصنيف من مقبض السحب (⠿) وأفلته في مكان آخر لإعادة الترتيب — تُعاد ترقيم البنود تلقائياً.</p>
+      <p class="text-muted no-print" style="font-size:11.5px;margin:-4px 0 10px">${svgIcon("bulb", 14)} اسحب صف بند أو تصنيف من مقبض السحب (${svgIcon("grip", 14)}) وأفلته في مكان آخر لإعادة الترتيب — تُعاد ترقيم البنود تلقائياً.</p>
       <div class="table-wrap">
         <table class="data-table quote-final-table">
           <thead><tr><th>#</th><th>البند</th><th>الكمية</th><th>الوحدة</th><th>السعر</th><th>الإجمالي</th><th class="no-print"></th></tr></thead>
           <tbody>
             ${categories.map((qc, ci) => `
               <tr class="cat-header-row" data-vcat="${ci}">
-                <td colspan="6"><span class="drag-handle no-print" title="اسحب لإعادة ترتيب التصنيف">⠿</span> <strong>${ci + 1}. ${qc.catName}</strong></td>
+                <td colspan="6"><span class="drag-handle no-print" title="اسحب لإعادة ترتيب التصنيف">${svgIcon("grip", 14)}</span> <strong>${ci + 1}. ${qc.catName}</strong></td>
                 <td class="no-print">
                   <button class="btn sm" data-vadditem="${ci}">+ إضافة بند</button>
                   <button class="btn sm" data-vaddlump="${ci}" title="بند بسعر ثابت بدون توضيح توريد أو تركيب">+ بند مقطوعية</button>
@@ -859,7 +859,7 @@ function renderViewItemsTable(categories) {
                 return `<tr data-vrow="${key}">
                   <td>${ci + 1}-${ii + 1}</td>
                   <td>
-                    <span class="drag-handle no-print" title="اسحب لإعادة ترتيب البند">⠿</span>
+                    <span class="drag-handle no-print" title="اسحب لإعادة ترتيب البند">${svgIcon("grip", 14)}</span>
                     ${hasSupplyInstall ? `
                       <span class="no-print supply-install-toggle">
                         <label class="chk"><input type="checkbox" data-vsupchk="${key}" ${supIncluded ? "checked" : ""}> توريد</label>
