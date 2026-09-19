@@ -91,7 +91,7 @@ function renderAppearanceTab(el) {
 
   document.getElementById("th_reset").onclick = () => {
     if (!confirm("إعادة المظهر إلى الإعدادات الافتراضية؟")) return;
-    setThemeSettings({ primaryColor: "#b5651d", sidebarColor: "#16233a", fontFamily: "Cairo", fontSize: "medium", showMenuIcons: true });
+    setThemeSettings(Object.assign({}, THEME_DEFAULTS));
     applyTheme();
     renderSettings(el.parentElement);
   };

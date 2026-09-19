@@ -42,10 +42,10 @@ const PAGE_TITLES = {
 
 /* ---------- تطبيق إعدادات المظهر (الألوان والخط وحجمه والأيقونات) ---------- */
 const FONT_OPTIONS = {
-  Cairo: { label: "Cairo (افتراضي)", stack: "'Cairo','Segoe UI',Tahoma,sans-serif" },
+  Cairo: { label: "Cairo", stack: "'Cairo','Segoe UI',Tahoma,sans-serif" },
   Tajawal: { label: "Tajawal", stack: "'Tajawal','Segoe UI',Tahoma,sans-serif", googleFamily: "Tajawal:wght@400;500;700;800" },
   Almarai: { label: "Almarai", stack: "'Almarai','Segoe UI',Tahoma,sans-serif", googleFamily: "Almarai:wght@400;700;800" },
-  "IBM Plex Sans Arabic": { label: "IBM Plex Sans Arabic", stack: "'IBM Plex Sans Arabic','Segoe UI',Tahoma,sans-serif", googleFamily: "IBM+Plex+Sans+Arabic:wght@400;500;600;700" },
+  "IBM Plex Sans Arabic": { label: "IBM Plex Sans Arabic (افتراضي)", stack: "'IBM Plex Sans Arabic','Segoe UI',Tahoma,sans-serif", googleFamily: "IBM+Plex+Sans+Arabic:wght@400;500;600;700" },
 };
 const FONT_SIZE_OPTIONS = { small: { label: "صغير", scale: "92%" }, medium: { label: "متوسط (افتراضي)", scale: "100%" }, large: { label: "كبير", scale: "110%" }, xlarge: { label: "كبير جداً", scale: "122%" } };
 

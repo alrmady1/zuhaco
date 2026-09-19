@@ -1,23 +1,23 @@
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap');
 
 :root {
-  --primary: #b5651d;
-  --primary-dark: #8a4a12;
-  --primary-light: #f2e2d0;
-  --accent: #1e3a5f;
-  --bg: #f4f5f7;
+  --primary: #1a6cf0;
+  --primary-dark: #1356c4;
+  --primary-light: #e8f0fe;
+  --accent: #0f2747;
+  --bg: #f4f7fb;
   --surface: #ffffff;
-  --border: #e3e6eb;
-  --text: #1f2430;
-  --text-muted: #6b7280;
-  --success: #1a7f4e;
-  --warning: #b7791f;
-  --danger: #c0392b;
-  --sidebar-bg: #16233a;
-  --sidebar-text: #cdd6e4;
-  --sidebar-active: #b5651d;
-  --radius: 10px;
-  --shadow: 0 1px 3px rgba(20, 25, 40, 0.08), 0 1px 2px rgba(20,25,40,.06);
+  --border: #e3e9f3;
+  --text: #14233c;
+  --text-muted: #6a7a93;
+  --success: #12905a;
+  --warning: #c47a0a;
+  --danger: #dc3545;
+  --sidebar-bg: #0f2747;
+  --sidebar-text: #c9d6ea;
+  --sidebar-active: #1a6cf0;
+  --radius: 14px;
+  --shadow: 0 1px 2px rgba(16, 36, 72, 0.04), 0 4px 16px rgba(16, 36, 72, 0.05);
 }
 
 * { box-sizing: border-box; }
@@ -547,3 +547,135 @@ svg.ico { flex-shrink: 0; vertical-align: -3px; }
 .quote-final-table .drag-handle svg { vertical-align: -3px; }
 .badge svg.ico, .file-chip svg.ico { vertical-align: -2px; margin-inline-end: 2px; }
 .btn.sm svg.ico { width: 14px; height: 14px; }
+
+/* =====================================================================
+   نظام التصميم v2 — واجهة موحّدة (شريط علوي كحلي، بطاقات مستديرة، أزرار/حقول/جداول متناسقة)
+   ===================================================================== */
+html, body { font-family: 'IBM Plex Sans Arabic', 'Cairo', 'Segoe UI', Tahoma, sans-serif; font-size: 14px; }
+body { color: var(--text); }
+
+/* ----- الشريط العلوي ----- */
+.topbar { background: var(--sidebar-bg); border-bottom: none; height: 66px; padding: 0 28px; color: #fff; box-shadow: 0 2px 12px rgba(10, 20, 45, .18); }
+.topbar h2 { color: #fff; font-size: 18px; font-weight: 700; }
+.topbar .text-muted { color: rgba(255,255,255,.62); }
+.topbar .user-chip { color: #fff; font-weight: 600; font-size: 13.5px; line-height: 1.35; padding-inline-start: 18px; margin-inline-start: 6px; border-inline-start: 1px solid rgba(255,255,255,.14); gap: 10px; }
+.topbar .user-chip small { font-weight: 400; font-size: 12px; }
+.topbar .avatar { width: 40px; height: 40px; background: rgba(255,255,255,.16); color: #fff; font-size: 14px; }
+.hamburger-btn { background: transparent; border: none; color: #fff; width: 42px; height: 42px; border-radius: 10px; }
+.hamburger-btn:hover { background: rgba(255,255,255,.12); border: none; }
+.notif-bell { background: transparent; border: none; color: #fff; width: 42px; height: 42px; border-radius: 10px; }
+.notif-bell:hover { background: rgba(255,255,255,.12); border: none; }
+.notif-badge { top: 7px; left: 7px; min-width: 10px; height: 10px; padding: 0; font-size: 0; border: 2px solid var(--sidebar-bg); }
+.notif-panel { color: var(--text); top: 52px; border-radius: 14px; }
+
+/* ----- الشريط الجانبي ----- */
+.sidebar-brand { padding: 22px 20px 18px; }
+.nav-link { border-radius: 10px; padding: 12px 14px; }
+.nav-link.active { background: var(--sidebar-active); box-shadow: 0 4px 12px rgba(26,108,240,.35); }
+
+/* ----- المحتوى وعناوين الصفحات ----- */
+.content { padding: 26px 32px 70px; }
+.section-title-row { margin-bottom: 22px; gap: 14px; }
+.section-title-row h2 { font-size: 26px; font-weight: 800; letter-spacing: -.2px; }
+.section-title-row p { margin: 6px 0 0; font-size: 14px; }
+.breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); margin-bottom: 12px; }
+.breadcrumb a { color: var(--primary); cursor: pointer; font-weight: 600; }
+.breadcrumb a:hover { text-decoration: underline; }
+.breadcrumb svg.ico { width: 13px; height: 13px; opacity: .7; }
+
+/* ----- البطاقات ----- */
+.card { border-radius: 14px; padding: 22px 24px; margin-bottom: 20px; }
+.card h3 { font-size: 17px; font-weight: 800; margin: 0 0 18px; display: flex; align-items: center; gap: 10px; }
+.card h3 svg.ico { color: var(--primary); width: 22px; height: 22px; vertical-align: 0; }
+.stat-card { border-radius: 14px; padding: 20px 22px; }
+.stat-card .label { font-size: 13px; }
+.stat-card .value { font-size: 24px; }
+
+/* ----- الأزرار ----- */
+.btn { height: 42px; padding: 0 18px; border-radius: 10px; border: 1px solid #d6deec; background: #fff; font-size: 14px; font-weight: 600; gap: 8px; justify-content: center; }
+.btn:hover { border-color: var(--primary); color: var(--primary); background: #f7faff; }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; box-shadow: 0 3px 10px rgba(26,108,240,.28); }
+.btn.primary:hover { background: var(--primary-dark); border-color: var(--primary-dark); color: #fff; }
+.btn.danger { color: var(--danger); border-color: #f4c7cd; background: #fff; }
+.btn.danger:hover { background: #fff5f6; color: var(--danger); border-color: var(--danger); }
+.btn.sm { height: 34px; padding: 0 13px; font-size: 13px; border-radius: 9px; }
+.btn.primary.sm { box-shadow: none; }
+.btn:disabled { box-shadow: none; }
+.btn-icon { width: 34px; height: 34px; border-radius: 10px; background: #fff; border: 1px solid #dfe6f2; color: #5a6b86; }
+.btn-icon:hover { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
+.btn-icon.danger { color: var(--danger); border-color: #f4c7cd; }
+.btn-icon.danger:hover { background: #fff5f6; color: var(--danger); border-color: var(--danger); }
+
+/* ----- الحقول ----- */
+.field label { font-size: 13px; font-weight: 600; color: #4a5b75; margin-bottom: 7px; }
+.field input, .field select, .field textarea { height: 44px; padding: 0 14px; border: 1px solid #d6deec; border-radius: 10px; font-size: 14px; background: #fff; color: var(--text); transition: border-color .12s, box-shadow .12s; }
+.field textarea { height: auto; padding: 12px 14px; min-height: 84px; }
+.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,108,240,.13); }
+.field input[type="checkbox"], .field input[type="radio"], .field input[type="file"] { height: auto; }
+.field input[type="file"] { padding: 10px 12px; }
+.field .hint { font-size: 12px; }
+.qitem-controls input[type="number"], .item-row input, table.data-table input[type="number"] { height: 38px; border: 1px solid #d6deec; border-radius: 9px; padding: 0 10px; font-size: 13.5px; }
+.qitem-controls input[type="number"]:focus, table.data-table input[type="number"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,108,240,.13); }
+input[type="checkbox"] { accent-color: var(--primary); }
+select { border-radius: 10px; }
+
+/* ----- التبويبات والحبوب ----- */
+.tabs { gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+.tab-btn { padding: 12px 18px; font-size: 14px; font-weight: 600; }
+.tab-btn.active { color: var(--primary); border-color: var(--primary); }
+.tab-btn:hover { color: var(--primary); }
+.pill { height: 40px; display: inline-flex; align-items: center; padding: 0 16px; border-radius: 10px; border: 1px solid #b9d1f7; color: var(--primary); background: #fff; font-size: 14px; font-weight: 600; transition: all .12s; }
+.pill:hover { background: var(--primary-light); }
+.pill.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* ----- الجداول ----- */
+table.data-table { font-size: 14px; }
+table.data-table th { background: #f6f9fd; color: #5b6b85; font-size: 12.5px; font-weight: 700; padding: 13px 14px; border-bottom: 1px solid var(--border); }
+table.data-table td { padding: 14px; border-bottom: 1px solid #eef2f8; }
+table.data-table tr:hover td { background: #fafcff; }
+.quote-final-table td, .quote-final-table th { padding: 12px 14px; }
+.quote-final-table .cat-header-row td { background: #e6efff; font-size: 14.5px; font-weight: 800; padding: 13px 14px; color: #123a78; }
+.quote-final-table .drag-handle { color: #9aa8bf; }
+
+/* ----- الشارات ----- */
+.badge { padding: 4px 12px; font-size: 12px; font-weight: 600; border-radius: 20px; }
+.badge.gray { background: #eef1f6; color: #52627c; }
+.badge.green { background: #e4f6ec; color: var(--success); }
+.badge.orange { background: #fff1dc; color: var(--warning); }
+.badge.red { background: #fde8ea; color: var(--danger); }
+.badge.blue { background: #e6efff; color: var(--primary); }
+
+/* ----- الإجمالي والملاحظات ----- */
+.grand-total-box { background: #e5f6f4; border: 1px solid #c3e9e4; border-radius: 12px; padding: 18px 24px; margin-top: 12px; margin-bottom: 20px; font-weight: 700; }
+.grand-total-box .num { font-size: 28px; font-weight: 800; color: #0d8f84; }
+.cat-block { border-radius: 12px; padding: 16px 18px; }
+.qitem-row { border-radius: 12px; background: #fbfcfe; padding: 12px 14px; }
+.kv-row { padding: 9px 0; border-bottom: 1px solid #eef2f8; }
+.kv-row .k { font-size: 13px; }
+
+/* ----- النوافذ والتنبيهات ----- */
+.modal-overlay { background: rgba(10, 25, 55, .5); backdrop-filter: blur(2px); }
+.modal { border-radius: 18px; padding: 26px 28px; box-shadow: 0 30px 80px rgba(10,25,55,.35); }
+.modal-head h3 { font-size: 18px; font-weight: 800; }
+.toast { border-radius: 12px; background: #14233c; }
+.empty-state { padding: 46px 20px; }
+.file-chip { background: #f0f4fa; }
+.notif-item.unread { background: var(--primary-light); }
+.notif-item.unread:hover { background: #dbe8fd; }
+
+/* ----- تسجيل الدخول ----- */
+.login-card { border-radius: 22px; }
+.login-user-row { border-radius: 14px; }
+
+@media (max-width: 700px) {
+  .content { padding: 18px 16px 60px; }
+  .topbar { padding: 0 14px; }
+  .section-title-row h2 { font-size: 22px; }
+}
+
+/* الطباعة: نلغي مظهر الحقول التفاعلية داخل الجداول حتى يخرج العرض كنص نظيف */
+@media print { table.data-table input[type="number"] { height: auto !important; border: none !important; padding: 0 !important; background: transparent !important; font-weight: 700; box-shadow: none !important; } .quote-final-table td, .quote-final-table th { padding: 8px 10px; } .grand-total-box { border: 1px solid #c3e9e4; } }
+
+/* الجداول: أزرار الإجراءات والمبالغ لا تلتف على سطرين */
+.quote-final-table td.no-print, .quote-final-table td[data-vtotal] { white-space: nowrap; }
+.quote-final-table td.no-print { text-align: left; }

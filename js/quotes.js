@@ -352,18 +352,19 @@ function renderQuoteBuilder(el) {
 
   const isEdit = !!q.editingId;
   el.innerHTML = `
+    <div class="breadcrumb"><a id="bcQuotesB">عروض الأسعار</a>${svgIcon("chevron-left")}<span>${isEdit ? "تعديل عرض سعر رقم " + q.number : "عرض سعر جديد"}</span></div>
     <div class="section-title-row">
       <div><h2>${isEdit ? "تعديل عرض سعر رقم " + q.number : "عرض سعر جديد"}</h2><p>${isEdit ? "أضف بنوداً أو احذفها أو عدّلها، ثم احفظ التعديلات" : "اختر العميل ثم أدخل بيانات المشروع واختر البنود"}</p></div>
       <button class="btn" id="backList">إلغاء والرجوع</button>
     </div>
 
     <div class="card">
-      <h3>العميل</h3>
+      <h3>${svgIcon("users", 22)} العميل</h3>
       ${clientPickerHtml(q)}
     </div>
 
     <div class="card">
-      <h3>بيانات المشروع</h3>
+      <h3>${svgIcon("folder", 22)} بيانات المشروع</h3>
       <div class="grid cols-2">
         <div class="field"><label>اسم المشروع</label><input id="f_projectName" value="${q.projectName}"></div>
         <div class="field">
@@ -382,7 +383,7 @@ function renderQuoteBuilder(el) {
     </div>
 
     <div class="card">
-      <h3>تصنيفات البنود</h3>
+      <h3>${svgIcon("layers", 22)} تصنيفات البنود</h3>
       <div class="pill-group" id="catPills">
         ${catalog.map(c => `<div class="pill ${q.categories.find(qc => qc.catId === c.id) ? "active" : ""}" data-catpill="${c.id}">${c.name}</div>`).join("")}
         <div class="pill" id="addCatPill" style="border-style:dashed">+ تصنيف جديد</div>
@@ -399,7 +400,7 @@ function renderQuoteBuilder(el) {
     </div>
 
     <div class="card">
-      <h3>ملاحظات عرض السعر (تظهر أسفل العرض النهائي)</h3>
+      <h3>${svgIcon("file-text", 22)} ملاحظات عرض السعر (تظهر أسفل العرض النهائي)</h3>
       <div class="field"><label>ملاحظة الصلاحية</label><textarea id="f_noteValidity">${q.noteValidity}</textarea></div>
       <div class="field"><label>ملاحظة الدفع / التحويل البنكي</label><textarea id="f_notePayment">${q.notePayment}</textarea></div>
     </div>
@@ -505,6 +506,7 @@ function bindQuoteBuilderEvents(el) {
 
   const leaveBuilder = () => { QUOTES_VIEW = (q.editingId && QUOTE_EDIT_RETURN === "view") ? "view" : "list"; router(); };
   document.getElementById("backList").onclick = leaveBuilder;
+  document.getElementById("bcQuotesB").onclick = leaveBuilder;
   document.getElementById("cancelQuoteBtn").onclick = leaveBuilder;
 
   ["f_projectName", "f_location"].forEach(id => {
@@ -777,6 +779,7 @@ function renderQuoteView(el) {
   const missingCats = catalog.filter(c => !q.categories.find(qc => qc.catId === c.id));
 
   el.innerHTML = `
+    <div class="breadcrumb no-print"><a id="bcQuotes">عروض الأسعار</a>${svgIcon("chevron-left")}<span>عرض سعر رقم ${q.number}</span></div>
     <div class="section-title-row no-print">
       <div><h2>عرض سعر رقم ${q.number}</h2><p>${fmtDate(q.date)} — يمكنك تعديل الكميات والأسعار وإضافة بنود مباشرة قبل الطباعة</p></div>
       <div class="flex gap">
@@ -791,14 +794,14 @@ function renderQuoteView(el) {
     <div class="card">
       <div class="grid cols-2" style="margin-bottom:6px">
         <div>
-          <h3 class="mt-0">بيانات العميل <span class="text-muted no-print" style="font-size:11px;font-weight:400">(قابلة للتعديل)</span></h3>
+          <h3 class="mt-0">${svgIcon("users", 22)} بيانات العميل <span class="text-muted no-print" style="font-size:11px;font-weight:400">(قابلة للتعديل)</span></h3>
           <div class="kv-row"><span class="k">الاسم</span><input class="kv-input" id="vc_name" value="${q.client.name}"></div>
           <div class="kv-row"><span class="k">الجوال</span><input class="kv-input" id="vc_phone" value="${q.client.phone || ""}"></div>
           <div class="kv-row"><span class="k">البريد</span><input class="kv-input" id="vc_email" value="${q.client.email || ""}"></div>
           <div class="kv-row"><span class="k">الرقم الضريبي للعميل</span><input class="kv-input" id="vc_tax" value="${q.client.taxNumber || ""}"></div>
         </div>
         <div>
-          <h3 class="mt-0">بيانات المشروع</h3>
+          <h3 class="mt-0">${svgIcon("folder", 22)} بيانات المشروع</h3>
           <div class="kv-row"><span class="k">اسم المشروع</span><span class="v">${q.projectName}</span></div>
           <div class="kv-row"><span class="k">الموقع</span><span class="v">${locationDisplay(q.location)}</span></div>
         </div>
@@ -820,12 +823,14 @@ function renderQuoteView(el) {
     </div>
 
     <div class="card">
-      <p style="font-size:12.5px;margin:0 0 8px">${(q.noteValidity !== undefined ? q.noteValidity : DEFAULT_NOTE_VALIDITY) || ""}</p>
-      <p style="font-size:12.5px;margin:0">${(q.notePayment !== undefined ? q.notePayment : DEFAULT_NOTE_PAYMENT) || ""}</p>
+      <h3>${svgIcon("file-text", 22)} ملاحظات</h3>
+      <p style="font-size:13.5px;margin:0 0 10px">${(q.noteValidity !== undefined ? q.noteValidity : DEFAULT_NOTE_VALIDITY) || ""}</p>
+      <p style="font-size:13.5px;margin:0">${(q.notePayment !== undefined ? q.notePayment : DEFAULT_NOTE_PAYMENT) || ""}</p>
     </div>
   `;
 
   document.getElementById("backList2").onclick = () => { QUOTES_VIEW = "list"; router(); };
+  document.getElementById("bcQuotes").onclick = () => { QUOTES_VIEW = "list"; router(); };
   document.getElementById("printQuote").onclick = () => window.print();
   const editQuoteBtn = document.getElementById("editQuoteBtn");
   if (editQuoteBtn) editQuoteBtn.onclick = () => startEditQuote(q.id, "view");

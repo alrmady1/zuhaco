@@ -509,14 +509,21 @@ function addInclusiveDays(dateStr, days) {
 }
 
 /* ---------- إعدادات المظهر (الألوان والأيقونات والخط) ---------- */
+/* الافتراضي الجديد (تصميم v2): أزرق + كحلي + خط IBM Plex Sans Arabic */
+const THEME_DEFAULTS = { primaryColor: "#1a6cf0", sidebarColor: "#0f2747", fontFamily: "IBM Plex Sans Arabic", fontSize: "medium", showMenuIcons: true };
+const LEGACY_THEME_DEFAULTS = { primaryColor: "#b5651d", sidebarColor: "#16233a", fontFamily: "Cairo" };
 function getThemeSettings() {
-  return dbGet("themeSettings", {
-    primaryColor: "#b5651d",
-    sidebarColor: "#16233a",
-    fontFamily: "Cairo",
-    fontSize: "medium", // small | medium | large | xlarge
-    showMenuIcons: true,
-  });
+  const saved = dbGet("themeSettings", null);
+  if (!saved) return Object.assign({}, THEME_DEFAULTS);
+  // مظهر محفوظ لم يُخصَّص فعلياً (ما زال على ألوان التصميم القديم الافتراضية) → يُرقّى تلقائياً للتصميم الجديد؛ أي تخصيص فعلي للألوان يبقى كما هو
+  if (saved.primaryColor === LEGACY_THEME_DEFAULTS.primaryColor && saved.sidebarColor === LEGACY_THEME_DEFAULTS.sidebarColor) {
+    return Object.assign({}, saved, {
+      primaryColor: THEME_DEFAULTS.primaryColor,
+      sidebarColor: THEME_DEFAULTS.sidebarColor,
+      fontFamily: saved.fontFamily === LEGACY_THEME_DEFAULTS.fontFamily ? THEME_DEFAULTS.fontFamily : saved.fontFamily,
+    });
+  }
+  return saved;
 }
 function setThemeSettings(t) {
   dbSet("themeSettings", t);
