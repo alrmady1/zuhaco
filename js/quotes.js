@@ -9,9 +9,10 @@ let QUOTE_CLIENT_SEARCH = "";
 let QUOTE_SHOW_ADD_CLIENT = false;
 let DRAG_ITEM_SRC = null; // {ci, ii} أثناء سحب بند
 let DRAG_CAT_SRC = null; // ci أثناء سحب تصنيف كامل
+let QUOTE_EDIT_RETURN = "list"; // الوجهة بعد حفظ/إلغاء تعديل عرض سعر محفوظ: list | view
 
 const DEFAULT_NOTE_VALIDITY = "هذا العرض صالح لمدة أسبوعين من تاريخه";
-const DEFAULT_NOTE_PAYMENT = "يتم تحويل الدفعة الأولى على حساب شركة زهى الاعمال للمقاولات - [اسم البنك] - [رقم الحساب/الآيبان]";
+const DEFAULT_NOTE_PAYMENT = "يتم تحويل الدفعة الأولى على حساب الشركة - شركة زهى الاعمال - البنك الأهلي - SA42 1000 0023 1000 0089 8800";
 
 function newDraftQuote() {
   return {
@@ -62,6 +63,13 @@ function itemTotal(it) {
   return (Number(it.qty) || 0) * itemUnitPrice(it);
 }
 
+/* بند بسعر نهائي ثابت (مقطوعية، أو بند عُدّل سعره يدوياً، أو بند قديم بسعر واحد) — لا يُحسب من تكلفة التوريد/التركيب والربح */
+function isFixedPriceItem(it) {
+  if (it.lumpSum) return true;
+  if (it.priceOverride !== undefined && it.priceOverride !== null && it.priceOverride !== "") return true;
+  return !(it.supply || it.install);
+}
+
 function supplyInstallLabel(it) {
   const s = it.supply && it.supply.included;
   const i = it.install && it.install.included;
@@ -107,6 +115,7 @@ function renderQuotesList(el) {
                 <td>${fmtDate(q.date)}</td>
                 <td>
                   <button class="btn-icon" data-view="${q.id}" title="عرض">${ICON_VIEW}</button>
+                  ${canAddQuote ? `<button class="btn-icon" data-editq="${q.id}" title="تعديل العرض (إضافة/حذف/تعديل البنود)">${ICON_EDIT}</button>` : ""}
                   ${canDeleteQuote ? `<button class="btn-icon danger" data-del="${q.id}" title="حذف">${ICON_DELETE}</button>` : ""}
                 </td>
               </tr>`).join("")}
@@ -127,6 +136,7 @@ function renderQuotesList(el) {
   el.querySelectorAll("[data-view]").forEach(b => b.onclick = () => {
     VIEW_QUOTE_ID = b.dataset.view; QUOTES_VIEW = "view"; router();
   });
+  el.querySelectorAll("[data-editq]").forEach(b => b.onclick = () => startEditQuote(b.dataset.editq, "list"));
   el.querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
     if (!confirm("هل تريد حذف عرض السعر؟")) return;
     const target = quotes.find(q => q.id === b.dataset.del);
@@ -134,6 +144,19 @@ function renderQuotesList(el) {
     logActivity(`تم حذف عرض السعر "${target ? target.number : ""}"`);
     router();
   });
+}
+
+/* فتح عرض سعر محفوظ في المنشئ لتعديله (إضافة/حذف/تعديل البنود والتصنيفات وبيانات المشروع) */
+function startEditQuote(id, returnTo) {
+  const saved = dbGet("quotes", []).find(x => x.id === id);
+  if (!saved) return;
+  DRAFT_QUOTE = JSON.parse(JSON.stringify(saved));
+  DRAFT_QUOTE.editingId = id;
+  QUOTE_EDIT_RETURN = returnTo || "list";
+  QUOTE_CLIENT_SEARCH = "";
+  QUOTE_SHOW_ADD_CLIENT = false;
+  QUOTES_VIEW = "builder";
+  router();
 }
 
 /* ---------- منتقي العميل داخل عرض السعر ---------- */
@@ -294,15 +317,43 @@ function openNewQuoteItemModal(onSaved) {
   };
 }
 
+/* ---------- بند مقطوعية: سعر ثابت يظهر للعميل بدون توضيح توريد أو تركيب ---------- */
+function openLumpSumItemModal(onSaved) {
+  const html = `
+    <div class="modal-head"><h3>بند مقطوعية</h3><button class="modal-close" id="mClose">×</button></div>
+    <div class="field"><label>اسم / وصف البند</label><input id="ls_name" placeholder="مثال: أعمال التشطيبات العامة للمدخل"></div>
+    <div class="grid cols-3">
+      <div class="field"><label>الوحدة</label><input id="ls_unit" value="مقطوعية"></div>
+      <div class="field"><label>الكمية</label><input type="number" min="0" step="0.01" id="ls_qty" value="1"></div>
+      <div class="field"><label>السعر (للوحدة)</label><input type="number" min="0" step="0.01" id="ls_price" value="0"></div>
+    </div>
+    <p class="text-muted" style="font-size:12px;margin-top:-6px">يظهر البند في عرض السعر بهذا السعر مباشرة، بدون أي توضيح أنه توريد أو تركيب.</p>
+    <div class="flex gap"><button class="btn primary" id="ls_save">إضافة البند</button><button class="btn" id="ls_cancel">إلغاء</button></div>
+  `;
+  const ov = openModalShell(html);
+  ov.querySelector("#mClose").onclick = closeModal;
+  ov.querySelector("#ls_cancel").onclick = closeModal;
+  ov.querySelector("#ls_save").onclick = () => {
+    const name = ov.querySelector("#ls_name").value.trim();
+    const unit = ov.querySelector("#ls_unit").value.trim() || "مقطوعية";
+    const qty = Number(ov.querySelector("#ls_qty").value) || 0;
+    const price = Number(ov.querySelector("#ls_price").value) || 0;
+    if (!name) { toast("يرجى إدخال اسم البند"); return; }
+    closeModal();
+    onSaved({ itemId: null, name, unit, qty, priceOverride: price, lumpSum: true });
+  };
+}
+
 /* ---------- منشئ عرض السعر ---------- */
 function renderQuoteBuilder(el) {
   const catalog = dbGet("priceCatalog", []);
   const q = DRAFT_QUOTE;
   const total = quoteTotal(q);
 
+  const isEdit = !!q.editingId;
   el.innerHTML = `
     <div class="section-title-row">
-      <div><h2>عرض سعر جديد</h2><p>اختر العميل ثم أدخل بيانات المشروع واختر البنود</p></div>
+      <div><h2>${isEdit ? "تعديل عرض سعر رقم " + q.number : "عرض سعر جديد"}</h2><p>${isEdit ? "أضف بنوداً أو احذفها أو عدّلها، ثم احفظ التعديلات" : "اختر العميل ثم أدخل بيانات المشروع واختر البنود"}</p></div>
       <button class="btn" id="backList">إلغاء والرجوع</button>
     </div>
 
@@ -354,7 +405,7 @@ function renderQuoteBuilder(el) {
     </div>
 
     <div class="flex gap" style="margin-top:16px">
-      <button class="btn primary" id="saveQuoteBtn">💾 حفظ عرض السعر</button>
+      <button class="btn primary" id="saveQuoteBtn">${isEdit ? "💾 حفظ التعديلات" : "💾 حفظ عرض السعر"}</button>
       <button class="btn" id="cancelQuoteBtn">إلغاء</button>
     </div>
   `;
@@ -387,6 +438,7 @@ function renderCatBlock(qc, catalog) {
           </select>
           <button class="btn sm" data-addpicked="${qc.catId}">إضافة البند</button>` : `<span class="text-muted" style="font-size:12px">تمت إضافة جميع بنود هذا التصنيف</span>`}
         <button class="btn sm" data-newitem="${qc.catId}">+ بند جديد</button>
+        <button class="btn sm" data-newlump="${qc.catId}" title="بند بسعر ثابت بدون توضيح توريد أو تركيب">+ بند مقطوعية</button>
         <button class="btn sm danger" data-rmcat="${qc.catId}" style="margin-inline-start:auto">حذف التصنيف من العرض</button>
       </div>
     </div>
@@ -397,6 +449,32 @@ function renderQuoteItemRow(qc, it, idx) {
   const key = qc.catId + ":" + idx;
   const supIncluded = !!(it.supply && it.supply.included);
   const insIncluded = !!(it.install && it.install.included);
+
+  if (isFixedPriceItem(it)) {
+    const hasSI = !!(it.supply || it.install);
+    return `
+    <div class="qitem-row" data-item-row="${key}">
+      <div class="qitem-name">
+        <input value="${it.name}" data-itemname="${key}" style="font-weight:700;border:1px solid var(--border);border-radius:6px;padding:5px 8px;width:100%;margin-bottom:5px">
+        <div class="flex" style="align-items:center;gap:6px">
+          <span class="text-muted" style="font-size:11.5px">الوحدة:</span>
+          <input value="${it.unit}" data-itemunit="${key}" style="border:1px solid var(--border);border-radius:6px;padding:3px 7px;width:80px;font-size:11.5px">
+          ${it.lumpSum ? `<span class="badge orange">مقطوعية</span>` : ""}
+        </div>
+      </div>
+      <div class="qitem-controls">
+        ${hasSI ? `
+        <label class="chk"><input type="checkbox" ${supIncluded ? "checked" : ""} data-fsupchk="${key}"> توريد</label>
+        <label class="chk"><input type="checkbox" ${insIncluded ? "checked" : ""} data-finschk="${key}"> تركيب</label>` : ""}
+        <input type="number" min="0" step="0.01" value="${itemUnitPrice(it).toFixed(2)}" data-fprice="${key}" placeholder="السعر" title="السعر النهائي للوحدة كما يظهر للعميل">
+        <input type="number" min="0" step="0.01" value="${it.qty}" data-qty="${key}" placeholder="الكمية" title="الكمية">
+        <div class="total-cell" data-total="${key}" title="الإجمالي">${fmtMoney(itemTotal(it))}</div>
+        <button class="btn sm" data-dupqitem="${key}" title="عمل نسخة من هذا البند">📋 نسخ</button>
+        <button class="btn-icon danger" data-rmitem="${key}" title="حذف">${ICON_DELETE}</button>
+      </div>
+    </div>`;
+  }
+
   return `
     <div class="qitem-row" data-item-row="${key}">
       <div class="qitem-name">
@@ -425,8 +503,9 @@ function bindQuoteBuilderEvents(el) {
   const q = DRAFT_QUOTE;
   const catalog = dbGet("priceCatalog", []);
 
-  document.getElementById("backList").onclick = () => { QUOTES_VIEW = "list"; router(); };
-  document.getElementById("cancelQuoteBtn").onclick = () => { QUOTES_VIEW = "list"; router(); };
+  const leaveBuilder = () => { QUOTES_VIEW = (q.editingId && QUOTE_EDIT_RETURN === "view") ? "view" : "list"; router(); };
+  document.getElementById("backList").onclick = leaveBuilder;
+  document.getElementById("cancelQuoteBtn").onclick = leaveBuilder;
 
   ["f_projectName", "f_location"].forEach(id => {
     const input = document.getElementById(id);
@@ -528,6 +607,15 @@ function bindQuoteBuilderEvents(el) {
     });
   });
 
+  el.querySelectorAll("[data-newlump]").forEach(b => b.onclick = () => {
+    const catId = b.dataset.newlump;
+    openLumpSumItemModal((item) => {
+      const qc = q.categories.find(c => c.catId === catId);
+      qc.items.push(item);
+      renderQuoteBuilder(el);
+    });
+  });
+
   el.querySelectorAll("[data-rmitem]").forEach(b => b.onclick = () => {
     const [catId, idx] = b.dataset.rmitem.split(":");
     const qc = q.categories.find(c => c.catId === catId);
@@ -580,6 +668,22 @@ function bindQuoteBuilderEvents(el) {
     it.profitMargin = Number(inp.value) || 0;
     updateRowAndTotals(el, catId, idx);
   });
+  el.querySelectorAll("[data-fprice]").forEach(inp => inp.oninput = () => {
+    const { catId, idx, it } = getItemRef(inp.dataset.fprice);
+    it.priceOverride = Number(inp.value) || 0;
+    updateRowAndTotals(el, catId, idx);
+  });
+  el.querySelectorAll("[data-fsupchk]").forEach(chk => chk.onchange = () => {
+    const { it } = getItemRef(chk.dataset.fsupchk);
+    if (!it.supply) it.supply = { included: false, price: 0 };
+    it.supply.included = chk.checked;
+  });
+  el.querySelectorAll("[data-finschk]").forEach(chk => chk.onchange = () => {
+    const { it } = getItemRef(chk.dataset.finschk);
+    if (!it.install) it.install = { included: false, price: 0 };
+    it.install.included = chk.checked;
+  });
+
   el.querySelectorAll("[data-supchk]").forEach(chk => chk.onchange = () => {
     const { catId, idx, it } = getItemRef(chk.dataset.supchk);
     it.supply.included = chk.checked;
@@ -601,6 +705,23 @@ function bindQuoteBuilderEvents(el) {
     if (!q.categories.length || q.categories.every(c => !c.items.length)) { toast("يرجى إضافة بند واحد على الأقل"); return; }
 
     const quotes = dbGet("quotes", []);
+
+    if (q.editingId) {
+      const idx = quotes.findIndex(x => x.id === q.editingId);
+      if (idx === -1) { toast("تعذّر العثور على عرض السعر المراد تعديله"); return; }
+      const updated = JSON.parse(JSON.stringify(q));
+      delete updated.editingId;
+      updated.updatedAt = new Date().toISOString();
+      quotes[idx] = updated;
+      dbSet("quotes", quotes);
+      logActivity(`تم تعديل عرض السعر "${updated.number}" للعميل "${updated.client.name}" — الإجمالي بعد التعديل ${fmtMoney(quoteTotal(updated))}`);
+      toast("تم حفظ تعديلات عرض السعر");
+      VIEW_QUOTE_ID = updated.id;
+      QUOTES_VIEW = QUOTE_EDIT_RETURN === "view" ? "view" : "list";
+      router();
+      return;
+    }
+
     q.id = uid("q");
     q.number = "Q-" + (1000 + quotes.length + 1);
     q.date = todayISO();
@@ -660,6 +781,7 @@ function renderQuoteView(el) {
       <div><h2>عرض سعر رقم ${q.number}</h2><p>${fmtDate(q.date)} — يمكنك تعديل الكميات والأسعار وإضافة بنود مباشرة قبل الطباعة</p></div>
       <div class="flex gap">
         <button class="btn" id="backList2">رجوع</button>
+        ${hasPermission((getCurrentUser() || {}).role, "quotes_add") ? `<button class="btn" id="editQuoteBtn">✏️ تعديل العرض</button>` : ""}
         <button class="btn primary" id="printQuote">🖨️ طباعة</button>
       </div>
     </div>
@@ -705,6 +827,8 @@ function renderQuoteView(el) {
 
   document.getElementById("backList2").onclick = () => { QUOTES_VIEW = "list"; router(); };
   document.getElementById("printQuote").onclick = () => window.print();
+  const editQuoteBtn = document.getElementById("editQuoteBtn");
+  if (editQuoteBtn) editQuoteBtn.onclick = () => startEditQuote(q.id, "view");
 
   bindQuoteViewEvents(el, q, quotes, catalog);
 }
@@ -722,6 +846,7 @@ function renderViewItemsTable(categories) {
                 <td colspan="6"><span class="drag-handle no-print" title="اسحب لإعادة ترتيب التصنيف">⠿</span> <strong>${ci + 1}. ${qc.catName}</strong></td>
                 <td class="no-print">
                   <button class="btn sm" data-vadditem="${ci}">+ إضافة بند</button>
+                  <button class="btn sm" data-vaddlump="${ci}" title="بند بسعر ثابت بدون توضيح توريد أو تركيب">+ بند مقطوعية</button>
                   <button class="btn sm danger" data-vrmcat="${ci}">حذف التصنيف</button>
                 </td>
               </tr>
@@ -894,6 +1019,16 @@ function bindQuoteViewEvents(el, q, quotes, catalog) {
       q.categories[ci].items.push(newItem);
       persist();
       toast("تم إضافة البند");
+      renderQuoteView(el);
+    });
+  });
+
+  el.querySelectorAll("[data-vaddlump]").forEach(btn => btn.onclick = () => {
+    const ci = Number(btn.dataset.vaddlump);
+    openLumpSumItemModal((item) => {
+      q.categories[ci].items.push(item);
+      persist();
+      toast("تم إضافة بند المقطوعية");
       renderQuoteView(el);
     });
   });
