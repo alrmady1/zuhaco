@@ -171,10 +171,10 @@ function calcAge(dob) {
 }
 
 const PERMISSIONS = {
-  "مدير عام": ["dashboard", "projects", "clients", "quotes", "visits", "reports", "acc_projects", "acc_general", "acc_vat", "contracts", "settings"],
-  "مدير النظام": ["dashboard", "projects", "clients", "quotes", "visits", "reports", "acc_projects", "acc_general", "acc_vat", "contracts", "settings"],
-  "محاسب": ["dashboard", "projects", "clients", "acc_projects", "acc_general", "acc_vat", "contracts"],
-  "مهندس": ["dashboard", "projects", "clients", "quotes", "visits", "reports", "contracts"],
+  "مدير عام": ["dashboard", "projects", "contractors", "clients", "quotes", "visits", "reports", "acc_projects", "acc_general", "acc_vat", "contracts", "settings"],
+  "مدير النظام": ["dashboard", "projects", "contractors", "clients", "quotes", "visits", "reports", "acc_projects", "acc_general", "acc_vat", "contracts", "settings"],
+  "محاسب": ["dashboard", "projects", "contractors", "clients", "acc_projects", "acc_general", "acc_vat", "contracts"],
+  "مهندس": ["dashboard", "projects", "contractors", "clients", "quotes", "visits", "reports", "contracts"],
   "مراقب موقع": ["dashboard", "visits", "reports"],
   "مسؤول مشتريات": ["dashboard", "projects", "clients", "quotes", "acc_projects"],
 };
@@ -205,6 +205,11 @@ const PERMISSION_GROUPS = [
   ]},
   { group: "التقارير", perms: [
     { key: "reports", label: "عرض التقارير" },
+  ]},
+  { group: "مقاولو الباطن", perms: [
+    { key: "contractors", label: "عرض مقاولي الباطن وحساباتهم وعقودهم" },
+    { key: "contractors_add", label: "إضافة/تعديل المقاولين والاتفاقات والتعديلات وعقود الباطن", parent: "contractors", defaultRoles: ["مدير عام", "مدير النظام", "محاسب"] },
+    { key: "contractors_delete", label: "حذف مقاول أو اتفاق أو عقد باطن", parent: "contractors", defaultRoles: ["مدير عام", "مدير النظام"] },
   ]},
   { group: "العقود", perms: [
     { key: "contracts", label: "عرض العقود" },
@@ -246,6 +251,9 @@ function setPermMatrix(matrix) {
 function hasPermission(role, key) {
   const matrix = getPermMatrix();
   if (matrix[key] && Object.prototype.hasOwnProperty.call(matrix[key], role)) return !!matrix[key][role];
+  // صلاحية جديدة غير موجودة في مصفوفة محفوظة سابقاً → نعود لقيمتها الافتراضية (وليس رفضاً شاملاً)
+  const def = defaultPermMatrix()[key];
+  if (def && Object.prototype.hasOwnProperty.call(def, role)) return !!def[role];
   return (PERMISSIONS[role] || []).includes(key);
 }
 

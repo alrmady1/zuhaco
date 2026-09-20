@@ -5,6 +5,7 @@
 const MENU = [
   { key: "dashboard", label: "لوحة التحكم", icon: svgIcon("home", 18) },
   { key: "projects", label: "المشاريع", icon: svgIcon("building", 18) },
+  { key: "contractors", label: "مقاولو الباطن", icon: svgIcon("briefcase", 18) },
   { key: "quotes", label: "عروض الأسعار", icon: svgIcon("file-text", 18) },
   {
     key: "supervisors", label: "مهام المشرفين", icon: svgIcon("users", 18),
@@ -29,6 +30,7 @@ const MENU = [
 const PAGE_TITLES = {
   dashboard: "لوحة التحكم",
   projects: "المشاريع",
+  contractors: "مقاولو الباطن",
   clients: "العملاء",
   quotes: "عروض الأسعار",
   visits: "زيارة موقع",
@@ -461,6 +463,7 @@ function router() {
   const renderers = {
     dashboard: renderDashboard,
     projects: renderProjects,
+    contractors: renderContractors,
     clients: renderClients,
     quotes: renderQuotes,
     visits: renderVisits,

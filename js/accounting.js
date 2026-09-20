@@ -36,7 +36,7 @@ function getExpenseCatalog() {
   const filtered = cat.filter(c => c.name !== "مصاريف عهدة");
   if (filtered.length !== cat.length) { cat = filtered; dbSet("expenseCatalog", cat); }
   // ترحيل: إضافة تصنيفات "سلفية"/"مركبات"/"المرافق" تلقائياً للأنظمة القائمة التي أُنشئ كتالوجها قبل إضافتها
-  const requiredCats = ["سلفية", "مركبات", "المرافق"];
+  const requiredCats = ["سلفية", "مركبات", "المرافق", "دفعة أعمال"];
   let addedMissing = false;
   requiredCats.forEach(name => {
     if (!cat.some(c => c.name === name)) { cat.push({ id: uid("ecat"), name, items: [] }); addedMissing = true; }
@@ -537,6 +537,9 @@ function renderAccGeneralVatTab(el) {
 }
 
 function generalExpenseSubtitle(e) {
+  if (e.category === "دفعة أعمال" && e.contractorName) {
+    return `المقاول: ${e.contractorName}${e.projectName ? " — المشروع: " + e.projectName : ""}`;
+  }
   if (e.category === "رواتب" && e.employeeName) {
     return `${e.employeeName}${e.salaryMonth ? " — راتب شهر " + salaryMonthLabel(e.salaryMonth) : ""}`;
   }
@@ -1316,14 +1319,14 @@ function openGeneralExpenseViewModal(e) {
   ov.querySelector("#v_close").onclick = closeModal;
 }
 
-function openGeneralExpenseModal(el, existingEntry) {
+function openGeneralExpenseModal(el, existingEntry, preset) {
   const isEdit = !!existingEntry;
   const catalog = getExpenseCatalog();
   const catNames = catalog.map(c => c.name);
   const users = dbGet("users", []);
   const html = `
     <div class="modal-head"><h3>${isEdit ? "تعديل مصروف إداري" : "إضافة مصروف إداري"}</h3><button class="modal-close" id="mClose">×</button></div>
-    <div class="field"><label>التصنيف</label><select id="g_cat">${catNames.map(c => `<option value="${c}" ${isEdit && existingEntry.category === c ? "selected" : ""}>${c}</option>`).join("")}</select></div>
+    <div class="field"><label>التصنيف</label><select id="g_cat">${catNames.map(c => `<option value="${c}" ${(isEdit ? existingEntry.category : (preset && preset.category)) === c ? "selected" : ""}>${c}</option>`).join("")}</select></div>
     <div id="g_extraFields"></div>
     <div class="grid cols-2">
       <div class="field"><label>المبلغ (ر.س)</label><input type="number" min="0" step="0.01" id="g_amount" value="${isEdit ? existingEntry.amount : ""}"></div>
@@ -1363,6 +1366,7 @@ function openGeneralExpenseModal(el, existingEntry) {
 
   function renderExtraFields() {
     const catName = catSelect.value;
+    ov.querySelector("#g_amount").oninput = null;
     if (catName === "رواتب") {
       dateLabel.textContent = "تاريخ تسليم الراتب";
       extraBox.innerHTML = `
@@ -1411,6 +1415,53 @@ function openGeneralExpenseModal(el, existingEntry) {
           ${!facilities.length ? `<div class="hint">لا توجد مرافق مسجلة — أضفها من الإعدادات ← المرافق</div>` : ""}
         </div>
       `;
+    } else if (catName === "دفعة أعمال") {
+      dateLabel.textContent = "تاريخ الدفعة";
+      const contractors = dbGet("contractors", []);
+      const pre = isEdit ? existingEntry : (preset || {});
+      extraBox.innerHTML = `
+        <div class="grid cols-2">
+          <div class="field"><label>المقاول</label>
+            <select id="g_contractor">
+              <option value="">— اختر المقاول —</option>
+              ${contractors.map(c => `<option value="${c.id}" ${pre.contractorId === c.id ? "selected" : ""}>${c.name}${c.trade ? " — " + c.trade : ""}</option>`).join("")}
+            </select>
+            ${!contractors.length ? `<div class="hint">لا يوجد مقاولو باطن — أضفهم من صفحة مقاولي الباطن</div>` : ""}
+          </div>
+          <div class="field"><label>المشروع</label><select id="g_conProject"></select></div>
+        </div>
+        <div id="g_conInfo" style="margin-bottom:14px"></div>
+      `;
+      const conSel = extraBox.querySelector("#g_contractor");
+      const projSel = extraBox.querySelector("#g_conProject");
+      const infoBox = extraBox.querySelector("#g_conInfo");
+      const amountInput = ov.querySelector("#g_amount");
+      const refreshProjects = (keepId) => {
+        const ags = conSel.value ? dbGet("contractorAgreements", []).filter(a => a.contractorId === conSel.value) : [];
+        const projs = dbGet("projects", []);
+        projSel.innerHTML = conSel.value && !ags.length
+          ? `<option value="">— لا توجد اتفاقات لهذا المقاول —</option>`
+          : `<option value="">— اختر المشروع —</option>` + ags.map(a => { const p = projs.find(x => x.id === a.projectId); return `<option value="${a.projectId}" ${keepId === a.projectId ? "selected" : ""}>${p ? p.name : (a.projectName || "مشروع")}</option>`; }).join("");
+      };
+      const refreshInfo = () => {
+        const f = conSel.value && projSel.value ? contractorFigures(conSel.value, projSel.value, isEdit ? existingEntry.id : null) : null;
+        if (!f) { infoBox.innerHTML = conSel.value ? `<div class="text-muted" style="font-size:12.5px">اختر مشروعاً للمقاول لعرض الاتفاق والمبلغ المتبقي — تُنشأ الاتفاقات من صفحة مقاولي الباطن.</div>` : ""; return; }
+        const amt = Number(amountInput.value) || 0;
+        const after = f.remaining - amt;
+        infoBox.innerHTML = `
+          <div class="card" style="background:#f6f9fd;padding:14px 18px;margin:0">
+            <div class="kv-row"><span class="k">نوع الاتفاق</span><span class="v">${AGREEMENT_TYPE_LABELS[f.ag.type]}</span></div>
+            <div class="kv-row"><span class="k">المستحق النهائي (بعد التمتير والخصومات)</span><span class="v">${fmtMoney(f.entitlement)}</span></div>
+            <div class="kv-row"><span class="k">المدفوع سابقاً</span><span class="v">${fmtMoney(f.paid)}</span></div>
+            <div class="kv-row"><span class="k">المتبقي قبل هذه الدفعة</span><span class="v">${fmtMoney(f.remaining)}</span></div>
+            <div class="kv-row"><span class="k">المتبقي بعد هذه الدفعة</span><span class="v" style="color:${after < 0 ? "var(--danger)" : "var(--success)"}">${fmtMoney(after)}${after < 0 ? " (تجاوز المستحق)" : ""}</span></div>
+          </div>`;
+      };
+      refreshProjects(pre.projectId);
+      refreshInfo();
+      conSel.onchange = () => { refreshProjects(""); refreshInfo(); };
+      projSel.onchange = refreshInfo;
+      amountInput.oninput = refreshInfo;
     } else if (catName === "سلفية") {
       dateLabel.textContent = "تاريخ السلفية";
       extraBox.innerHTML = `
@@ -1490,6 +1541,18 @@ function openGeneralExpenseModal(el, existingEntry) {
         const facility = dbGet("facilities", []).find(f => f.id === facilitySelect.value);
         if (facility) { entry.facilityId = facility.id; entry.facilityName = facility.name; logSuffix = ` — المرفق: ${facility.name}`; }
       }
+    } else if (category === "دفعة أعمال") {
+      const conId = (ov.querySelector("#g_contractor") || {}).value;
+      const projId = (ov.querySelector("#g_conProject") || {}).value;
+      const con = dbGet("contractors", []).find(x => x.id === conId);
+      const proj = dbGet("projects", []).find(x => x.id === projId);
+      if (!con) { toast("يرجى اختيار المقاول"); return; }
+      if (!projId || !findContractorAgreement(conId, projId)) { toast("يرجى اختيار مشروع للمقاول عليه اتفاق مسجّل"); return; }
+      entry.contractorId = con.id;
+      entry.contractorName = con.name;
+      entry.projectId = projId;
+      entry.projectName = proj ? proj.name : "";
+      logSuffix = ` للمقاول "${con.name}" — المشروع: ${entry.projectName}`;
     } else if (category === "سلفية") {
       const empSelect = ov.querySelector("#g_advanceEmployee");
       const emp = users.find(u => u.id === (empSelect ? empSelect.value : ""));
@@ -1513,7 +1576,7 @@ function openGeneralExpenseModal(el, existingEntry) {
     logActivity(`تم ${isEdit ? "تعديل" : "تسجيل"} مصروف إداري "${category}"${logSuffix} بقيمة ${fmtMoney(amount)}${paymentMethod ? " — دفع عبر " + paymentMethod : ""}`);
     toast(isEdit ? "تم حفظ التعديلات على المصروف" : "تم إضافة المصروف الإداري");
     closeModal();
-    renderGeneralExpensesTab(el);
+    if (preset && preset.onSaved) preset.onSaved(); else renderGeneralExpensesTab(el);
   };
 }
 
