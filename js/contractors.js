@@ -122,6 +122,7 @@ function renderContractors(el) {
   if (CONTRACTORS_VIEW === "account") return renderContractorAccount(el);
   if (CONTRACTORS_VIEW === "subBuilder") return renderSubcontractBuilder(el);
   if (CONTRACTORS_VIEW === "subView") return renderSubcontractView(el);
+  if (CONTRACTORS_VIEW === "statement") return renderContractorStatement(el);
   renderContractorsList(el);
 }
 
@@ -172,6 +173,7 @@ function renderContractorsList(el) {
                 <td><strong style="color:${r.remaining > 0 ? "var(--warning)" : "var(--success)"}">${fmtMoney(r.remaining)}</strong></td>
                 <td style="white-space:nowrap">
                   <button class="btn-icon" data-openconbtn="${r.c.id}" title="حساب المقاول">${ICON_VIEW}</button>
+                  <button class="btn-icon" data-stmtcon="${r.c.id}" title="كشف حساب للطباعة">${svgIcon("printer", 16)}</button>
                   ${canAdd ? `<button class="btn-icon" data-editcon="${r.c.id}" title="تعديل بيانات المقاول">${ICON_EDIT}</button>` : ""}
                   ${canDelete ? `<button class="btn-icon danger" data-delcon="${r.c.id}" title="حذف">${ICON_DELETE}</button>` : ""}
                 </td>
@@ -185,6 +187,7 @@ function renderContractorsList(el) {
   const openAccount = (id) => { CONTRACTOR_VIEW_ID = id; CONTRACTOR_ACC_PROJECT = null; CONTRACTORS_VIEW = "account"; renderContractors(el); };
   el.querySelectorAll("tr[data-opencon]").forEach(tr => tr.onclick = () => openAccount(tr.dataset.opencon));
   el.querySelectorAll("[data-openconbtn]").forEach(b => b.onclick = (e) => { e.stopPropagation(); openAccount(b.dataset.openconbtn); });
+  el.querySelectorAll("[data-stmtcon]").forEach(b => b.onclick = (e) => { e.stopPropagation(); openContractorStatement(el, b.dataset.stmtcon, "all"); });
   const newBtn = document.getElementById("newContractorBtn");
   if (newBtn) newBtn.onclick = () => openContractorModal(null, () => renderContractors(el));
   el.querySelectorAll("[data-editcon]").forEach(b => b.onclick = (e) => {
@@ -266,7 +269,10 @@ function renderContractorAccount(el) {
         <h2>${c.name} ${c.trade ? `<span class="badge blue" style="font-size:13px;vertical-align:middle">${c.trade}</span>` : ""}</h2>
         <p>${c.phone ? "الجوال: " + c.phone + " — " : ""}حساب المقاول لكل مشروع على حدة${c.notes ? " — " + c.notes : ""}</p>
       </div>
-      <button class="btn" id="conBack">${svgIcon("chevron-left")} رجوع لمقاولي الباطن</button>
+      <div class="flex gap">
+        <button class="btn" id="conBack">${svgIcon("chevron-left")} رجوع لمقاولي الباطن</button>
+        <button class="btn primary" id="conStmtBtn">${svgIcon("printer")} كشف حساب</button>
+      </div>
     </div>
 
     ${summaryRows.length ? `
@@ -315,6 +321,7 @@ function renderContractorAccount(el) {
 
   document.getElementById("bcContractors").onclick = () => { CONTRACTORS_VIEW = "list"; renderContractors(el); };
   document.getElementById("conBack").onclick = () => { CONTRACTORS_VIEW = "list"; renderContractors(el); };
+  document.getElementById("conStmtBtn").onclick = () => openContractorStatement(el, c.id, project && agreements.some(a => a.projectId === project.id) ? project.id : "all");
   const projSel = document.getElementById("ca_project");
   if (projSel) projSel.onchange = () => { CONTRACTOR_ACC_PROJECT = projSel.value; renderContractorAccount(el); };
   el.querySelectorAll("[data-switchproj]").forEach(b => b.onclick = () => { CONTRACTOR_ACC_PROJECT = b.dataset.switchproj; renderContractorAccount(el); window.scrollTo(0, 0); });
@@ -325,16 +332,23 @@ function renderContractorAccount(el) {
   if (figs) bindAccountEvents(el, c, project, figs, canEdit, canPay);
 }
 
+/* كل دفعات المقاول على المشروع (نقدية + مشتريات + محاسبة المشروع) مرتبة من الأحدث */
+function contractorAllPayments(contractorId, projectId) {
+  const invoicesById = {};
+  dbGet("accProjects", []).forEach(x => { invoicesById[x.id] = x; });
+  return [
+    ...contractorPaymentsOf(contractorId, projectId).map(e => ({ kind: "cash", id: e.id, date: e.date, amount: e.amount, method: e.paymentMethod, note: e.note })),
+    ...contractorPurchasePaymentsOf(contractorId, projectId).map(p => ({ kind: "purchase", id: p.id, date: p.date, amount: p.amount, label: p.label, note: p.note, entry: invoicesById[p.entryId] })),
+    ...contractorProjectPaymentsOf(contractorId, projectId).map(e => ({ kind: "projectpay", id: e.id, date: e.date, amount: e.amount, method: e.paymentMethod, note: e.note, entry: e })),
+  ].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+}
+
 function accountBodyHtml(c, project, f, canEdit, canPay) {
   const ag = f.ag;
   const isUnit = ag.type === "unit";
   const invoicesById = {};
   dbGet("accProjects", []).forEach(x => { invoicesById[x.id] = x; });
-  const payments = [
-    ...contractorPaymentsOf(c.id, project.id).map(e => ({ kind: "cash", id: e.id, date: e.date, amount: e.amount, method: e.paymentMethod, note: e.note })),
-    ...contractorPurchasePaymentsOf(c.id, project.id).map(p => ({ kind: "purchase", id: p.id, date: p.date, amount: p.amount, label: p.label, note: p.note, entry: invoicesById[p.entryId] })),
-    ...contractorProjectPaymentsOf(c.id, project.id).map(e => ({ kind: "projectpay", id: e.id, date: e.date, amount: e.amount, method: e.paymentMethod, note: e.note, entry: e })),
-  ].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  const payments = contractorAllPayments(c.id, project.id);
   const adjustments = (ag.adjustments || []).slice().sort((a, b) => (b.date || "").localeCompare(a.date || ""));
   const extras = (ag.extras || []).slice().sort((a, b) => (b.date || "").localeCompare(a.date || ""));
   const items = ag.items || [];
@@ -454,10 +468,11 @@ function accountBodyHtml(c, project, f, canEdit, canPay) {
     <div class="card">
       <div class="flex between" style="align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
         <h3 class="mt-0" style="margin:0">${svgIcon("dollar", 22)} الدفعات المسلّمة للمقاول (${payments.length})</h3>
-        ${canPay ? `<div class="flex gap wrap">
-          <button class="btn sm primary" id="addPaymentBtn">${svgIcon("plus")} تسجيل دفعة أعمال</button>
-          <button class="btn sm" id="addPurchasePaymentBtn">${svgIcon("plus")} دفعة من مشتريات مسددة</button>
-        </div>` : ""}
+        <div class="flex gap wrap">
+          <button class="btn sm" id="printStatementBtn">${svgIcon("printer")} طباعة كشف حساب</button>
+          ${canPay ? `<button class="btn sm primary" id="addPaymentBtn">${svgIcon("plus")} تسجيل دفعة أعمال</button>
+          <button class="btn sm" id="addPurchasePaymentBtn">${svgIcon("plus")} دفعة من مشتريات مسددة</button>` : ""}
+        </div>
       </div>
       ${payments.length ? `
       <div class="table-wrap">
@@ -489,6 +504,7 @@ function bindAccountEvents(el, c, project, f, canEdit, canPay) {
   const rerender = () => renderContractorAccount(el);
   const projLabel = project.name;
 
+  document.getElementById("printStatementBtn").onclick = () => printContractorStatement(c, project, f);
   const payBtn = document.getElementById("addPaymentBtn");
   if (payBtn) payBtn.onclick = () => openGeneralExpenseModal(el, null, { category: CONTRACTOR_PAYMENT_CATEGORY, contractorId: c.id, projectId: project.id, onSaved: rerender });
   const purchaseBtn = document.getElementById("addPurchasePaymentBtn");
@@ -568,6 +584,122 @@ function bindAccountEvents(el, c, project, f, canEdit, canPay) {
     logActivity(`تم حذف اتفاق المقاول "${c.name}" على مشروع "${projLabel}"`);
     rerender();
   };
+}
+
+/* ---------- طباعة كشف حساب المقاول (نافذة مستقلة جاهزة للطباعة A4) ---------- */
+function printContractorStatement(c, project, f) {
+  const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const ag = f.ag;
+  const isUnit = ag.type === "unit";
+  const company = getCompanyProfile();
+  const asc = (a, b) => (a.date || "").localeCompare(b.date || "");
+  const items = ag.items || [];
+  const extras = (ag.extras || []).slice().sort(asc);
+  const adjustments = (ag.adjustments || []).slice().sort(asc);
+  const payments = contractorAllPayments(c.id, project.id).reverse();
+  const signed = (n) => { n = Number(n) || 0; return n === 0 ? fmtMoney(0) : (n > 0 ? "+ " : "− ") + fmtMoney(Math.abs(n)); };
+  const kindLabel = (p) => p.kind === "purchase" ? "مشتريات" : p.kind === "projectpay" ? "محاسبة المشروع" : "دفعة مالية";
+
+  let cumulative = 0;
+  const paymentRows = payments.map((p, i) => {
+    cumulative += Number(p.amount) || 0;
+    const desc = p.kind === "purchase" ? (p.label || "فاتورة مشتريات") : (p.method || "-");
+    return `<tr><td>${i + 1}</td><td>${fmtDate(p.date)}</td><td>${kindLabel(p)}</td><td class="r">${esc(desc)}${p.note ? `<div class="sub">${esc(p.note)}</div>` : ""}</td><td class="n">${fmtMoney(p.amount)}</td><td class="n">${fmtMoney(f.entitlement - cumulative)}</td></tr>`;
+  }).join("");
+
+  const body = `
+    <div class="head">
+      ${company.logo ? `<img class="logo" src="${company.logo}">` : ""}
+      <div class="co">
+        <h1>${esc(company.name)}</h1>
+        ${company.address ? `<div>${esc(company.address)}</div>` : ""}
+        ${company.phone ? `<div>${esc(company.phone)}</div>` : ""}
+        ${company.taxNumber ? `<div>الرقم الضريبي: ${esc(company.taxNumber)}</div>` : ""}
+      </div>
+      <div class="ttl"><h2>كشف حساب مقاول</h2><div>تاريخ الطباعة: ${fmtDate(todayISO())}</div></div>
+    </div>
+
+    <table class="info"><tr>
+      <td><span>المقاول</span><strong>${esc(c.name)}</strong></td>
+      <td><span>التخصص</span><strong>${esc(c.trade || "-")}</strong></td>
+      <td><span>الجوال</span><strong>${esc(c.phone || "-")}</strong></td>
+    </tr><tr>
+      <td colspan="2"><span>المشروع</span><strong>${esc(project.name)}</strong></td>
+      <td><span>نوع الاتفاق</span><strong>${AGREEMENT_TYPE_LABELS[ag.type] || ""}</strong></td>
+    </tr></table>
+
+    <h3>ملخص الحساب</h3>
+    <table class="grid sum">
+      <tr><td>قيمة الاتفاق الأصلية</td><td class="n">${fmtMoney(f.agreed)}</td></tr>
+      <tr><td>فرق التمتير النهائي</td><td class="n">${signed(f.measuredDiff)}</td></tr>
+      <tr><td>الأعمال الإضافية (لصالحه)</td><td class="n">${signed(f.extras)}</td></tr>
+      <tr><td>الخصومات والتعديلات</td><td class="n">${signed(f.adjustments)}</td></tr>
+      <tr class="tot"><td>المستحق النهائي للمقاول</td><td class="n">${fmtMoney(f.entitlement)}</td></tr>
+      <tr><td>إجمالي المدفوع</td><td class="n">${fmtMoney(f.paid)}</td></tr>
+      <tr class="tot"><td>${f.remaining < 0 ? "المدفوع أكثر من المستحق بمبلغ" : "المبلغ المتبقي للمقاول"}</td><td class="n">${fmtMoney(Math.abs(f.remaining))}</td></tr>
+    </table>
+
+    ${isUnit && items.length ? `
+    <h3>بنود الاتفاق</h3>
+    <table class="grid"><thead><tr><th>#</th><th>البند</th><th>الوحدة</th><th>الكمية المتفق عليها</th><th>سعر الوحدة</th><th>الكمية النهائية</th><th>الإجمالي</th></tr></thead><tbody>
+      ${items.map((it, i) => `<tr><td>${i + 1}</td><td class="r">${esc(it.name)}</td><td>${esc(it.unit || "-")}</td><td>${Number(it.qty) || 0}</td><td class="n">${fmtMoney(it.unitPrice)}</td><td>${contractorItemFinalQty(it)}</td><td class="n">${fmtMoney(contractorItemFinalQty(it) * (Number(it.unitPrice) || 0))}</td></tr>`).join("")}
+    </tbody></table>` : ""}
+
+    ${extras.length ? `
+    <h3>الأعمال الإضافية</h3>
+    <table class="grid"><thead><tr><th>التاريخ</th><th>النوع</th><th>البيان</th><th>المبلغ</th></tr></thead><tbody>
+      ${extras.map(x => `<tr><td>${fmtDate(x.date)}</td><td>${esc((CONTRACTOR_EXTRA_KINDS.find(k => k.key === x.kind) || {}).label || "")}</td><td class="r">${esc(x.title || "-")}${x.vendor ? `<div class="sub">التاجر: ${esc(x.vendor)}${x.invoiceRef ? " — فاتورة " + esc(x.invoiceRef) : ""}</div>` : ""}${x.note ? `<div class="sub">${esc(x.note)}</div>` : ""}</td><td class="n">${fmtMoney(contractorExtraAmount(x))}</td></tr>`).join("")}
+      <tr class="tot"><td colspan="3">الإجمالي</td><td class="n">${fmtMoney(f.extras)}</td></tr>
+    </tbody></table>` : ""}
+
+    ${adjustments.length ? `
+    <h3>الخصومات والتعديلات</h3>
+    <table class="grid"><thead><tr><th>التاريخ</th><th>النوع</th><th>ملاحظة</th><th>المبلغ</th></tr></thead><tbody>
+      ${adjustments.map(a => `<tr><td>${fmtDate(a.date)}</td><td>${esc(a.label)}</td><td class="r">${esc(a.note || "-")}</td><td class="n">${signed(a.amount)}</td></tr>`).join("")}
+      <tr class="tot"><td colspan="3">الإجمالي</td><td class="n">${signed(f.adjustments)}</td></tr>
+    </tbody></table>` : ""}
+
+    <h3>الدفعات المسلّمة للمقاول (${payments.length})</h3>
+    ${payments.length ? `
+    <table class="grid"><thead><tr><th>#</th><th>التاريخ</th><th>النوع</th><th>البيان / طريقة الدفع</th><th>المبلغ</th><th>المتبقي بعد الدفعة</th></tr></thead><tbody>
+      ${paymentRows}
+      <tr class="tot"><td colspan="4">إجمالي المدفوع</td><td class="n">${fmtMoney(f.paid)}</td><td class="n">${fmtMoney(f.remaining)}</td></tr>
+    </tbody></table>` : `<p class="empty">لا توجد دفعات مسجلة.</p>`}
+
+    <div class="sign"><div>المقاول<br><br>الاسم / التوقيع: ..............................</div><div>المحاسب<br><br>الاسم / التوقيع: ..............................</div><div>المدير<br><br>الاسم / التوقيع: ..............................</div></div>
+  `;
+
+  const css = `
+    @page { size: A4; margin: 12mm; }
+    * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif; color: #1f2430; font-size: 12.5px; margin: 0; padding: 16px; direction: rtl; }
+    .head { display: flex; align-items: center; gap: 16px; border-bottom: 3px solid #1d6fe8; padding-bottom: 12px; margin-bottom: 14px; }
+    .logo { height: 64px; max-width: 120px; object-fit: contain; }
+    .co { flex: 1; } .co h1 { margin: 0 0 4px; font-size: 20px; } .co div { color: #555; font-size: 12px; }
+    .ttl { text-align: left; } .ttl h2 { margin: 0 0 4px; font-size: 20px; color: #1d6fe8; } .ttl div { color: #555; font-size: 12px; }
+    h3 { margin: 18px 0 6px; font-size: 14px; border-right: 4px solid #1d6fe8; padding-right: 8px; }
+    table { width: 100%; border-collapse: collapse; }
+    .info td { border: 1px solid #d5d9e2; padding: 8px 10px; background: #f7f9fc; }
+    .info span { display: block; color: #666; font-size: 11px; } .info strong { font-size: 13.5px; }
+    .grid th { background: #eef2f9; font-size: 12px; }
+    .grid th, .grid td { border: 1px solid #d5d9e2; padding: 6px 8px; text-align: center; }
+    .grid td.r { text-align: right; } .grid td.n { white-space: nowrap; font-weight: 700; }
+    .sub { color: #666; font-size: 11px; font-weight: 400; }
+    .sum td:first-child { text-align: right; width: 60%; } .sum td.n { text-align: left; }
+    .grid tr.tot td { background: #eef2f9; font-weight: 800; }
+    thead { display: table-header-group; } tr { break-inside: avoid; page-break-inside: avoid; }
+    .empty { color: #777; }
+    .sign { display: flex; gap: 20px; margin-top: 36px; break-inside: avoid; }
+    .sign div { flex: 1; text-align: center; line-height: 1.9; }
+  `;
+
+  const w = window.open("", "_blank");
+  if (!w) { toast("تعذّر فتح نافذة الطباعة — اسمح بالنوافذ المنبثقة لهذا الموقع ثم أعد المحاولة"); return; }
+  w.document.open();
+  w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>كشف حساب — ${esc(c.name)} — ${esc(project.name)}</title><style>${css}</style></head><body>${body}</body></html>`);
+  w.document.close();
+  w.focus();
+  setTimeout(() => { try { w.print(); } catch (e) {} }, 400);
 }
 
 /* ---------- إنشاء اتفاق ---------- */
@@ -1353,4 +1485,187 @@ function openExtraWorkModal(c, project, ag, existing, onSaved) {
     closeModal();
     onSaved();
   };
+}
+
+/* =========================================================
+   كشف حساب المقاول (قابل للطباعة): دفتر حركة بالرصيد الجاري لكل مشروع أو لكل المشاريع
+   ========================================================= */
+let CONTRACTOR_STMT = { projectId: "all", from: "", to: "" };
+
+function contractorLedger(c, projectId) {
+  const ag = findContractorAgreement(c.id, projectId);
+  if (!ag) return null;
+  const t = contractorAgreementTotals(ag);
+  const baseDate = (ag.createdAt || "").slice(0, 10);
+  const rows = [];
+  const add = (date, desc, credit, debit) => rows.push({ date: date || "", desc, credit: credit || 0, debit: debit || 0 });
+
+  add(baseDate, `قيمة الاتفاق (${AGREEMENT_TYPE_LABELS[ag.type] || ""})`, t.agreed, 0);
+  if (Math.abs(t.measuredDiff) > 0.005) add(baseDate, "فرق التمتير النهائي", t.measuredDiff > 0 ? t.measuredDiff : 0, t.measuredDiff < 0 ? -t.measuredDiff : 0);
+  (ag.extras || []).forEach(x => add(x.date, `عمل إضافي: ${x.title || ""}${x.vendor ? " — " + x.vendor : ""}${x.invoiceRef ? " (فاتورة " + x.invoiceRef + ")" : ""}`, contractorExtraAmount(x), 0));
+  (ag.adjustments || []).forEach(a => add(a.date, `${a.label}${a.note ? " — " + a.note : ""}`, a.amount > 0 ? a.amount : 0, a.amount < 0 ? -a.amount : 0));
+  contractorPaymentsOf(c.id, projectId).forEach(e => add(e.date, `دفعة أعمال${e.paymentMethod ? " — " + e.paymentMethod : ""}${e.note ? " — " + e.note : ""}`, 0, Number(e.amount) || 0));
+  contractorProjectPaymentsOf(c.id, projectId).forEach(e => add(e.date, `دفعة من محاسبة المشروع${e.paymentMethod ? " — " + e.paymentMethod : ""}${e.note ? " — " + e.note : ""}`, 0, Number(e.amount) || 0));
+  contractorPurchasePaymentsOf(c.id, projectId).forEach(p => add(p.date, `مشتريات مسددة: ${p.label || "فاتورة"}${p.note ? " — " + p.note : ""}`, 0, Number(p.amount) || 0));
+
+  rows.forEach((r, i) => { r._i = i; });
+  rows.sort((a, b) => (a.date || "").localeCompare(b.date || "") || a._i - b._i);
+  return { ag, rows };
+}
+
+function contractorStatement(c, filter) {
+  const projects = dbGet("projects", []);
+  const sections = contractorAgreementsOf(c.id)
+    .filter(a => filter.projectId === "all" || a.projectId === filter.projectId)
+    .map(a => {
+      const led = contractorLedger(c, a.projectId);
+      const before = led.rows.filter(r => filter.from && (r.date || "") < filter.from);
+      const shown = led.rows.filter(r => (!filter.from || (r.date || "") >= filter.from) && (!filter.to || (r.date || "") <= filter.to));
+      const opening = before.reduce((s, r) => s + r.credit - r.debit, 0);
+      let bal = opening;
+      const rows = shown.map(r => { bal += r.credit - r.debit; return Object.assign({}, r, { balance: bal }); });
+      return {
+        ag: a, project: projects.find(p => p.id === a.projectId) || { name: a.projectName || "مشروع محذوف" },
+        opening, rows, credit: rows.reduce((s, r) => s + r.credit, 0), debit: rows.reduce((s, r) => s + r.debit, 0), closing: bal,
+      };
+    });
+  const sum = (k) => sections.reduce((s, x) => s + x[k], 0);
+  return { sections, opening: sum("opening"), credit: sum("credit"), debit: sum("debit"), closing: sum("closing") };
+}
+
+function renderContractorStatement(el) {
+  const c = getContractors().find(x => x.id === CONTRACTOR_VIEW_ID);
+  if (!c) { CONTRACTORS_VIEW = "list"; renderContractors(el); return; }
+  const company = getCompanyProfile();
+  const agreements = contractorAgreementsOf(c.id);
+  const projects = dbGet("projects", []);
+  if (CONTRACTOR_STMT.projectId !== "all" && !agreements.some(a => a.projectId === CONTRACTOR_STMT.projectId)) CONTRACTOR_STMT.projectId = "all";
+  const st = contractorStatement(c, CONTRACTOR_STMT);
+  const single = CONTRACTOR_STMT.projectId !== "all" && st.sections.length === 1 ? st.sections[0] : null;
+  const periodLabel = CONTRACTOR_STMT.from || CONTRACTOR_STMT.to
+    ? `${CONTRACTOR_STMT.from ? "من " + fmtDate(CONTRACTOR_STMT.from) : ""} ${CONTRACTOR_STMT.to ? "إلى " + fmtDate(CONTRACTOR_STMT.to) : ""}`.trim()
+    : "منذ بداية التعامل حتى تاريخه";
+
+  const ledgerTable = (sec) => `
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th style="width:110px">التاريخ</th><th>البيان</th><th>المستحق</th><th>المدفوع / الخصم</th><th>الرصيد المتبقي له</th></tr></thead>
+        <tbody>
+          ${(CONTRACTOR_STMT.from ? `<tr style="background:#f6f9fd"><td>-</td><td><strong>رصيد سابق (قبل ${fmtDate(CONTRACTOR_STMT.from)})</strong></td><td></td><td></td><td><strong>${fmtMoney(sec.opening)}</strong></td></tr>` : "")}
+          ${sec.rows.length ? sec.rows.map(r => `
+            <tr>
+              <td>${r.date ? fmtDate(r.date) : "-"}</td>
+              <td>${r.desc}</td>
+              <td>${r.credit ? fmtMoney(r.credit) : ""}</td>
+              <td>${r.debit ? fmtMoney(r.debit) : ""}</td>
+              <td><strong>${fmtMoney(r.balance)}</strong></td>
+            </tr>`).join("") : `<tr><td colspan="5" class="text-muted" style="text-align:center">لا توجد حركات في الفترة المحددة</td></tr>`}
+          <tr style="background:#f6f9fd;font-weight:800">
+            <td colspan="2">الإجمالي</td><td>${fmtMoney(sec.credit)}</td><td>${fmtMoney(sec.debit)}</td><td>${fmtMoney(sec.closing)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
+
+  const itemsTable = (ag) => (ag.items || []).length ? `
+    <h3 style="margin-top:18px">بنود الاتفاق حسب جدول الكميات</h3>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>#</th><th>البند</th><th>الوحدة</th><th>الكمية المتفق عليها</th>${ag.type === "unit" ? "<th>سعر الوحدة</th><th>الكمية النهائية</th><th>الإجمالي</th>" : ""}</tr></thead>
+        <tbody>
+          ${ag.items.map((it, i) => `<tr><td>${i + 1}</td><td>${it.name}</td><td>${it.unit || "-"}</td><td>${Number(it.qty) || 0}</td>
+            ${ag.type === "unit" ? `<td>${fmtMoney(it.unitPrice)}</td><td>${contractorItemFinalQty(it)}</td><td>${fmtMoney(contractorItemFinalQty(it) * (Number(it.unitPrice) || 0))}</td>` : ""}</tr>`).join("")}
+        </tbody>
+      </table>
+    </div>` : "";
+
+  el.innerHTML = `
+    <div class="breadcrumb no-print"><a id="bcCons">مقاولو الباطن</a>${svgIcon("chevron-left")}<a id="bcCon">${c.name}</a>${svgIcon("chevron-left")}<span>كشف حساب</span></div>
+    <div class="section-title-row no-print">
+      <div><h2>كشف حساب المقاول</h2><p>اختر المشروع والفترة ثم اطبع الكشف</p></div>
+      <div class="flex gap">
+        <button class="btn" id="stBack">رجوع</button>
+        <button class="btn primary" id="stPrint">${svgIcon("printer")} طباعة الكشف</button>
+      </div>
+    </div>
+
+    <div class="card no-print">
+      <div class="grid cols-3">
+        <div class="field" style="margin-bottom:0"><label>المشروع</label>
+          <select id="st_project">
+            <option value="all" ${CONTRACTOR_STMT.projectId === "all" ? "selected" : ""}>كل المشاريع</option>
+            ${agreements.map(a => `<option value="${a.projectId}" ${CONTRACTOR_STMT.projectId === a.projectId ? "selected" : ""}>${(projects.find(p => p.id === a.projectId) || {}).name || a.projectName || "مشروع محذوف"}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field" style="margin-bottom:0"><label>من تاريخ (اختياري)</label><input type="date" id="st_from" value="${CONTRACTOR_STMT.from}"></div>
+        <div class="field" style="margin-bottom:0"><label>إلى تاريخ (اختياري)</label><input type="date" id="st_to" value="${CONTRACTOR_STMT.to}"></div>
+      </div>
+    </div>
+
+    <div class="card statement-sheet">
+      <div class="quote-header-card" style="margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--border)">
+        <div class="quote-logo-box">${company.logo ? `<img src="${company.logo}">` : "الشعار"}</div>
+        <div style="flex:1">
+          <h2>${company.name || ""}${company.taxNumber ? ` <span class="tax-inline">— الرقم الضريبي: ${company.taxNumber}</span>` : ""}</h2>
+          ${company.address ? `<div class="cline">${company.address}</div>` : ""}
+          ${(company.phone || company.email) ? `<div class="cline">${[company.phone, company.email].filter(Boolean).join(" — ")}</div>` : ""}
+          ${company.crNumber ? `<div class="cline">س.ت: ${company.crNumber}</div>` : ""}
+        </div>
+        <div style="text-align:left">
+          <div style="font-size:20px;font-weight:800">كشف حساب مقاول باطن</div>
+          <div class="text-muted" style="font-size:12.5px">تاريخ الإصدار: ${fmtDate(todayISO())}</div>
+        </div>
+      </div>
+
+      <div class="grid cols-2" style="margin-bottom:14px">
+        <div>
+          <div class="kv-row"><span class="k">المقاول</span><span class="v">${c.name}</span></div>
+          <div class="kv-row"><span class="k">العمل / التخصص</span><span class="v">${c.trade || "-"}</span></div>
+          <div class="kv-row"><span class="k">الجوال</span><span class="v">${c.phone || "-"}</span></div>
+        </div>
+        <div>
+          <div class="kv-row"><span class="k">المشروع</span><span class="v">${single ? single.project.name : "كل المشاريع (" + st.sections.length + ")"}</span></div>
+          ${single ? `<div class="kv-row"><span class="k">نوع الاتفاق</span><span class="v">${AGREEMENT_TYPE_LABELS[single.ag.type]}</span></div>` : ""}
+          <div class="kv-row"><span class="k">الفترة</span><span class="v">${periodLabel}</span></div>
+        </div>
+      </div>
+
+      ${st.sections.length ? st.sections.map(sec => `
+        ${single ? "" : `<h3 style="margin-top:20px">المشروع: ${sec.project.name} <span class="badge gray">${AGREEMENT_TYPE_LABELS[sec.ag.type]}</span></h3>`}
+        ${ledgerTable(sec)}
+      `).join("") : `<div class="empty-state">لا توجد اتفاقات لهذا المقاول</div>`}
+
+      ${st.sections.length > 1 ? `
+      <div class="grid cols-3" style="margin-top:18px">
+        <div class="stat-card"><div class="label">إجمالي المستحق</div><div class="value">${fmtMoney(st.credit)}</div></div>
+        <div class="stat-card"><div class="label">إجمالي المدفوع والخصومات</div><div class="value success">${fmtMoney(st.debit)}</div></div>
+        <div class="stat-card"><div class="label">الرصيد المتبقي للمقاول</div><div class="value ${st.closing > 0 ? "warning" : "success"}">${fmtMoney(st.closing)}</div></div>
+      </div>` : (st.sections.length === 1 ? `
+      <div class="grand-total-box"><div>الرصيد المتبقي للمقاول${single ? " على المشروع" : ""}</div><div class="num">${fmtMoney(st.closing)}</div></div>` : "")}
+
+      ${single ? itemsTable(single.ag) : ""}
+
+      <div class="grid cols-2" style="margin-top:40px;font-size:13px">
+        <div>المحاسب: ...............................<div class="text-muted" style="font-size:11.5px;margin-top:4px">التوقيع والتاريخ</div></div>
+        <div>مقاول الباطن (اطلعتُ ووافقتُ على الرصيد): ...............................<div class="text-muted" style="font-size:11.5px;margin-top:4px">التوقيع والتاريخ</div></div>
+      </div>
+    </div>
+  `;
+
+  const toAccount = () => { CONTRACTORS_VIEW = "account"; renderContractors(el); window.scrollTo(0, 0); };
+  document.getElementById("bcCons").onclick = () => { CONTRACTORS_VIEW = "list"; renderContractors(el); };
+  document.getElementById("bcCon").onclick = toAccount;
+  document.getElementById("stBack").onclick = toAccount;
+  document.getElementById("stPrint").onclick = () => window.print();
+  document.getElementById("st_project").onchange = (e) => { CONTRACTOR_STMT.projectId = e.target.value; renderContractorStatement(el); };
+  document.getElementById("st_from").onchange = (e) => { CONTRACTOR_STMT.from = e.target.value; renderContractorStatement(el); };
+  document.getElementById("st_to").onchange = (e) => { CONTRACTOR_STMT.to = e.target.value; renderContractorStatement(el); };
+}
+
+function openContractorStatement(el, contractorId, projectId) {
+  CONTRACTOR_VIEW_ID = contractorId;
+  CONTRACTOR_STMT = { projectId: projectId || "all", from: "", to: "" };
+  CONTRACTORS_VIEW = "statement";
+  renderContractors(el);
+  window.scrollTo(0, 0);
 }
