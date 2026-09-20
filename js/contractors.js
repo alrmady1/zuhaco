@@ -65,13 +65,17 @@ const PURCHASE_ENTRY_TYPES = ["دفعة مشتريات", "مصروف مواد"];
 function contractorPurchasePaymentsOf(contractorId, projectId) {
   return dbGet("contractorPurchasePayments", []).filter(p => p.contractorId === contractorId && (!projectId || p.projectId === projectId));
 }
-function purchaseAllocatedAmount(entryId) {
-  return dbGet("contractorPurchasePayments", []).filter(p => p.entryId === entryId).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+/* المُسنَد من الفاتورة = دفعات مشتريات للمقاولين + أعمال إضافية مربوطة بها (حتى لا تُحتسب الفاتورة مرتين) */
+function purchaseAllocatedAmount(entryId, excludeExtraId) {
+  const payments = dbGet("contractorPurchasePayments", []).filter(p => p.entryId === entryId).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const linkedExtras = dbGet("contractorAgreements", []).reduce((sum, ag) =>
+    sum + (ag.extras || []).filter(x => x.kind === "purchase" && x.entryId === entryId && x.id !== excludeExtraId).reduce((s, x) => s + (Number(x.amount) || 0), 0), 0);
+  return payments + linkedExtras;
 }
-function projectPurchaseInvoices(projectId) {
+function projectPurchaseInvoices(projectId, excludeExtraId) {
   return dbGet("accProjects", []).filter(e => e.projectId === projectId && PURCHASE_ENTRY_TYPES.includes(e.type))
     .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
-    .map(e => { const allocated = purchaseAllocatedAmount(e.id); return { entry: e, allocated, available: Math.max((Number(e.amount) || 0) - allocated, 0) }; });
+    .map(e => { const allocated = purchaseAllocatedAmount(e.id, excludeExtraId); return { entry: e, allocated, available: Math.max((Number(e.amount) || 0) - allocated, 0) }; });
 }
 function purchaseInvoiceLabel(e) {
   return [e.vendorName, e.invoiceRefNumber ? "فاتورة " + e.invoiceRefNumber : "", e.note].filter(Boolean).join(" — ") || e.type;
@@ -403,7 +407,7 @@ function accountBodyHtml(c, project, f, canEdit, canPay) {
               <tr>
                 <td>${fmtDate(x.date)}</td>
                 <td><span class="badge blue">${(CONTRACTOR_EXTRA_KINDS.find(k => k.key === x.kind) || {}).label || ""}</span></td>
-                <td>${x.title || "-"}${x.vendor ? `<div class="text-muted" style="font-size:11.5px">التاجر: ${x.vendor}${x.invoiceRef ? " — فاتورة " + x.invoiceRef : ""}</div>` : ""}${x.note ? `<div class="text-muted" style="font-size:11.5px">${x.note}</div>` : ""}${x.attachment ? ` <a href="${x.attachment.url}" target="_blank" rel="noopener" class="badge blue" style="text-decoration:none">${svgIcon("paperclip", 14)} المرفق</a>` : ""}</td>
+                <td>${x.title || "-"}${x.vendor ? `<div class="text-muted" style="font-size:11.5px">التاجر: ${x.vendor}${x.invoiceRef ? " — فاتورة " + x.invoiceRef : ""}</div>` : ""}${x.note ? `<div class="text-muted" style="font-size:11.5px">${x.note}</div>` : ""}${x.entryId ? ` <span class="badge green">مربوطة بفاتورة المشروع</span>` : ""}${(x.attachment || (x.entryId && invoicesById[x.entryId] && invoicesById[x.entryId].attachment)) ? ` <a href="${(x.attachment || invoicesById[x.entryId].attachment).url}" target="_blank" rel="noopener" class="badge blue" style="text-decoration:none">${svgIcon("paperclip", 14)} المرفق</a>` : ""}</td>
                 <td>${(x.kind === "qty" || x.kind === "item") ? `${Number(x.qty) || 0} ${x.unit || ""}` : `<span class="text-muted">-</span>`}</td>
                 <td>${(x.kind === "qty" || x.kind === "item") ? fmtMoney(x.unitPrice) : `<span class="text-muted">-</span>`}</td>
                 <td><strong style="color:var(--success)">+ ${fmtMoney(contractorExtraAmount(x))}</strong></td>
@@ -1098,7 +1102,10 @@ function openPurchasePaymentModal(c, project, onSaved) {
   const invoices = projectPurchaseInvoices(project.id);
   const contractorsById = {};
   getContractors().forEach(x => { contractorsById[x.id] = x.name; });
-  const allocOwners = (entryId) => [...new Set(dbGet("contractorPurchasePayments", []).filter(p => p.entryId === entryId).map(p => contractorsById[p.contractorId] || "مقاول"))].join("، ");
+  const allocOwners = (entryId) => [...new Set([
+    ...dbGet("contractorPurchasePayments", []).filter(p => p.entryId === entryId).map(p => contractorsById[p.contractorId] || "مقاول"),
+    ...dbGet("contractorAgreements", []).filter(ag => (ag.extras || []).some(x => x.kind === "purchase" && x.entryId === entryId)).map(ag => (contractorsById[ag.contractorId] || "مقاول") + " (أعمال إضافية)"),
+  ])].join("، ");
 
   const html = `
     <div class="modal-head"><h3>دفعة من مشتريات مسددة — ${c.name}</h3><button class="modal-close" id="mClose">×</button></div>
@@ -1226,22 +1233,66 @@ function openExtraWorkModal(c, project, ag, existing, onSaved) {
           <div class="field"><label>سعر الوحدة (ر.س)</label><input type="number" min="0" step="0.01" id="ex_price" value="${x0.kind === "item" ? (x0.unitPrice || 0) : 0}"></div>
         </div>`;
     } else if (kind === "purchase") {
+      const invoices = projectPurchaseInvoices(project.id, isEdit ? existing.id : null).filter(i => i.available > 0 || i.entry.id === x0.entryId);
+      const wasKind = x0.kind === "purchase";
+      const src = purchaseSrc || (wasKind ? (x0.entryId ? "link" : "manual") : (invoices.length ? "link" : "manual"));
+      purchaseSrc = src;
       box.innerHTML = `
-        <div class="grid cols-2">
-          <div class="field"><label>التاجر / المورّد</label><input id="ex_vendor" value="${x0.vendor || ""}"></div>
-          <div class="field"><label>رقم الفاتورة</label><input id="ex_invoice" value="${x0.invoiceRef || ""}"></div>
+        <div class="field"><label>مصدر الفاتورة</label>
+          <select id="ex_src">
+            <option value="link" ${src === "link" ? "selected" : ""}>ربط فاتورة مسجّلة على المشروع (من محاسبة المشاريع)</option>
+            <option value="manual" ${src === "manual" ? "selected" : ""}>إدخال الفاتورة يدوياً</option>
+          </select>
         </div>
-        <div class="field"><label>وصف المشتريات</label><input id="ex_title" value="${x0.kind === "purchase" ? (x0.title || "") : ""}" placeholder="مثال: أسلاك ولوازم كهربائية اشتراها المقاول"></div>
-        <div class="field"><label>مبلغ الفاتورة (ر.س)</label><input type="number" min="0" step="0.01" id="ex_amount" value="${x0.kind === "purchase" ? (x0.amount || 0) : 0}"></div>
-        <div class="field"><label>صورة الفاتورة (اختياري)</label><input type="file" id="ex_attachment" accept=".pdf,image/*">
-          <div id="ex_attPreview" class="flex wrap" style="margin-top:8px">${attachment ? `<span class="file-chip">${svgIcon("paperclip", 14)} ${attachment.name || "المرفق الحالي"}</span>` : ""}</div></div>`;
-      const att = box.querySelector("#ex_attachment");
-      att.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) { attachment = null; box.querySelector("#ex_attPreview").innerHTML = ""; return; }
-        attachment = { name: file.name, type: file.type, url: await fileToDataURL(file) };
-        box.querySelector("#ex_attPreview").innerHTML = `<span class="file-chip">${svgIcon("paperclip", 14)} ${file.name}</span>`;
-      };
+        <div id="ex_purchaseBody"></div>`;
+      const body = box.querySelector("#ex_purchaseBody");
+      box.querySelector("#ex_src").onchange = (e) => { purchaseSrc = e.target.value; drawFields(); };
+
+      if (src === "link") {
+        body.innerHTML = invoices.length ? `
+          <div class="field"><label>فاتورة المشتريات المسجّلة على المشروع</label>
+            <select id="ex_entry">
+              <option value="">— اختر الفاتورة —</option>
+              ${invoices.map(i => `<option value="${i.entry.id}" ${x0.entryId === i.entry.id ? "selected" : ""}>${fmtDate(i.entry.date)} — ${purchaseInvoiceLabel(i.entry)} — المتاح ${fmtMoney(i.available)}</option>`).join("")}
+            </select>
+            <div class="hint" id="ex_entryInfo"></div>
+          </div>
+          <div class="field"><label>المبلغ المحتسب لصالح المقاول (ر.س)</label><input type="number" min="0" step="0.01" id="ex_amount" value="${wasKind && x0.entryId ? (x0.amount || 0) : 0}"></div>`
+          : `<div class="text-muted" style="font-size:13px;margin-bottom:12px">لا توجد فواتير مشتريات متاحة على هذا المشروع — سجّلها من محاسبة المشاريع (نوع الحركة: دفعة مشتريات) أو اختر "إدخال الفاتورة يدوياً".</div>`;
+        const entrySel = body.querySelector("#ex_entry");
+        if (entrySel) {
+          const showInfo = () => {
+            const inv = invoices.find(i => i.entry.id === entrySel.value);
+            body.querySelector("#ex_entryInfo").innerHTML = inv
+              ? `المبلغ الأصلي ${fmtMoney(inv.entry.amount)} — المتاح للاحتساب ${fmtMoney(inv.available)}${inv.entry.attachment ? ` — <a href="${inv.entry.attachment.url}" target="_blank" rel="noopener" style="color:var(--primary);font-weight:700">عرض الفاتورة</a>` : ""}`
+              : "";
+          };
+          entrySel.onchange = () => {
+            const inv = invoices.find(i => i.entry.id === entrySel.value);
+            if (inv) body.querySelector("#ex_amount").value = inv.available;
+            showInfo();
+            computeAmount();
+          };
+          showInfo();
+        }
+      } else {
+        body.innerHTML = `
+          <div class="grid cols-2">
+            <div class="field"><label>التاجر / المورّد</label><input id="ex_vendor" value="${wasKind ? (x0.vendor || "") : ""}"></div>
+            <div class="field"><label>رقم الفاتورة</label><input id="ex_invoice" value="${wasKind ? (x0.invoiceRef || "") : ""}"></div>
+          </div>
+          <div class="field"><label>وصف المشتريات</label><input id="ex_title" value="${wasKind ? (x0.title || "") : ""}" placeholder="مثال: أسلاك ولوازم كهربائية اشتراها المقاول"></div>
+          <div class="field"><label>مبلغ الفاتورة (ر.س)</label><input type="number" min="0" step="0.01" id="ex_amount" value="${wasKind && !x0.entryId ? (x0.amount || 0) : 0}"></div>
+          <div class="field"><label>صورة الفاتورة (اختياري)</label><input type="file" id="ex_attachment" accept=".pdf,image/*">
+            <div id="ex_attPreview" class="flex wrap" style="margin-top:8px">${attachment ? `<span class="file-chip">${svgIcon("paperclip", 14)} ${attachment.name || "المرفق الحالي"}</span>` : ""}</div></div>`;
+        const att = body.querySelector("#ex_attachment");
+        att.onchange = async (e) => {
+          const file = e.target.files[0];
+          if (!file) { attachment = null; body.querySelector("#ex_attPreview").innerHTML = ""; return; }
+          attachment = { name: file.name, type: file.type, url: await fileToDataURL(file) };
+          body.querySelector("#ex_attPreview").innerHTML = `<span class="file-chip">${svgIcon("paperclip", 14)} ${file.name}</span>`;
+        };
+      }
     } else {
       box.innerHTML = `
         <div class="field"><label>وصف الدفعة / المصروف الذي سدّده المقاول</label><input id="ex_title" value="${x0.kind === "payment" ? (x0.title || "") : ""}" placeholder="مثال: أجور عمالة إضافية سدّدها المقاول"></div>
@@ -1250,7 +1301,8 @@ function openExtraWorkModal(c, project, ag, existing, onSaved) {
     box.querySelectorAll("input, select").forEach(inp => { inp.oninput = computeAmount; if (inp.tagName === "SELECT") inp.addEventListener("change", computeAmount); });
     computeAmount();
   }
-  kindSel.onchange = drawFields;
+  let purchaseSrc = null; // link | manual
+  kindSel.onchange = () => { purchaseSrc = null; drawFields(); };
   drawFields();
 
   ov.querySelector("#ex_save").onclick = () => {
@@ -1266,8 +1318,17 @@ function openExtraWorkModal(c, project, ag, existing, onSaved) {
       if (!rec.title) { toast("يرجى إدخال اسم البند الإضافي"); return; }
       if (rec.qty <= 0) { toast("يرجى إدخال الكمية"); return; }
     } else if (kind === "purchase") {
-      rec.vendor = val("#ex_vendor").trim(); rec.invoiceRef = val("#ex_invoice").trim(); rec.title = val("#ex_title").trim() || "مشتريات"; rec.amount = Number(val("#ex_amount")) || 0; rec.attachment = attachment;
-      if (rec.amount <= 0) { toast("يرجى إدخال مبلغ الفاتورة"); return; }
+      rec.amount = Number(val("#ex_amount")) || 0;
+      if (purchaseSrc === "link") {
+        const inv = projectPurchaseInvoices(project.id, isEdit ? existing.id : null).find(i => i.entry.id === val("#ex_entry"));
+        if (!inv) { toast("يرجى اختيار الفاتورة المسجّلة على المشروع"); return; }
+        if (rec.amount <= 0) { toast("يرجى إدخال المبلغ المحتسب لصالح المقاول"); return; }
+        if (rec.amount > inv.available + 0.005) { toast("المبلغ أكبر من المتاح على الفاتورة (" + fmtMoney(inv.available) + ")"); return; }
+        rec.entryId = inv.entry.id; rec.vendor = inv.entry.vendorName || ""; rec.invoiceRef = inv.entry.invoiceRefNumber || ""; rec.title = purchaseInvoiceLabel(inv.entry);
+      } else {
+        rec.vendor = val("#ex_vendor").trim(); rec.invoiceRef = val("#ex_invoice").trim(); rec.title = val("#ex_title").trim() || "مشتريات"; rec.attachment = attachment;
+        if (rec.amount <= 0) { toast("يرجى إدخال مبلغ الفاتورة"); return; }
+      }
     } else {
       rec.title = val("#ex_title").trim(); rec.amount = Number(val("#ex_amount")) || 0;
       if (!rec.title) { toast("يرجى إدخال وصف الدفعة / المصروف"); return; }
