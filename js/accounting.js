@@ -6,10 +6,11 @@ const VAT_RATE = 0.15;
 let ACC_SELECTED_PROJECT = null;
 let GEN_EXP_SORT = { key: "date", dir: "desc" };
 
-const ACC_TYPES = ["إيراد مشروع", "دفعة مشتريات", "مصروف مواد", "مصروف عمال", "مصروف نثرية"];
+const ACC_TYPES = ["إيراد مشروع", "دفعة مشتريات", "دفعة مقاول باطن", "مصروف مواد", "مصروف عمال", "مصروف نثرية"];
+const ACC_EXPENSE_TYPES = ["دفعة مشتريات", "دفعة مقاول باطن", "مصروف مواد", "مصروف عمال", "مصروف نثرية"];
 const ACC_TYPE_BADGE = {
   "إيراد مشروع": "green", "فاتورة ضريبية": "green",
-  "دفعة مشتريات": "blue", "مصروف مواد": "orange", "مصروف عمال": "orange", "مصروف نثرية": "gray",
+  "دفعة مشتريات": "blue", "دفعة مقاول باطن": "orange", "مصروف مواد": "orange", "مصروف عمال": "orange", "مصروف نثرية": "gray",
 };
 const PAYMENT_METHODS = ["تحويل بنكي", "كاش", "شبكة", "سداد حكومي"];
 /* ---------- قائمة المصاريف والعهد (تصنيفات المصاريف الإدارية وبنودها الفرعية) ---------- */
@@ -70,7 +71,7 @@ function renderAccProjects(el) {
   const project = projects.find(p => p.id === ACC_SELECTED_PROJECT);
   const entries = dbGet("accProjects", []).filter(e => e.projectId === ACC_SELECTED_PROJECT).sort((a, b) => (b.date > a.date ? 1 : -1));
 
-  const EXPENSE_TYPES = ["دفعة مشتريات", "مصروف مواد", "مصروف عمال", "مصروف نثرية"];
+  const EXPENSE_TYPES = ACC_EXPENSE_TYPES;
   const revenue = entries.filter(e => e.type === "إيراد مشروع" || e.type === "فاتورة ضريبية").reduce((s, e) => s + Number(e.amount || 0), 0);
   const expenses = entries.filter(e => EXPENSE_TYPES.includes(e.type)).reduce((s, e) => s + Number(e.amount || 0), 0);
   const net = revenue - expenses;
@@ -129,6 +130,7 @@ function renderAccProjects(el) {
                 <td>${fmtDate(e.date)}</td>
                 <td class="text-muted">
                   ${e.note || (e.invoiceNumber ? "فاتورة رقم " + e.invoiceNumber : "-")}
+                  ${e.contractorName ? `<br><span style="font-size:11px">مقاول الباطن: ${e.contractorName}</span>` : ""}
                   ${e.vendorName ? `<br><span style="font-size:11px">التاجر: ${e.vendorName}${e.invoiceRefNumber ? " — فاتورة رقم " + e.invoiceRefNumber : ""}</span>` : ""}
                   ${e.paymentMethod ? `<br><span class="badge gray" style="font-size:10.5px">${e.paymentMethod}</span>` : ""}
                 </td>
@@ -173,6 +175,7 @@ function openAccEntryViewModal(e) {
     <div class="kv-row"><span class="k">المبلغ</span><span class="v">${fmtMoney(e.amount)}</span></div>
     <div class="kv-row"><span class="k">التاريخ</span><span class="v">${fmtDate(e.date)}</span></div>
     <div class="kv-row"><span class="k">ضريبة القيمة المضافة</span><span class="v">${e.vatApplicable ? `خاضع (${fmtMoney(e.vatAmount || Number(e.amount) * VAT_RATE)})` : "غير خاضع"}</span></div>
+    ${e.contractorName ? `<div class="kv-row"><span class="k">مقاول الباطن</span><span class="v">${e.contractorName}</span></div>` : ""}
     ${e.vendorName ? `<div class="kv-row"><span class="k">التاجر / المورّد</span><span class="v">${e.vendorName}</span></div>` : ""}
     ${e.invoiceRefNumber ? `<div class="kv-row"><span class="k">رقم الفاتورة</span><span class="v">${e.invoiceRefNumber}</span></div>` : ""}
     ${e.paymentMethod ? `<div class="kv-row"><span class="k">طريقة السداد/الاستلام</span><span class="v">${e.paymentMethod}</span></div>` : ""}
@@ -211,6 +214,7 @@ function openAccEntryModal(el, existingEntry) {
 
   function renderExtra() {
     const type = typeSelect.value;
+    ov.querySelector("#e_amount").oninput = null;
     if (type === "دفعة مشتريات") {
       extraBox.innerHTML = `
         <div class="grid cols-2">
@@ -225,6 +229,44 @@ function openAccEntryModal(el, existingEntry) {
         </div>
       `;
       wireAttachment();
+    } else if (type === "دفعة مقاول باطن") {
+      const contractors = dbGet("contractors", []).filter(c => findContractorAgreement(c.id, ACC_SELECTED_PROJECT));
+      extraBox.innerHTML = `
+        <div class="field"><label>مقاول الباطن (من المقاولين المسجلين)</label>
+          <select id="e_contractor">
+            <option value="">— اختر المقاول —</option>
+            ${contractors.map(c => `<option value="${c.id}" ${isEdit && existingEntry.contractorId === c.id ? "selected" : ""}>${c.name}${c.trade ? " — " + c.trade : ""}</option>`).join("")}
+          </select>
+          ${!contractors.length ? `<div class="hint">لا يوجد مقاول باطن له اتفاق على هذا المشروع — أنشئ الاتفاق من صفحة مقاولي الباطن أولاً</div>` : ""}
+        </div>
+        <div id="e_conInfo" style="margin-bottom:14px"></div>
+        <div class="field"><label>طريقة الدفع</label><select id="e_paymentMethod">${PAYMENT_METHODS.map(m => `<option value="${m}" ${isEdit && existingEntry.paymentMethod === m ? "selected" : ""}>${m}</option>`).join("")}</select></div>
+        <div class="field">
+          <label>إيصال التحويل أو الفاتورة (اختياري)</label>
+          <input type="file" id="e_attachment" accept=".pdf,image/*">
+          <div id="e_attachmentPreview" class="flex wrap" style="margin-top:8px">${attachment ? `<span class="file-chip">${svgIcon("paperclip", 14)} ${attachment.name || "المرفق الحالي"}</span>` : ""}</div>
+        </div>
+      `;
+      wireAttachment();
+      const conSel = extraBox.querySelector("#e_contractor");
+      const infoBox = extraBox.querySelector("#e_conInfo");
+      const amountInput = ov.querySelector("#e_amount");
+      const refreshInfo = () => {
+        const f = conSel.value ? contractorFigures(conSel.value, ACC_SELECTED_PROJECT, isEdit ? existingEntry.id : null) : null;
+        if (!f) { infoBox.innerHTML = ""; return; }
+        const after = f.remaining - (Number(amountInput.value) || 0);
+        infoBox.innerHTML = `
+          <div class="card" style="background:#f6f9fd;padding:14px 18px;margin:0">
+            <div class="kv-row"><span class="k">نوع الاتفاق</span><span class="v">${AGREEMENT_TYPE_LABELS[f.ag.type]}</span></div>
+            <div class="kv-row"><span class="k">المستحق النهائي (بعد التمتير والخصومات والأعمال الإضافية)</span><span class="v">${fmtMoney(f.entitlement)}</span></div>
+            <div class="kv-row"><span class="k">المدفوع سابقاً</span><span class="v">${fmtMoney(f.paid)}</span></div>
+            <div class="kv-row"><span class="k">المتبقي قبل هذه الدفعة</span><span class="v">${fmtMoney(f.remaining)}</span></div>
+            <div class="kv-row"><span class="k">المتبقي بعد هذه الدفعة</span><span class="v" style="color:${after < 0 ? "var(--danger)" : "var(--success)"}">${fmtMoney(after)}${after < 0 ? " (تجاوز المستحق)" : ""}</span></div>
+          </div>`;
+      };
+      conSel.onchange = refreshInfo;
+      amountInput.oninput = refreshInfo;
+      refreshInfo();
     } else if (type === "إيراد مشروع") {
       extraBox.innerHTML = `
         <div class="field"><label>طريقة الاستلام</label><select id="e_paymentMethod">${PAYMENT_METHODS.map(m => `<option value="${m}" ${isEdit && existingEntry.paymentMethod === m ? "selected" : ""}>${m}</option>`).join("")}</select></div>
@@ -270,6 +312,13 @@ function openAccEntryModal(el, existingEntry) {
     if (type === "دفعة مشتريات") {
       entry.invoiceRefNumber = ov.querySelector("#e_invoiceRef").value.trim();
       entry.vendorName = ov.querySelector("#e_vendor").value.trim();
+      entry.attachment = attachment;
+    } else if (type === "دفعة مقاول باطن") {
+      const conId = (ov.querySelector("#e_contractor") || {}).value;
+      const con = dbGet("contractors", []).find(x => x.id === conId);
+      if (!con) { toast("يرجى اختيار مقاول الباطن"); return; }
+      entry.contractorId = con.id;
+      entry.contractorName = con.name;
       entry.attachment = attachment;
     } else if (type === "إيراد مشروع") {
       entry.attachment = attachment;
@@ -393,7 +442,7 @@ function renderAccGeneralProjectsTab(el) {
   function statsFor(projectId) {
     const list = entries.filter(e => e.projectId === projectId);
     const revenue = list.filter(e => e.type === "إيراد مشروع" || e.type === "فاتورة ضريبية").reduce((s, e) => s + Number(e.amount || 0), 0);
-    const expenses = list.filter(e => ["دفعة مشتريات", "مصروف مواد", "مصروف عمال", "مصروف نثرية"].includes(e.type)).reduce((s, e) => s + Number(e.amount || 0), 0);
+    const expenses = list.filter(e => ACC_EXPENSE_TYPES.includes(e.type)).reduce((s, e) => s + Number(e.amount || 0), 0);
     return { revenue, expenses, net: revenue - expenses };
   }
 
@@ -441,7 +490,7 @@ function renderAccGeneralVatTab(el) {
   const revenueEntries = projEntries.filter(e => e.type === "إيراد مشروع" || e.type === "فاتورة ضريبية")
     .slice().sort((a, b) => (a.date > b.date ? 1 : -1));
   const purchaseEntries = [
-    ...projEntries.filter(e => ["دفعة مشتريات", "مصروف مواد", "مصروف عمال", "مصروف نثرية"].includes(e.type)),
+    ...projEntries.filter(e => ACC_EXPENSE_TYPES.includes(e.type)),
     ...genEntries,
   ].slice().sort((a, b) => (a.date > b.date ? 1 : -1));
 
@@ -1640,9 +1689,9 @@ function renderAccVat(el) {
   const outputSales = projEntries.filter(e => e.type === "إيراد مشروع" || e.type === "فاتورة ضريبية").reduce((s, e) => s + Number(e.amountBeforeTax ?? e.amount), 0);
   const outputVat = projEntries.filter(e => e.type === "إيراد مشروع" || e.type === "فاتورة ضريبية").reduce((s, e) => s + Number(e.vatAmount || 0), 0);
 
-  const inputPurchases = projEntries.filter(e => ["دفعة مشتريات", "مصروف مواد", "مصروف عمال", "مصروف نثرية"].includes(e.type)).reduce((s, e) => s + Number(e.amount), 0)
+  const inputPurchases = projEntries.filter(e => ACC_EXPENSE_TYPES.includes(e.type)).reduce((s, e) => s + Number(e.amount), 0)
     + genEntries.reduce((s, e) => s + Number(e.amount), 0);
-  const inputVat = projEntries.filter(e => ["دفعة مشتريات", "مصروف مواد", "مصروف عمال", "مصروف نثرية"].includes(e.type)).reduce((s, e) => s + Number(e.vatAmount || 0), 0)
+  const inputVat = projEntries.filter(e => ACC_EXPENSE_TYPES.includes(e.type)).reduce((s, e) => s + Number(e.vatAmount || 0), 0)
     + genEntries.reduce((s, e) => s + Number(e.vatAmount || 0), 0);
 
   const net = outputVat - inputVat;

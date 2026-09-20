@@ -423,7 +423,7 @@ function renderProjectDetail(el) {
 
   const accEntries = dbGet("accProjects", []).filter(e => e.projectId === p.id);
   const revenue = accEntries.filter(e => e.type === "إيراد مشروع" || e.type === "فاتورة ضريبية").reduce((s, e) => s + Number(e.amount || 0), 0);
-  const expenses = accEntries.filter(e => ["دفعة مشتريات", "مصروف مواد", "مصروف عمال", "مصروف نثرية"].includes(e.type)).reduce((s, e) => s + Number(e.amount || 0), 0);
+  const expenses = accEntries.filter(e => ACC_EXPENSE_TYPES.includes(e.type)).reduce((s, e) => s + Number(e.amount || 0), 0);
   const paymentsProgress = computeContractPaymentsProgress(contract, revenue);
   const projectCustodies = dbGet("custodies", []).filter(c => c.scopeType === "project" && c.projectId === p.id);
 

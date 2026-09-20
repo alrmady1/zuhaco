@@ -80,12 +80,20 @@ function projectPurchaseInvoices(projectId, excludeExtraId) {
 function purchaseInvoiceLabel(e) {
   return [e.vendorName, e.invoiceRefNumber ? "فاتورة " + e.invoiceRefNumber : "", e.note].filter(Boolean).join(" — ") || e.type;
 }
-function contractorPaidTotal(contractorId, projectId, excludeGeneralId) {
-  return contractorPaymentsOf(contractorId, projectId, excludeGeneralId).reduce((s, e) => s + (Number(e.amount) || 0), 0)
+/* دفعات مقاول الباطن المسجّلة من محاسبة المشاريع (حركة نوعها "دفعة مقاول باطن" — تُحتسب مصروفاً على المشروع ودفعة في حساب المقاول) */
+const PROJECT_CONTRACTOR_PAYMENT_TYPE = "دفعة مقاول باطن";
+function contractorProjectPaymentsOf(contractorId, projectId, excludeId) {
+  return dbGet("accProjects", []).filter(e => e.type === PROJECT_CONTRACTOR_PAYMENT_TYPE && e.contractorId === contractorId
+    && (!projectId || e.projectId === projectId) && e.id !== excludeId);
+}
+function contractorPaidTotal(contractorId, projectId, excludePaymentId) {
+  return contractorPaymentsOf(contractorId, projectId, excludePaymentId).reduce((s, e) => s + (Number(e.amount) || 0), 0)
+    + contractorProjectPaymentsOf(contractorId, projectId, excludePaymentId).reduce((s, e) => s + (Number(e.amount) || 0), 0)
     + contractorPurchasePaymentsOf(contractorId, projectId).reduce((s, p) => s + (Number(p.amount) || 0), 0);
 }
 function contractorHasPayments(contractorId, projectId) {
-  return contractorPaymentsOf(contractorId, projectId).length > 0 || contractorPurchasePaymentsOf(contractorId, projectId).length > 0;
+  return contractorPaymentsOf(contractorId, projectId).length > 0 || contractorProjectPaymentsOf(contractorId, projectId).length > 0
+    || contractorPurchasePaymentsOf(contractorId, projectId).length > 0;
 }
 
 function contractorFigures(contractorId, projectId, excludePaymentId) {
@@ -325,6 +333,7 @@ function accountBodyHtml(c, project, f, canEdit, canPay) {
   const payments = [
     ...contractorPaymentsOf(c.id, project.id).map(e => ({ kind: "cash", id: e.id, date: e.date, amount: e.amount, method: e.paymentMethod, note: e.note })),
     ...contractorPurchasePaymentsOf(c.id, project.id).map(p => ({ kind: "purchase", id: p.id, date: p.date, amount: p.amount, label: p.label, note: p.note, entry: invoicesById[p.entryId] })),
+    ...contractorProjectPaymentsOf(c.id, project.id).map(e => ({ kind: "projectpay", id: e.id, date: e.date, amount: e.amount, method: e.paymentMethod, note: e.note, entry: e })),
   ].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
   const adjustments = (ag.adjustments || []).slice().sort((a, b) => (b.date || "").localeCompare(a.date || ""));
   const extras = (ag.extras || []).slice().sort((a, b) => (b.date || "").localeCompare(a.date || ""));
@@ -458,11 +467,11 @@ function accountBodyHtml(c, project, f, canEdit, canPay) {
             ${payments.map(p => `
               <tr>
                 <td>${fmtDate(p.date)}</td>
-                <td>${p.kind === "purchase" ? `<span class="badge orange">مشتريات</span>` : `<span class="badge green">دفعة مالية</span>`}</td>
+                <td>${p.kind === "purchase" ? `<span class="badge orange">مشتريات</span>` : p.kind === "projectpay" ? `<span class="badge blue">محاسبة المشروع</span>` : `<span class="badge green">دفعة مالية</span>`}</td>
                 <td><strong>${fmtMoney(p.amount)}</strong></td>
                 <td>${p.kind === "purchase"
                   ? `${p.label || "فاتورة مشتريات"}${p.entry && p.entry.attachment ? ` <a href="${p.entry.attachment.url}" target="_blank" rel="noopener" class="badge blue" style="text-decoration:none">${svgIcon("paperclip", 14)} الفاتورة</a>` : ""}`
-                  : (p.method || `<span class="text-muted">-</span>`)}</td>
+                  : `${p.method || `<span class="text-muted">-</span>`}${p.kind === "projectpay" && p.entry && p.entry.attachment ? ` <a href="${p.entry.attachment.url}" target="_blank" rel="noopener" class="badge blue" style="text-decoration:none">${svgIcon("paperclip", 14)} المرفق</a>` : ""}`}</td>
                 <td>${p.note || `<span class="text-muted">-</span>`}</td>
                 <td>${p.kind === "purchase" && canEdit ? `<button class="btn-icon danger" data-rmpurchasepay="${p.id}" title="إلغاء هذه الدفعة (الفاتورة تبقى في المصاريف)">${ICON_DELETE}</button>` : ""}</td>
               </tr>`).join("")}
@@ -470,7 +479,7 @@ function accountBodyHtml(c, project, f, canEdit, canPay) {
           </tbody>
         </table>
       </div>
-      <div class="text-muted" style="font-size:12px;margin-top:8px">الدفعات المالية تُعدَّل أو تُحذف من المحاسبة العامة ← المصاريف الإدارية (تصنيف "دفعة أعمال")، ودفعات المشتريات تُلغى من هنا وتبقى فواتيرها في محاسبة المشروع.</div>` : `<div class="text-muted" style="font-size:13px">لا توجد دفعات مسجلة لهذا المقاول على هذا المشروع.</div>`}
+      <div class="text-muted" style="font-size:12px;margin-top:8px">الدفعات المالية تُعدَّل أو تُحذف من المحاسبة العامة ← المصاريف الإدارية (تصنيف "دفعة أعمال")، ودفعات "محاسبة المشروع" من محاسبة المشاريع (نوع الحركة "دفعة مقاول باطن")، ودفعات المشتريات تُلغى من هنا وتبقى فواتيرها في محاسبة المشروع.</div>` : `<div class="text-muted" style="font-size:13px">لا توجد دفعات مسجلة لهذا المقاول على هذا المشروع.</div>`}
     </div>
   `;
 }
