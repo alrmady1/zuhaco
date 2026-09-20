@@ -1367,6 +1367,7 @@ function openGeneralExpenseModal(el, existingEntry, preset) {
   function renderExtraFields() {
     const catName = catSelect.value;
     ov.querySelector("#g_amount").oninput = null;
+    ["#g_vat", "#g_paymentMethod", "#g_attachment"].forEach(id => { const inp = ov.querySelector(id); const f = inp && inp.closest(".field"); if (f) f.style.display = ""; });
     if (catName === "رواتب") {
       dateLabel.textContent = "تاريخ تسليم الراتب";
       extraBox.innerHTML = `
@@ -1420,6 +1421,11 @@ function openGeneralExpenseModal(el, existingEntry, preset) {
       const contractors = dbGet("contractors", []);
       const pre = isEdit ? existingEntry : (preset || {});
       extraBox.innerHTML = `
+        ${isEdit ? "" : `<div class="field"><label>نوع الدفعة</label>
+          <select id="g_payKind">
+            <option value="cash">دفعة مالية (تحويل / كاش / شبكة)</option>
+            <option value="purchase">مشتريات مسددة من قبلنا (فاتورة مسجلة على المشروع)</option>
+          </select></div>`}
         <div class="grid cols-2">
           <div class="field"><label>المقاول</label>
             <select id="g_contractor">
@@ -1431,6 +1437,7 @@ function openGeneralExpenseModal(el, existingEntry, preset) {
           <div class="field"><label>المشروع</label><select id="g_conProject"></select></div>
         </div>
         <div id="g_conInfo" style="margin-bottom:14px"></div>
+        <div id="g_purchaseBox" style="display:none;margin-bottom:14px"></div>
       `;
       const conSel = extraBox.querySelector("#g_contractor");
       const projSel = extraBox.querySelector("#g_conProject");
@@ -1451,7 +1458,7 @@ function openGeneralExpenseModal(el, existingEntry, preset) {
         infoBox.innerHTML = `
           <div class="card" style="background:#f6f9fd;padding:14px 18px;margin:0">
             <div class="kv-row"><span class="k">نوع الاتفاق</span><span class="v">${AGREEMENT_TYPE_LABELS[f.ag.type]}</span></div>
-            <div class="kv-row"><span class="k">المستحق النهائي (بعد التمتير والخصومات)</span><span class="v">${fmtMoney(f.entitlement)}</span></div>
+            <div class="kv-row"><span class="k">المستحق النهائي (بعد التمتير والخصومات والأعمال الإضافية)</span><span class="v">${fmtMoney(f.entitlement)}</span></div>
             <div class="kv-row"><span class="k">المدفوع سابقاً</span><span class="v">${fmtMoney(f.paid)}</span></div>
             <div class="kv-row"><span class="k">المتبقي قبل هذه الدفعة</span><span class="v">${fmtMoney(f.remaining)}</span></div>
             <div class="kv-row"><span class="k">المتبقي بعد هذه الدفعة</span><span class="v" style="color:${after < 0 ? "var(--danger)" : "var(--success)"}">${fmtMoney(after)}${after < 0 ? " (تجاوز المستحق)" : ""}</span></div>
@@ -1459,8 +1466,32 @@ function openGeneralExpenseModal(el, existingEntry, preset) {
       };
       refreshProjects(pre.projectId);
       refreshInfo();
-      conSel.onchange = () => { refreshProjects(""); refreshInfo(); };
-      projSel.onchange = refreshInfo;
+      const kindSel = extraBox.querySelector("#g_payKind");
+      const purchaseBox = extraBox.querySelector("#g_purchaseBox");
+      const refreshPurchase = () => {
+        const purchase = !!kindSel && kindSel.value === "purchase";
+        ["#g_vat", "#g_paymentMethod", "#g_attachment"].forEach(id => { const inp = ov.querySelector(id); const f = inp && inp.closest(".field"); if (f) f.style.display = purchase ? "none" : ""; });
+        purchaseBox.style.display = purchase ? "block" : "none";
+        if (!purchase) return;
+        if (!projSel.value) { purchaseBox.innerHTML = `<div class="text-muted" style="font-size:12.5px">اختر المقاول والمشروع لعرض فواتير المشتريات المسجلة على المشروع.</div>`; return; }
+        const invs = projectPurchaseInvoices(projSel.value).filter(i => i.available > 0);
+        purchaseBox.innerHTML = invs.length ? `
+          <div class="field" style="margin-bottom:0"><label>فاتورة المشتريات المسجلة على المشروع</label>
+            <select id="g_purchaseEntry">
+              <option value="">— اختر الفاتورة —</option>
+              ${invs.map(i => `<option value="${i.entry.id}">${fmtDate(i.entry.date)} — ${purchaseInvoiceLabel(i.entry)} — المتاح ${fmtMoney(i.available)}</option>`).join("")}
+            </select>
+            <div class="hint">يُحتسب المبلغ كدفعة للمقاول من نفس الفاتورة دون تسجيل مصروف جديد (المشتريات مسجّلة أصلاً في محاسبة المشروع).</div>
+          </div>` : `<div class="text-muted" style="font-size:12.5px">لا توجد فواتير مشتريات متاحة على هذا المشروع — سجّلها من محاسبة المشاريع (نوع الحركة: دفعة مشتريات).</div>`;
+        const entrySel = purchaseBox.querySelector("#g_purchaseEntry");
+        if (entrySel) entrySel.onchange = () => {
+          const inv = invs.find(i => i.entry.id === entrySel.value);
+          if (inv) { amountInput.value = inv.available; refreshInfo(); }
+        };
+      };
+      if (kindSel) kindSel.onchange = refreshPurchase;
+      conSel.onchange = () => { refreshProjects(""); refreshInfo(); refreshPurchase(); };
+      projSel.onchange = () => { refreshInfo(); refreshPurchase(); };
       amountInput.oninput = refreshInfo;
     } else if (catName === "سلفية") {
       dateLabel.textContent = "تاريخ السلفية";
@@ -1548,6 +1579,17 @@ function openGeneralExpenseModal(el, existingEntry, preset) {
       const proj = dbGet("projects", []).find(x => x.id === projId);
       if (!con) { toast("يرجى اختيار المقاول"); return; }
       if (!projId || !findContractorAgreement(conId, projId)) { toast("يرجى اختيار مشروع للمقاول عليه اتفاق مسجّل"); return; }
+      const kindEl = ov.querySelector("#g_payKind");
+      if (kindEl && kindEl.value === "purchase") {
+        const inv = projectPurchaseInvoices(projId).find(i => i.entry.id === (ov.querySelector("#g_purchaseEntry") || {}).value);
+        if (!inv) { toast("يرجى اختيار فاتورة المشتريات"); return; }
+        if (amount > inv.available + 0.005) { toast("المبلغ أكبر من المتاح على الفاتورة (" + fmtMoney(inv.available) + ")"); return; }
+        createContractorPurchasePayments(con, proj || { id: projId, name: "" }, [{ entry: inv.entry, amount }], ov.querySelector("#g_date").value || todayISO(), ov.querySelector("#g_note").value.trim());
+        toast("تم احتساب الفاتورة كدفعة للمقاول");
+        closeModal();
+        if (preset && preset.onSaved) preset.onSaved(); else renderGeneralExpensesTab(el);
+        return;
+      }
       entry.contractorId = con.id;
       entry.contractorName = con.name;
       entry.projectId = projId;
