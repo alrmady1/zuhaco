@@ -122,7 +122,8 @@ function todayISO() {
 
 function fmtMoney(n) {
   n = Number(n) || 0;
-  return n.toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " ر.س";
+  const hasHalalas = Math.round(n * 100) % 100 !== 0;
+  return n.toLocaleString("ar-SA", { minimumFractionDigits: hasHalalas ? 2 : 0, maximumFractionDigits: 2 }) + " ر.س";
 }
 
 function fmtDate(d) {

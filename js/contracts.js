@@ -9,7 +9,8 @@ let DRAFT_CONTRACT = null;
 // تنسيق الأرقام في صفحة العقود بالأرقام الإنجليزية (لاتينية) بدل الأرقام العربية
 function fmtMoneyEN(n) {
   n = Number(n) || 0;
-  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " ر.س";
+  const hasHalalas = Math.round(n * 100) % 100 !== 0;
+  return n.toLocaleString("en-US", { minimumFractionDigits: hasHalalas ? 2 : 0, maximumFractionDigits: 2 }) + " ر.س";
 }
 
 const CONTRACT_TYPES = [
