@@ -1490,9 +1490,151 @@ function openExtraWorkModal(c, project, ag, existing, onSaved) {
 /* =========================================================
    كشف حساب المقاول (قابل للطباعة): دفتر حركة بالرصيد الجاري لكل مشروع أو لكل المشاريع
    ========================================================= */
-let CONTRACTOR_STMT = { projectId: "all", from: "", to: "" };
+let CONTRACTOR_STMT = { projectId: "all", from: "", to: "", lang: "ar" };
 
-function contractorLedger(c, projectId) {
+/* ---------- ترجمة كشف الحساب (عربي افتراضي، إنجليزي، أردو، بنغالي) — للطباعة فقط؛ الأسماء والملاحظات الحرة تبقى كما أُدخلت ---------- */
+const STMT_LANGS = [
+  { key: "ar", label: "العربية (افتراضي)", dir: "rtl" },
+  { key: "en", label: "English", dir: "ltr" },
+  { key: "ur", label: "اردو", dir: "rtl" },
+  { key: "bn", label: "বাংলা", dir: "ltr" },
+];
+const STMT_I18N = {
+  ar: {
+    breadcrumbContractors: "مقاولو الباطن", breadcrumbStatement: "كشف حساب",
+    pageTitle: "كشف حساب المقاول", pageSubtitle: "اختر المشروع والفترة واللغة ثم اطبع الكشف",
+    back: "رجوع", print: "طباعة الكشف",
+    filterProject: "المشروع", allProjects: "كل المشاريع", fromDate: "من تاريخ (اختياري)", toDate: "إلى تاريخ (اختياري)", language: "لغة الكشف",
+    statementTitle: "كشف حساب مقاول باطن", issueDate: "تاريخ الإصدار:",
+    contractor: "المقاول", tradeSpec: "العمل / التخصص", mobile: "الجوال", project: "المشروع", agreementType: "نوع الاتفاق", period: "الفترة",
+    periodSince: "منذ بداية التعامل حتى تاريخه", periodFrom: "من", periodTo: "إلى",
+    allProjectsCount: (n) => `كل المشاريع (${n})`,
+    colDate: "التاريخ", colDesc: "البيان", colDue: "المستحق", colPaidDeduct: "المدفوع / الخصم", colBalance: "الرصيد المتبقي له",
+    openingBalance: (d) => `رصيد سابق (قبل ${d})`, noTransactions: "لا توجد حركات في الفترة المحددة", total: "الإجمالي",
+    projectLabel: (n) => `المشروع: ${n}`,
+    totalDue: "إجمالي المستحق", totalPaidDeduct: "إجمالي المدفوع والخصومات", remainingBalance: "الرصيد المتبقي للمقاول",
+    remainingBalanceProject: "الرصيد المتبقي للمقاول على المشروع", noAgreements: "لا توجد اتفاقات لهذا المقاول",
+    itemsTitle: "بنود الاتفاق حسب جدول الكميات", colNum: "#", colItem: "البند", colUnit: "الوحدة",
+    colAgreedQty: "الكمية المتفق عليها", colUnitPrice: "سعر الوحدة", colFinalQty: "الكمية النهائية", colTotal: "الإجمالي",
+    accountantSign: "المحاسب:", signDate: "التوقيع والتاريخ", contractorSign: "مقاول الباطن (اطلعتُ ووافقتُ على الرصيد):",
+    logo: "الشعار", taxNumber: "— الرقم الضريبي:", crNumber: "س.ت:",
+    agreementValue: (type) => `قيمة الاتفاق (${type})`, finalMeasureDiff: "فرق التمتير النهائي",
+    extraWork: "عمل إضافي", invoice: "فاتورة", workPayment: "دفعة أعمال",
+    projectAccountingPayment: "دفعة من محاسبة المشروع", settledPurchase: "مشتريات مسددة",
+  },
+  en: {
+    breadcrumbContractors: "Subcontractors", breadcrumbStatement: "Account Statement",
+    pageTitle: "Contractor Account Statement", pageSubtitle: "Choose the project, period and language, then print",
+    back: "Back", print: "Print Statement",
+    filterProject: "Project", allProjects: "All Projects", fromDate: "From date (optional)", toDate: "To date (optional)", language: "Statement Language",
+    statementTitle: "Subcontractor Account Statement", issueDate: "Issue date:",
+    contractor: "Contractor", tradeSpec: "Trade / Specialty", mobile: "Mobile", project: "Project", agreementType: "Agreement Type", period: "Period",
+    periodSince: "Since the start of dealings to date", periodFrom: "From", periodTo: "To",
+    allProjectsCount: (n) => `All projects (${n})`,
+    colDate: "Date", colDesc: "Description", colDue: "Due", colPaidDeduct: "Paid / Deducted", colBalance: "Remaining Balance",
+    openingBalance: (d) => `Opening balance (before ${d})`, noTransactions: "No transactions in the selected period", total: "Total",
+    projectLabel: (n) => `Project: ${n}`,
+    totalDue: "Total Due", totalPaidDeduct: "Total Paid & Deductions", remainingBalance: "Contractor's Remaining Balance",
+    remainingBalanceProject: "Contractor's remaining balance on the project", noAgreements: "This contractor has no agreements",
+    itemsTitle: "Agreement Items (per Bill of Quantities)", colNum: "#", colItem: "Item", colUnit: "Unit",
+    colAgreedQty: "Agreed Quantity", colUnitPrice: "Unit Price", colFinalQty: "Final Quantity", colTotal: "Total",
+    accountantSign: "Accountant:", signDate: "Signature & Date", contractorSign: "Subcontractor (reviewed and approved the balance):",
+    logo: "Logo", taxNumber: "— Tax No:", crNumber: "CR:",
+    agreementValue: (type) => `Agreement value (${type})`, finalMeasureDiff: "Final measurement difference",
+    extraWork: "Extra work", invoice: "invoice", workPayment: "Work payment",
+    projectAccountingPayment: "Payment via project accounting", settledPurchase: "Settled purchase",
+  },
+  ur: {
+    breadcrumbContractors: "ذیلی ٹھیکیدار", breadcrumbStatement: "کھاتہ اسٹیٹمنٹ",
+    pageTitle: "ٹھیکیدار کھاتہ اسٹیٹمنٹ", pageSubtitle: "منصوبہ، مدت اور زبان منتخب کریں پھر پرنٹ کریں",
+    back: "واپس", print: "اسٹیٹمنٹ پرنٹ کریں",
+    filterProject: "منصوبہ", allProjects: "تمام منصوبے", fromDate: "تاریخ سے (اختیاری)", toDate: "تاریخ تک (اختیاری)", language: "اسٹیٹمنٹ کی زبان",
+    statementTitle: "ذیلی ٹھیکیدار کھاتہ اسٹیٹمنٹ", issueDate: "اجراء کی تاریخ:",
+    contractor: "ٹھیکیدار", tradeSpec: "پیشہ / مہارت", mobile: "موبائل", project: "منصوبہ", agreementType: "معاہدے کی قسم", period: "مدت",
+    periodSince: "تعامل کے آغاز سے تاحال", periodFrom: "سے", periodTo: "تک",
+    allProjectsCount: (n) => `تمام منصوبے (${n})`,
+    colDate: "تاریخ", colDesc: "تفصیل", colDue: "واجب الادا", colPaidDeduct: "ادا شدہ / کٹوتی", colBalance: "باقی رقم",
+    openingBalance: (d) => `سابقہ بیلنس (${d} سے پہلے)`, noTransactions: "منتخب مدت میں کوئی لین دین نہیں", total: "مجموعہ",
+    projectLabel: (n) => `منصوبہ: ${n}`,
+    totalDue: "کل واجب الادا", totalPaidDeduct: "کل ادائیگی اور کٹوتیاں", remainingBalance: "ٹھیکیدار کا باقی بیلنس",
+    remainingBalanceProject: "منصوبے پر ٹھیکیدار کا باقی بیلنس", noAgreements: "اس ٹھیکیدار کا کوئی معاہدہ نہیں",
+    itemsTitle: "معاہدے کی مدات (مقدار کے جدول کے مطابق)", colNum: "#", colItem: "مد", colUnit: "اکائی",
+    colAgreedQty: "طے شدہ مقدار", colUnitPrice: "فی یونٹ قیمت", colFinalQty: "حتمی مقدار", colTotal: "کل",
+    accountantSign: "اکاؤنٹنٹ:", signDate: "دستخط اور تاریخ", contractorSign: "ذیلی ٹھیکیدار (بیلنس ملاحظہ اور منظور کیا):",
+    logo: "لوگو", taxNumber: "— ٹیکس نمبر:", crNumber: "سی آر:",
+    agreementValue: (type) => `معاہدے کی قیمت (${type})`, finalMeasureDiff: "حتمی پیمائش کا فرق",
+    extraWork: "اضافی کام", invoice: "انوائس", workPayment: "کام کی ادائیگی",
+    projectAccountingPayment: "منصوبے کے حسابات سے ادائیگی", settledPurchase: "ادا شدہ خریداری",
+  },
+  bn: {
+    breadcrumbContractors: "উপ-ঠিকাদার", breadcrumbStatement: "হিসাব বিবরণী",
+    pageTitle: "ঠিকাদার হিসাব বিবরণী", pageSubtitle: "প্রকল্প, সময়কাল ও ভাষা নির্বাচন করে প্রিন্ট করুন",
+    back: "ফিরে যান", print: "বিবরণী প্রিন্ট করুন",
+    filterProject: "প্রকল্প", allProjects: "সকল প্রকল্প", fromDate: "তারিখ থেকে (ঐচ্ছিক)", toDate: "তারিখ পর্যন্ত (ঐচ্ছিক)", language: "বিবরণীর ভাষা",
+    statementTitle: "উপ-ঠিকাদার হিসাব বিবরণী", issueDate: "প্রকাশের তারিখ:",
+    contractor: "ঠিকাদার", tradeSpec: "পেশা / বিশেষত্ব", mobile: "মোবাইল", project: "প্রকল্প", agreementType: "চুক্তির ধরন", period: "সময়কাল",
+    periodSince: "লেনদেন শুরু থেকে আজ পর্যন্ত", periodFrom: "থেকে", periodTo: "পর্যন্ত",
+    allProjectsCount: (n) => `সকল প্রকল্প (${n})`,
+    colDate: "তারিখ", colDesc: "বিবরণ", colDue: "পাওনা", colPaidDeduct: "পরিশোধিত / কর্তন", colBalance: "অবশিষ্ট ব্যালেন্স",
+    openingBalance: (d) => `পূর্ববর্তী ব্যালেন্স (${d} এর আগে)`, noTransactions: "নির্বাচিত সময়কালে কোনো লেনদেন নেই", total: "মোট",
+    projectLabel: (n) => `প্রকল্প: ${n}`,
+    totalDue: "মোট পাওনা", totalPaidDeduct: "মোট পরিশোধ ও কর্তন", remainingBalance: "ঠিকাদারের অবশিষ্ট ব্যালেন্স",
+    remainingBalanceProject: "প্রকল্পে ঠিকাদারের অবশিষ্ট ব্যালেন্স", noAgreements: "এই ঠিকাদারের কোনো চুক্তি নেই",
+    itemsTitle: "পরিমাণ তালিকা অনুযায়ী চুক্তির আইটেম", colNum: "#", colItem: "আইটেম", colUnit: "একক",
+    colAgreedQty: "সম্মত পরিমাণ", colUnitPrice: "একক মূল্য", colFinalQty: "চূড়ান্ত পরিমাণ", colTotal: "মোট",
+    accountantSign: "হিসাবরক্ষক:", signDate: "স্বাক্ষর ও তারিখ", contractorSign: "উপ-ঠিকাদার (ব্যালেন্স দেখেছি ও অনুমোদন করেছি):",
+    logo: "লোগো", taxNumber: "— ট্যাক্স নম্বর:", crNumber: "সিআর:",
+    agreementValue: (type) => `চুক্তির মূল্য (${type})`, finalMeasureDiff: "চূড়ান্ত পরিমাপের পার্থক্য",
+    extraWork: "অতিরিক্ত কাজ", invoice: "চালান", workPayment: "কাজের পেমেন্ট",
+    projectAccountingPayment: "প্রকল্প হিসাব থেকে পেমেন্ট", settledPurchase: "পরিশোধিত ক্রয়",
+  },
+};
+const STMT_ADJ_I18N = {
+  ar: { delay: "خصم تأخير", qty: "تغيير بالكميات (حسب التمتير النهائي)", deduction: "خصم آخر", addition: "إضافة / زيادة" },
+  en: { delay: "Delay deduction", qty: "Quantity change (per final measurement)", deduction: "Other deduction", addition: "Addition / increase" },
+  ur: { delay: "تاخیر کٹوتی", qty: "مقدار میں تبدیلی (حتمی پیمائش کے مطابق)", deduction: "دیگر کٹوتی", addition: "اضافہ / زیادتی" },
+  bn: { delay: "বিলম্ব কর্তন", qty: "পরিমাণ পরিবর্তন (চূড়ান্ত পরিমাপ অনুযায়ী)", deduction: "অন্যান্য কর্তন", addition: "সংযোজন / বৃদ্ধি" },
+};
+const STMT_AGTYPE_I18N = {
+  ar: { unit: "بالمتر", lumpsum: "مقطوعية" }, en: { unit: "Unit rate", lumpsum: "Lump sum" },
+  ur: { unit: "میٹر کے حساب سے", lumpsum: "ٹھیکہ (مقطوعیت)" }, bn: { unit: "মিটার অনুযায়ী", lumpsum: "লাম্পসাম (একমুঠো)" },
+};
+const STMT_PAYMETHOD_I18N = {
+  en: { "تحويل بنكي": "Bank transfer", "كاش": "Cash", "شبكة": "Card (POS)", "سداد حكومي": "Government payment" },
+  ur: { "تحويل بنكي": "بینک ٹرانسفر", "كاش": "نقد", "شبكة": "کارڈ (پی او ایس)", "سداد حكومي": "سرکاری ادائیگی" },
+  bn: { "تحويل بنكي": "ব্যাংক ট্রান্সফার", "كاش": "নগদ", "شبكة": "কার্ড (পিওএস)", "سداد حكومي": "সরকারি পেমেন্ট" },
+};
+function stmtT(lang, key, ...args) {
+  const entry = (STMT_I18N[lang] || STMT_I18N.ar)[key];
+  return typeof entry === "function" ? entry(...args) : entry;
+}
+function stmtAdjLabel(lang, kind, fallback) { return (STMT_ADJ_I18N[lang] || {})[kind] || fallback || kind; }
+function stmtAgreementType(lang, type) { return (STMT_AGTYPE_I18N[lang] || STMT_AGTYPE_I18N.ar)[type] || AGREEMENT_TYPE_LABELS[type] || type; }
+function stmtPayMethod(lang, method) { return (STMT_PAYMETHOD_I18N[lang] || {})[method] || method; }
+function stmtMoney(lang, n) {
+  if (lang === "ar" || !lang) return fmtMoney(n);
+  n = Number(n) || 0;
+  const hasHalalas = Math.round(n * 100) % 100 !== 0;
+  return n.toLocaleString("en-US", { minimumFractionDigits: hasHalalas ? 2 : 0, maximumFractionDigits: 2 }) + " SAR";
+}
+/* fmtDate العادية تُدرج علامات اتجاه عربية (RLM) بين أجزاء التاريخ فتظهر مقلوبة داخل حاوية LTR — نسخة بأرقام لاتينية بلا علامات اتجاه للغات غير العربية */
+function stmtDate(lang, d) {
+  if (lang === "ar" || !lang) return fmtDate(d);
+  if (!d) return "-";
+  try {
+    let date;
+    if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      const [y, m, day] = d.split("-").map(Number);
+      date = new Date(y, m - 1, day);
+    } else {
+      date = new Date(d);
+    }
+    return date.toLocaleDateString("en-GB", { year: "numeric", month: "2-digit", day: "2-digit" });
+  } catch (e) { return d; }
+}
+
+function contractorLedger(c, projectId, lang) {
+  lang = lang || "ar";
   const ag = findContractorAgreement(c.id, projectId);
   if (!ag) return null;
   const t = contractorAgreementTotals(ag);
@@ -1500,13 +1642,13 @@ function contractorLedger(c, projectId) {
   const rows = [];
   const add = (date, desc, credit, debit) => rows.push({ date: date || "", desc, credit: credit || 0, debit: debit || 0 });
 
-  add(baseDate, `قيمة الاتفاق (${AGREEMENT_TYPE_LABELS[ag.type] || ""})`, t.agreed, 0);
-  if (Math.abs(t.measuredDiff) > 0.005) add(baseDate, "فرق التمتير النهائي", t.measuredDiff > 0 ? t.measuredDiff : 0, t.measuredDiff < 0 ? -t.measuredDiff : 0);
-  (ag.extras || []).forEach(x => add(x.date, `عمل إضافي: ${x.title || ""}${x.vendor ? " — " + x.vendor : ""}${x.invoiceRef ? " (فاتورة " + x.invoiceRef + ")" : ""}`, contractorExtraAmount(x), 0));
-  (ag.adjustments || []).forEach(a => add(a.date, `${a.label}${a.note ? " — " + a.note : ""}`, a.amount > 0 ? a.amount : 0, a.amount < 0 ? -a.amount : 0));
-  contractorPaymentsOf(c.id, projectId).forEach(e => add(e.date, `دفعة أعمال${e.paymentMethod ? " — " + e.paymentMethod : ""}${e.note ? " — " + e.note : ""}`, 0, Number(e.amount) || 0));
-  contractorProjectPaymentsOf(c.id, projectId).forEach(e => add(e.date, `دفعة من محاسبة المشروع${e.paymentMethod ? " — " + e.paymentMethod : ""}${e.note ? " — " + e.note : ""}`, 0, Number(e.amount) || 0));
-  contractorPurchasePaymentsOf(c.id, projectId).forEach(p => add(p.date, `مشتريات مسددة: ${p.label || "فاتورة"}${p.note ? " — " + p.note : ""}`, 0, Number(p.amount) || 0));
+  add(baseDate, stmtT(lang, "agreementValue", stmtAgreementType(lang, ag.type)), t.agreed, 0);
+  if (Math.abs(t.measuredDiff) > 0.005) add(baseDate, stmtT(lang, "finalMeasureDiff"), t.measuredDiff > 0 ? t.measuredDiff : 0, t.measuredDiff < 0 ? -t.measuredDiff : 0);
+  (ag.extras || []).forEach(x => add(x.date, `${stmtT(lang, "extraWork")}: ${x.title || ""}${x.vendor ? " — " + x.vendor : ""}${x.invoiceRef ? " (" + stmtT(lang, "invoice") + " " + x.invoiceRef + ")" : ""}`, contractorExtraAmount(x), 0));
+  (ag.adjustments || []).forEach(a => add(a.date, `${stmtAdjLabel(lang, a.kind, a.label)}${a.note ? " — " + a.note : ""}`, a.amount > 0 ? a.amount : 0, a.amount < 0 ? -a.amount : 0));
+  contractorPaymentsOf(c.id, projectId).forEach(e => add(e.date, `${stmtT(lang, "workPayment")}${e.paymentMethod ? " — " + stmtPayMethod(lang, e.paymentMethod) : ""}${e.note ? " — " + e.note : ""}`, 0, Number(e.amount) || 0));
+  contractorProjectPaymentsOf(c.id, projectId).forEach(e => add(e.date, `${stmtT(lang, "projectAccountingPayment")}${e.paymentMethod ? " — " + stmtPayMethod(lang, e.paymentMethod) : ""}${e.note ? " — " + e.note : ""}`, 0, Number(e.amount) || 0));
+  contractorPurchasePaymentsOf(c.id, projectId).forEach(p => add(p.date, `${stmtT(lang, "settledPurchase")}: ${p.label || ""}${p.note ? " — " + p.note : ""}`, 0, Number(p.amount) || 0));
 
   rows.forEach((r, i) => { r._i = i; });
   rows.sort((a, b) => (a.date || "").localeCompare(b.date || "") || a._i - b._i);
@@ -1514,11 +1656,12 @@ function contractorLedger(c, projectId) {
 }
 
 function contractorStatement(c, filter) {
+  const lang = filter.lang || "ar";
   const projects = dbGet("projects", []);
   const sections = contractorAgreementsOf(c.id)
     .filter(a => filter.projectId === "all" || a.projectId === filter.projectId)
     .map(a => {
-      const led = contractorLedger(c, a.projectId);
+      const led = contractorLedger(c, a.projectId, lang);
       const before = led.rows.filter(r => filter.from && (r.date || "") < filter.from);
       const shown = led.rows.filter(r => (!filter.from || (r.date || "") >= filter.from) && (!filter.to || (r.date || "") <= filter.to));
       const opening = before.reduce((s, r) => s + r.credit - r.debit, 0);
@@ -1536,6 +1679,9 @@ function contractorStatement(c, filter) {
 function renderContractorStatement(el) {
   const c = getContractors().find(x => x.id === CONTRACTOR_VIEW_ID);
   if (!c) { CONTRACTORS_VIEW = "list"; renderContractors(el); return; }
+  const lang = CONTRACTOR_STMT.lang || "ar";
+  const dir = (STMT_LANGS.find(l => l.key === lang) || STMT_LANGS[0]).dir;
+  const T = (key, ...args) => stmtT(lang, key, ...args);
   const company = getCompanyProfile();
   const agreements = contractorAgreementsOf(c.id);
   const projects = dbGet("projects", []);
@@ -1543,111 +1689,114 @@ function renderContractorStatement(el) {
   const st = contractorStatement(c, CONTRACTOR_STMT);
   const single = CONTRACTOR_STMT.projectId !== "all" && st.sections.length === 1 ? st.sections[0] : null;
   const periodLabel = CONTRACTOR_STMT.from || CONTRACTOR_STMT.to
-    ? `${CONTRACTOR_STMT.from ? "من " + fmtDate(CONTRACTOR_STMT.from) : ""} ${CONTRACTOR_STMT.to ? "إلى " + fmtDate(CONTRACTOR_STMT.to) : ""}`.trim()
-    : "منذ بداية التعامل حتى تاريخه";
+    ? `${CONTRACTOR_STMT.from ? T("periodFrom") + " " + stmtDate(lang, CONTRACTOR_STMT.from) : ""} ${CONTRACTOR_STMT.to ? T("periodTo") + " " + stmtDate(lang, CONTRACTOR_STMT.to) : ""}`.trim()
+    : T("periodSince");
 
   const ledgerTable = (sec) => `
     <div class="table-wrap">
       <table class="data-table">
-        <thead><tr><th style="width:110px">التاريخ</th><th>البيان</th><th>المستحق</th><th>المدفوع / الخصم</th><th>الرصيد المتبقي له</th></tr></thead>
+        <thead><tr><th style="width:110px">${T("colDate")}</th><th>${T("colDesc")}</th><th>${T("colDue")}</th><th>${T("colPaidDeduct")}</th><th>${T("colBalance")}</th></tr></thead>
         <tbody>
-          ${(CONTRACTOR_STMT.from ? `<tr style="background:#f6f9fd"><td>-</td><td><strong>رصيد سابق (قبل ${fmtDate(CONTRACTOR_STMT.from)})</strong></td><td></td><td></td><td><strong>${fmtMoney(sec.opening)}</strong></td></tr>` : "")}
+          ${(CONTRACTOR_STMT.from ? `<tr style="background:#f6f9fd"><td>-</td><td><strong>${T("openingBalance", stmtDate(lang, CONTRACTOR_STMT.from))}</strong></td><td></td><td></td><td><strong>${stmtMoney(lang, sec.opening)}</strong></td></tr>` : "")}
           ${sec.rows.length ? sec.rows.map(r => `
             <tr>
-              <td>${r.date ? fmtDate(r.date) : "-"}</td>
+              <td>${r.date ? stmtDate(lang, r.date) : "-"}</td>
               <td>${r.desc}</td>
-              <td>${r.credit ? fmtMoney(r.credit) : ""}</td>
-              <td>${r.debit ? fmtMoney(r.debit) : ""}</td>
-              <td><strong>${fmtMoney(r.balance)}</strong></td>
-            </tr>`).join("") : `<tr><td colspan="5" class="text-muted" style="text-align:center">لا توجد حركات في الفترة المحددة</td></tr>`}
+              <td>${r.credit ? stmtMoney(lang, r.credit) : ""}</td>
+              <td>${r.debit ? stmtMoney(lang, r.debit) : ""}</td>
+              <td><strong>${stmtMoney(lang, r.balance)}</strong></td>
+            </tr>`).join("") : `<tr><td colspan="5" class="text-muted" style="text-align:center">${T("noTransactions")}</td></tr>`}
           <tr style="background:#f6f9fd;font-weight:800">
-            <td colspan="2">الإجمالي</td><td>${fmtMoney(sec.credit)}</td><td>${fmtMoney(sec.debit)}</td><td>${fmtMoney(sec.closing)}</td>
+            <td colspan="2">${T("total")}</td><td>${stmtMoney(lang, sec.credit)}</td><td>${stmtMoney(lang, sec.debit)}</td><td>${stmtMoney(lang, sec.closing)}</td>
           </tr>
         </tbody>
       </table>
     </div>`;
 
   const itemsTable = (ag) => (ag.items || []).length ? `
-    <h3 style="margin-top:18px">بنود الاتفاق حسب جدول الكميات</h3>
+    <h3 style="margin-top:18px">${T("itemsTitle")}</h3>
     <div class="table-wrap">
       <table class="data-table">
-        <thead><tr><th>#</th><th>البند</th><th>الوحدة</th><th>الكمية المتفق عليها</th>${ag.type === "unit" ? "<th>سعر الوحدة</th><th>الكمية النهائية</th><th>الإجمالي</th>" : ""}</tr></thead>
+        <thead><tr><th>${T("colNum")}</th><th>${T("colItem")}</th><th>${T("colUnit")}</th><th>${T("colAgreedQty")}</th>${ag.type === "unit" ? `<th>${T("colUnitPrice")}</th><th>${T("colFinalQty")}</th><th>${T("colTotal")}</th>` : ""}</tr></thead>
         <tbody>
           ${ag.items.map((it, i) => `<tr><td>${i + 1}</td><td>${it.name}</td><td>${it.unit || "-"}</td><td>${Number(it.qty) || 0}</td>
-            ${ag.type === "unit" ? `<td>${fmtMoney(it.unitPrice)}</td><td>${contractorItemFinalQty(it)}</td><td>${fmtMoney(contractorItemFinalQty(it) * (Number(it.unitPrice) || 0))}</td>` : ""}</tr>`).join("")}
+            ${ag.type === "unit" ? `<td>${stmtMoney(lang, it.unitPrice)}</td><td>${contractorItemFinalQty(it)}</td><td>${stmtMoney(lang, contractorItemFinalQty(it) * (Number(it.unitPrice) || 0))}</td>` : ""}</tr>`).join("")}
         </tbody>
       </table>
     </div>` : "";
 
   el.innerHTML = `
-    <div class="breadcrumb no-print"><a id="bcCons">مقاولو الباطن</a>${svgIcon("chevron-left")}<a id="bcCon">${c.name}</a>${svgIcon("chevron-left")}<span>كشف حساب</span></div>
+    <div class="breadcrumb no-print"><a id="bcCons">${T("breadcrumbContractors")}</a>${svgIcon("chevron-left")}<a id="bcCon">${c.name}</a>${svgIcon("chevron-left")}<span>${T("breadcrumbStatement")}</span></div>
     <div class="section-title-row no-print">
-      <div><h2>كشف حساب المقاول</h2><p>اختر المشروع والفترة ثم اطبع الكشف</p></div>
+      <div><h2>${T("pageTitle")}</h2><p>${T("pageSubtitle")}</p></div>
       <div class="flex gap">
-        <button class="btn" id="stBack">رجوع</button>
-        <button class="btn primary" id="stPrint">${svgIcon("printer")} طباعة الكشف</button>
+        <button class="btn" id="stBack">${T("back")}</button>
+        <button class="btn primary" id="stPrint">${svgIcon("printer")} ${T("print")}</button>
       </div>
     </div>
 
     <div class="card no-print">
-      <div class="grid cols-3">
-        <div class="field" style="margin-bottom:0"><label>المشروع</label>
+      <div class="grid cols-4">
+        <div class="field" style="margin-bottom:0"><label>${T("filterProject")}</label>
           <select id="st_project">
-            <option value="all" ${CONTRACTOR_STMT.projectId === "all" ? "selected" : ""}>كل المشاريع</option>
-            ${agreements.map(a => `<option value="${a.projectId}" ${CONTRACTOR_STMT.projectId === a.projectId ? "selected" : ""}>${(projects.find(p => p.id === a.projectId) || {}).name || a.projectName || "مشروع محذوف"}</option>`).join("")}
+            <option value="all" ${CONTRACTOR_STMT.projectId === "all" ? "selected" : ""}>${T("allProjects")}</option>
+            ${agreements.map(a => `<option value="${a.projectId}" ${CONTRACTOR_STMT.projectId === a.projectId ? "selected" : ""}>${(projects.find(p => p.id === a.projectId) || {}).name || a.projectName || "-"}</option>`).join("")}
           </select>
         </div>
-        <div class="field" style="margin-bottom:0"><label>من تاريخ (اختياري)</label><input type="date" id="st_from" value="${CONTRACTOR_STMT.from}"></div>
-        <div class="field" style="margin-bottom:0"><label>إلى تاريخ (اختياري)</label><input type="date" id="st_to" value="${CONTRACTOR_STMT.to}"></div>
+        <div class="field" style="margin-bottom:0"><label>${T("fromDate")}</label><input type="date" id="st_from" value="${CONTRACTOR_STMT.from}"></div>
+        <div class="field" style="margin-bottom:0"><label>${T("toDate")}</label><input type="date" id="st_to" value="${CONTRACTOR_STMT.to}"></div>
+        <div class="field" style="margin-bottom:0"><label>${T("language")}</label>
+          <select id="st_lang">${STMT_LANGS.map(l => `<option value="${l.key}" ${lang === l.key ? "selected" : ""}>${l.label}</option>`).join("")}</select>
+        </div>
       </div>
     </div>
 
-    <div class="card statement-sheet">
+    <div class="card statement-sheet" dir="${dir}">
       <div class="quote-header-card" style="margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--border)">
-        <div class="quote-logo-box">${company.logo ? `<img src="${company.logo}">` : "الشعار"}</div>
+        <div class="quote-logo-box">${company.logo ? `<img src="${company.logo}">` : T("logo")}</div>
         <div style="flex:1">
-          <h2>${company.name || ""}${company.taxNumber ? ` <span class="tax-inline">— الرقم الضريبي: ${company.taxNumber}</span>` : ""}</h2>
+          <h2>${company.name || ""}${company.taxNumber ? ` <span class="tax-inline">${T("taxNumber")} ${company.taxNumber}</span>` : ""}</h2>
           ${company.address ? `<div class="cline">${company.address}</div>` : ""}
           ${(company.phone || company.email) ? `<div class="cline">${[company.phone, company.email].filter(Boolean).join(" — ")}</div>` : ""}
-          ${company.crNumber ? `<div class="cline">س.ت: ${company.crNumber}</div>` : ""}
+          ${company.crNumber ? `<div class="cline">${T("crNumber")} ${company.crNumber}</div>` : ""}
         </div>
-        <div style="text-align:left">
-          <div style="font-size:20px;font-weight:800">كشف حساب مقاول باطن</div>
-          <div class="text-muted" style="font-size:12.5px">تاريخ الإصدار: ${fmtDate(todayISO())}</div>
+        <div style="text-align:${dir === "rtl" ? "left" : "right"}">
+          <div style="font-size:20px;font-weight:800">${T("statementTitle")}</div>
+          <div class="text-muted" style="font-size:12.5px">${T("issueDate")} ${stmtDate(lang, todayISO())}</div>
         </div>
       </div>
 
       <div class="grid cols-2" style="margin-bottom:14px">
         <div>
-          <div class="kv-row"><span class="k">المقاول</span><span class="v">${c.name}</span></div>
-          <div class="kv-row"><span class="k">العمل / التخصص</span><span class="v">${c.trade || "-"}</span></div>
-          <div class="kv-row"><span class="k">الجوال</span><span class="v">${c.phone || "-"}</span></div>
+          <div class="kv-row"><span class="k">${T("contractor")}</span><span class="v">${c.name}</span></div>
+          <div class="kv-row"><span class="k">${T("tradeSpec")}</span><span class="v">${c.trade || "-"}</span></div>
+          <div class="kv-row"><span class="k">${T("mobile")}</span><span class="v">${c.phone || "-"}</span></div>
         </div>
         <div>
-          <div class="kv-row"><span class="k">المشروع</span><span class="v">${single ? single.project.name : "كل المشاريع (" + st.sections.length + ")"}</span></div>
-          ${single ? `<div class="kv-row"><span class="k">نوع الاتفاق</span><span class="v">${AGREEMENT_TYPE_LABELS[single.ag.type]}</span></div>` : ""}
-          <div class="kv-row"><span class="k">الفترة</span><span class="v">${periodLabel}</span></div>
+          <div class="kv-row"><span class="k">${T("project")}</span><span class="v">${single ? single.project.name : T("allProjectsCount", st.sections.length)}</span></div>
+          ${single ? `<div class="kv-row"><span class="k">${T("agreementType")}</span><span class="v">${stmtAgreementType(lang, single.ag.type)}</span></div>` : ""}
+          <div class="kv-row"><span class="k">${T("period")}</span><span class="v">${periodLabel}</span></div>
         </div>
       </div>
 
       ${st.sections.length ? st.sections.map(sec => `
-        ${single ? "" : `<h3 style="margin-top:20px">المشروع: ${sec.project.name} <span class="badge gray">${AGREEMENT_TYPE_LABELS[sec.ag.type]}</span></h3>`}
+        ${single ? "" : `<h3 style="margin-top:20px">${T("projectLabel", sec.project.name)} <span class="badge gray">${stmtAgreementType(lang, sec.ag.type)}</span></h3>`}
         ${ledgerTable(sec)}
-      `).join("") : `<div class="empty-state">لا توجد اتفاقات لهذا المقاول</div>`}
+      `).join("") : `<div class="empty-state">${T("noAgreements")}</div>`}
 
       ${st.sections.length > 1 ? `
       <div class="grid cols-3" style="margin-top:18px">
-        <div class="stat-card"><div class="label">إجمالي المستحق</div><div class="value">${fmtMoney(st.credit)}</div></div>
-        <div class="stat-card"><div class="label">إجمالي المدفوع والخصومات</div><div class="value success">${fmtMoney(st.debit)}</div></div>
-        <div class="stat-card"><div class="label">الرصيد المتبقي للمقاول</div><div class="value ${st.closing > 0 ? "warning" : "success"}">${fmtMoney(st.closing)}</div></div>
+        <div class="stat-card"><div class="label">${T("totalDue")}</div><div class="value">${stmtMoney(lang, st.credit)}</div></div>
+        <div class="stat-card"><div class="label">${T("totalPaidDeduct")}</div><div class="value success">${stmtMoney(lang, st.debit)}</div></div>
+        <div class="stat-card"><div class="label">${T("remainingBalance")}</div><div class="value ${st.closing > 0 ? "warning" : "success"}">${stmtMoney(lang, st.closing)}</div></div>
       </div>` : (st.sections.length === 1 ? `
-      <div class="grand-total-box"><div>الرصيد المتبقي للمقاول${single ? " على المشروع" : ""}</div><div class="num">${fmtMoney(st.closing)}</div></div>` : "")}
+      <div class="grand-total-box"><div>${single ? T("remainingBalanceProject") : T("remainingBalance")}</div><div class="num">${stmtMoney(lang, st.closing)}</div></div>` : "")}
 
       ${single ? itemsTable(single.ag) : ""}
 
       <div class="grid cols-2" style="margin-top:40px;font-size:13px">
-        <div>المحاسب: ...............................<div class="text-muted" style="font-size:11.5px;margin-top:4px">التوقيع والتاريخ</div></div>
-        <div>مقاول الباطن (اطلعتُ ووافقتُ على الرصيد): ...............................<div class="text-muted" style="font-size:11.5px;margin-top:4px">التوقيع والتاريخ</div></div>
+        <div>${T("accountantSign")} ...............................<div class="text-muted" style="font-size:11.5px;margin-top:4px">${T("signDate")}</div></div>
+        <div>${T("contractorSign")} ...............................<div class="text-muted" style="font-size:11.5px;margin-top:4px">${T("signDate")}</div></div>
       </div>
     </div>
   `;
@@ -1660,11 +1809,12 @@ function renderContractorStatement(el) {
   document.getElementById("st_project").onchange = (e) => { CONTRACTOR_STMT.projectId = e.target.value; renderContractorStatement(el); };
   document.getElementById("st_from").onchange = (e) => { CONTRACTOR_STMT.from = e.target.value; renderContractorStatement(el); };
   document.getElementById("st_to").onchange = (e) => { CONTRACTOR_STMT.to = e.target.value; renderContractorStatement(el); };
+  document.getElementById("st_lang").onchange = (e) => { CONTRACTOR_STMT.lang = e.target.value; renderContractorStatement(el); };
 }
 
 function openContractorStatement(el, contractorId, projectId) {
   CONTRACTOR_VIEW_ID = contractorId;
-  CONTRACTOR_STMT = { projectId: projectId || "all", from: "", to: "" };
+  CONTRACTOR_STMT = { projectId: projectId || "all", from: "", to: "", lang: "ar" };
   CONTRACTORS_VIEW = "statement";
   renderContractors(el);
   window.scrollTo(0, 0);
