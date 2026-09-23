@@ -1384,6 +1384,13 @@ function docStatus(days) {
 function vehicleLabel(v) {
   return (v.brand || v.modelTrim) ? [v.brand, v.modelTrim].filter(Boolean).join(" ") : (v.category || v.type || "مركبة");
 }
+function docAttachmentCell(att) {
+  if (!att) return "-";
+  if ((att.type || "").indexOf("image/") === 0) {
+    return `<a href="${att.url}" target="_blank" rel="noopener" class="veh-doc-thumb" title="${att.name || "عرض المرفق"}"><img src="${att.url}"></a>`;
+  }
+  return `<a href="${att.url}" target="_blank" rel="noopener" class="badge blue" style="text-decoration:none">${svgIcon("paperclip", 14)} عرض المرفق</a>`;
+}
 
 /* تُستدعى عند بدء التشغيل وكل 5 دقائق (app.js) — تنبيه عبر جرس التنبيهات عند الاقتراب من الشهرين أو الانتهاء فعلياً */
 function checkDocumentExpiryNotifications() {
@@ -1479,7 +1486,7 @@ function renderPersonalDatesTab(el) {
       ${docs.length ? `
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>الشخص</th><th>البند</th><th>رقم الهوية/المرجع</th><th>تاريخ الانتهاء</th><th>المتبقي</th><th>التكلفة</th><th>الحالة</th><th>ملاحظات</th><th></th></tr></thead>
+          <thead><tr><th>الشخص</th><th>البند</th><th>رقم الهوية/المرجع</th><th>تاريخ الانتهاء</th><th>المتبقي</th><th>التكلفة</th><th>الحالة</th><th>ملاحظات</th><th>المرفق</th><th></th></tr></thead>
           <tbody>
             ${docs.map(d => {
               const days = docDaysRemaining(d.expiryDate);
@@ -1495,6 +1502,7 @@ function renderPersonalDatesTab(el) {
                 <td>${d.cost ? fmtMoney(d.cost) : "-"}</td>
                 <td><span class="badge ${st.badge}">${st.label}</span></td>
                 <td class="text-muted">${d.notes || "-"}</td>
+                <td>${docAttachmentCell(d.attachment)}</td>
                 <td style="white-space:nowrap"><button class="btn-icon" data-editpdoc="${d.id}" title="تعديل">${ICON_EDIT}</button><button class="btn-icon danger" data-delpdoc="${d.id}" title="حذف">${ICON_DELETE}</button></td>
               </tr>`;
             }).join("")}
@@ -1532,11 +1540,23 @@ function openPersonalDocModal(el, existing, persons) {
       <div class="field"><label>التكلفة (اختياري)</label><input type="number" min="0" step="0.01" id="pd_cost" value="${isEdit ? (existing.cost || "") : ""}"></div>
     </div>
     <div class="field"><label>ملاحظات (اختياري)</label><textarea id="pd_notes">${isEdit ? (existing.notes || "") : ""}</textarea></div>
+    <div class="field"><label>صورة أو ملف المستند (اختياري)</label>
+      <input type="file" id="pd_attachment" accept=".pdf,image/*">
+      <div id="pd_attachmentPreview" class="flex wrap" style="margin-top:8px">${isEdit && existing.attachment ? `<span class="file-chip">${svgIcon("paperclip", 14)} ${existing.attachment.name || "المرفق الحالي"}</span>` : ""}</div>
+    </div>
     <div class="flex gap"><button class="btn primary" id="pd_save">حفظ</button><button class="btn" id="pd_cancel">إلغاء</button></div>
   `;
   const ov = openModalShell(html);
   ov.querySelector("#mClose").onclick = closeModal;
   ov.querySelector("#pd_cancel").onclick = closeModal;
+  let attachment = isEdit ? (existing.attachment || null) : null;
+  ov.querySelector("#pd_attachment").onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) { attachment = null; ov.querySelector("#pd_attachmentPreview").innerHTML = ""; return; }
+    const url = await fileToDataURL(file);
+    attachment = { name: file.name, type: file.type, url };
+    ov.querySelector("#pd_attachmentPreview").innerHTML = `<span class="file-chip">${svgIcon("paperclip", 14)} ${file.name}</span>`;
+  };
   ov.querySelector("#pd_save").onclick = () => {
     const name = ov.querySelector("#pd_name").value.trim();
     const expiryDate = ov.querySelector("#pd_expiry").value;
@@ -1547,6 +1567,7 @@ function openPersonalDocModal(el, existing, persons) {
       category: ov.querySelector("#pd_person").value.trim(), name,
       idNumber: ov.querySelector("#pd_idnum").value.trim(), expiryDate,
       cost: Number(ov.querySelector("#pd_cost").value) || 0, notes: ov.querySelector("#pd_notes").value.trim(),
+      attachment,
     };
     if (isEdit) {
       const idx = list.findIndex(x => x.id === existing.id);
@@ -1592,7 +1613,7 @@ function renderDocumentsTab(el) {
       ${docs.length ? `
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>التصنيف</th><th>البند</th><th>تاريخ الانتهاء</th><th>المتبقي</th><th>التكلفة</th><th>الحالة</th><th>ملاحظات</th><th></th></tr></thead>
+          <thead><tr><th>التصنيف</th><th>البند</th><th>تاريخ الانتهاء</th><th>المتبقي</th><th>التكلفة</th><th>الحالة</th><th>ملاحظات</th><th>المرفق</th><th></th></tr></thead>
           <tbody>
             ${docs.map(d => {
               const days = docDaysRemaining(d.expiryDate);
@@ -1607,6 +1628,7 @@ function renderDocumentsTab(el) {
                 <td>${d.cost ? fmtMoney(d.cost) : "-"}</td>
                 <td><span class="badge ${st.badge}">${st.label}</span></td>
                 <td class="text-muted">${d.notes || "-"}</td>
+                <td>${docAttachmentCell(d.attachment)}</td>
                 <td style="white-space:nowrap">${canEdit ? `<button class="btn-icon" data-editdoc="${d.id}" title="تعديل">${ICON_EDIT}</button><button class="btn-icon danger" data-deldoc="${d.id}" title="حذف">${ICON_DELETE}</button>` : ""}</td>
               </tr>`;
             }).join("")}
@@ -1664,11 +1686,23 @@ function openDocExpiryModal(el, existing, categories) {
       <div class="field"><label>التكلفة (اختياري)</label><input type="number" min="0" step="0.01" id="d_cost" value="${isEdit ? (existing.cost || "") : ""}"></div>
     </div>
     <div class="field"><label>ملاحظات (اختياري)</label><textarea id="d_notes">${isEdit ? (existing.notes || "") : ""}</textarea></div>
+    <div class="field"><label>صورة أو ملف المستند (اختياري)</label>
+      <input type="file" id="d_attachment" accept=".pdf,image/*">
+      <div id="d_attachmentPreview" class="flex wrap" style="margin-top:8px">${isEdit && existing.attachment ? `<span class="file-chip">${svgIcon("paperclip", 14)} ${existing.attachment.name || "المرفق الحالي"}</span>` : ""}</div>
+    </div>
     <div class="flex gap"><button class="btn primary" id="d_save">حفظ</button><button class="btn" id="d_cancel">إلغاء</button></div>
   `;
   const ov = openModalShell(html);
   ov.querySelector("#mClose").onclick = closeModal;
   ov.querySelector("#d_cancel").onclick = closeModal;
+  let attachment = isEdit ? (existing.attachment || null) : null;
+  ov.querySelector("#d_attachment").onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) { attachment = null; ov.querySelector("#d_attachmentPreview").innerHTML = ""; return; }
+    const url = await fileToDataURL(file);
+    attachment = { name: file.name, type: file.type, url };
+    ov.querySelector("#d_attachmentPreview").innerHTML = `<span class="file-chip">${svgIcon("paperclip", 14)} ${file.name}</span>`;
+  };
   const vehicleSelect = ov.querySelector("#d_vehicle");
   if (vehicleSelect) vehicleSelect.onchange = () => {
     const veh = vehicles.find(v => v.id === vehicleSelect.value);
@@ -1696,6 +1730,7 @@ function openDocExpiryModal(el, existing, categories) {
       cost: Number(ov.querySelector("#d_cost").value) || 0, notes: ov.querySelector("#d_notes").value.trim(),
       vehicleId: vehicleSelect ? (vehicleSelect.value || "") : "",
       employeeId: (empSelect && empField && empField.style.display !== "none") ? (empSelect.value || "") : "",
+      attachment,
     };
     if (isEdit) {
       const idx = list.findIndex(x => x.id === existing.id);
