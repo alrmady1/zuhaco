@@ -99,6 +99,18 @@ function initials(name) {
   return (name || "").trim().split(/\s+/).slice(0, 2).map(s => s[0]).join("");
 }
 
+/* ---------- الوضع الليلي/الفاتح (تفضيل خاص بهذا الجهاز، لا يُزامن) ---------- */
+function getDarkMode() {
+  try { return localStorage.getItem(DB_PREFIX + "darkMode") === "1"; } catch (e) { return false; }
+}
+function setDarkMode(on) {
+  try { localStorage.setItem(DB_PREFIX + "darkMode", on ? "1" : "0"); } catch (e) { /* تجاهل */ }
+  document.documentElement.setAttribute("data-theme", on ? "dark" : "light");
+  const btn = document.getElementById("darkModeBtn");
+  if (btn) btn.innerHTML = svgIcon(on ? "sun" : "moon", 18);
+}
+function toggleDarkMode() { setDarkMode(!getDarkMode()); }
+
 /* ---------- تسجيل الدخول ---------- */
 async function renderLogin() {
   document.getElementById("root").innerHTML = `<div class="login-wrap"><div class="login-card login-card-wide"><p class="sub">جارٍ التحميل...</p></div></div>`;
@@ -272,8 +284,15 @@ function renderApp() {
             <h2 id="pageTitle">لوحة التحكم</h2>
           </div>
           <div class="flex gap center">
+            <button class="notif-bell" id="darkModeBtn" type="button" title="الوضع الليلي/الفاتح">${svgIcon(getDarkMode() ? "sun" : "moon", 18)}</button>
             <div class="notif-bell-wrap">
-              <button class="notif-bell" id="notifBellBtn" type="button" title="التنبيهات">
+              <button class="notif-bell" id="quickNotifBellBtn" type="button" title="آخر التنبيهات">
+                ${svgIcon("bell", 18)}
+              </button>
+              <div class="notif-panel" id="quickNotifPanel" style="display:none"></div>
+            </div>
+            <div class="notif-bell-wrap">
+              <button class="notif-bell" id="notifBellBtn" type="button" title="كل التنبيهات">
                 ${svgIcon("bell", 18)}<span class="notif-badge" id="notifBadge" style="display:none"></span>
               </button>
               <div class="notif-panel" id="notifPanel" style="display:none"></div>
@@ -295,16 +314,22 @@ function renderApp() {
     renderLogin();
   };
 
+  document.getElementById("darkModeBtn").onclick = () => toggleDarkMode();
+  document.getElementById("quickNotifBellBtn").onclick = (e) => {
+    e.stopPropagation();
+    toggleQuickNotifPanel();
+  };
   document.getElementById("notifBellBtn").onclick = (e) => {
     e.stopPropagation();
     toggleNotifPanel();
   };
   document.addEventListener("click", (e) => {
-    const wrap = document.querySelector(".notif-bell-wrap");
-    const panel = document.getElementById("notifPanel");
-    if (wrap && panel && panel.style.display !== "none" && !wrap.contains(e.target)) {
-      panel.style.display = "none";
-    }
+    document.querySelectorAll(".notif-bell-wrap").forEach(wrap => {
+      const panel = wrap.querySelector(".notif-panel");
+      if (panel && panel.style.display !== "none" && !wrap.contains(e.target)) {
+        panel.style.display = "none";
+      }
+    });
   });
 
   document.getElementById("hamburgerBtn").onclick = (e) => { e.stopPropagation(); toggleSidebar(); };
@@ -358,9 +383,46 @@ function toggleNotifPanel() {
   const panel = document.getElementById("notifPanel");
   if (!panel) return;
   const isOpen = panel.style.display !== "none";
+  const quickPanel = document.getElementById("quickNotifPanel");
+  if (quickPanel) quickPanel.style.display = "none";
   if (isOpen) { panel.style.display = "none"; return; }
   renderNotifPanelContent();
   panel.style.display = "block";
+}
+
+function toggleQuickNotifPanel() {
+  const panel = document.getElementById("quickNotifPanel");
+  if (!panel) return;
+  const isOpen = panel.style.display !== "none";
+  const fullPanel = document.getElementById("notifPanel");
+  if (fullPanel) fullPanel.style.display = "none";
+  if (isOpen) { panel.style.display = "none"; return; }
+  renderQuickNotifPanelContent();
+  panel.style.display = "block";
+}
+
+function renderQuickNotifPanelContent() {
+  const user = getCurrentUser();
+  const panel = document.getElementById("quickNotifPanel");
+  const notifs = getNotificationsForUser(user).slice(0, 5);
+  panel.innerHTML = `
+    <div class="notif-panel-head"><strong>آخر التنبيهات</strong></div>
+    <div class="notif-list">
+      ${notifs.length ? notifs.map(n => `
+        <div class="notif-item ${n.readBy.includes(user.id) ? "" : "unread"}" data-qnotif="${n.id}" data-route="${n.relatedRoute || ""}">
+          <div class="notif-item-title">${n.title}</div>
+          <div class="notif-item-msg">${n.message}</div>
+          <div class="notif-item-time">${notifTimeAgo(n.createdAt)}</div>
+        </div>
+      `).join("") : `<div class="notif-empty">لا توجد تنبيهات</div>`}
+    </div>
+  `;
+  panel.querySelectorAll("[data-qnotif]").forEach(item => item.onclick = () => {
+    markNotificationRead(item.dataset.qnotif, user.id);
+    if (item.dataset.route) location.hash = "#/" + item.dataset.route;
+    panel.style.display = "none";
+    renderNotifBell();
+  });
 }
 
 function notifTimeAgo(iso) {
@@ -539,6 +601,7 @@ function renderDashboard(el) {
 window.addEventListener("hashchange", router);
 window.addEventListener("DOMContentLoaded", async () => {
   applyTheme();
+  document.documentElement.setAttribute("data-theme", getDarkMode() ? "dark" : "light");
 
   const token = getAuthToken();
   if (token) {

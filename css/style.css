@@ -281,6 +281,8 @@ table.data-table tr:hover td { background: #fafbfc; }
 .perm-matrix .perm-group-row:hover td { background: #f8f9fb; }
 .perm-matrix input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--primary); cursor: pointer; }
 .table-wrap { overflow-x: auto; }
+table.data-table tr.row-expired { background: #fbe6e2; }
+table.data-table tr.row-near { background: #fdecd6; }
 
 .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11.5px; font-weight: 700; }
 .badge.gray { background: #eef0f3; color: #4b5563; }
@@ -679,3 +681,113 @@ table.data-table tr:hover td { background: #fafcff; }
 /* الجداول: أزرار الإجراءات والمبالغ لا تلتف على سطرين */
 .quote-final-table td.no-print, .quote-final-table td[data-vtotal] { white-space: nowrap; }
 .quote-final-table td.no-print { text-align: left; }
+
+/* =====================================================================
+   الوضع الليلي (Dark Mode) — يُفعَّل بإضافة data-theme="dark" على <html>
+   عناصر كثيرة تعتمد أصلاً على متغيرات --bg/--surface/--border/--text/--text-muted
+   فتتحول تلقائياً؛ الأسطر أدناه تغطي الخلفيات/الحدود التي كانت بقيم ثابتة صراحة
+   ===================================================================== */
+:root[data-theme="dark"] {
+  --bg: #0d1220;
+  --surface: #161c2c;
+  --surface-2: #1c2338;
+  --border: #2b3450;
+  --text: #e7ecf7;
+  --text-muted: #93a0bf;
+}
+:root[data-theme="dark"] body { background: var(--bg); }
+
+:root[data-theme="dark"] .btn,
+:root[data-theme="dark"] .btn.danger,
+:root[data-theme="dark"] .btn-icon,
+:root[data-theme="dark"] .field input,
+:root[data-theme="dark"] .field select,
+:root[data-theme="dark"] .field textarea,
+:root[data-theme="dark"] table.data-table th,
+:root[data-theme="dark"] table.data-table tr:hover td,
+:root[data-theme="dark"] .perm-matrix .perm-group-row td,
+:root[data-theme="dark"] .perm-matrix .perm-group-row:hover td,
+:root[data-theme="dark"] .photo-item,
+:root[data-theme="dark"] .photo-item .rm,
+:root[data-theme="dark"] .qitem-row,
+:root[data-theme="dark"] .qitem-controls input[type="number"]:disabled,
+:root[data-theme="dark"] .quote-logo-box,
+:root[data-theme="dark"] .company-logo-preview,
+:root[data-theme="dark"] .veh-doc-thumb,
+:root[data-theme="dark"] .notif-item:hover,
+:root[data-theme="dark"] .client-suggest,
+:root[data-theme="dark"] .file-chip,
+:root[data-theme="dark"] .view-toggle,
+:root[data-theme="dark"] .emp-tile,
+:root[data-theme="dark"] .kv-row .kv-input:focus,
+:root[data-theme="dark"] .progress-track {
+  background: var(--surface-2);
+}
+:root[data-theme="dark"] .btn:hover { background: var(--surface-2); border-color: var(--primary); color: var(--primary); }
+:root[data-theme="dark"] table.data-table th { color: var(--text-muted); }
+
+:root[data-theme="dark"] .modal,
+:root[data-theme="dark"] .notif-panel,
+:root[data-theme="dark"] .notif-panel-head {
+  background: var(--surface);
+}
+
+:root[data-theme="dark"] .field label,
+:root[data-theme="dark"] .chk {
+  color: var(--text-muted);
+}
+
+:root[data-theme="dark"] table.data-table td,
+:root[data-theme="dark"] .activity-log-row,
+:root[data-theme="dark"] .exp-item-row,
+:root[data-theme="dark"] .timeline-item,
+:root[data-theme="dark"] .kv-row {
+  border-bottom-color: var(--border);
+}
+
+:root[data-theme="dark"] .btn,
+:root[data-theme="dark"] .field input,
+:root[data-theme="dark"] .field select,
+:root[data-theme="dark"] .field textarea,
+:root[data-theme="dark"] .btn-icon,
+:root[data-theme="dark"] .qitem-controls input[type="number"],
+:root[data-theme="dark"] .item-row input,
+:root[data-theme="dark"] table.data-table input[type="number"],
+:root[data-theme="dark"] .pill {
+  border-color: var(--border);
+}
+
+:root[data-theme="dark"] .badge.gray { background: var(--surface-2); color: var(--text-muted); }
+:root[data-theme="dark"] .badge.green { background: color-mix(in srgb, var(--success) 22%, transparent); }
+:root[data-theme="dark"] .badge.orange { background: color-mix(in srgb, var(--warning) 22%, transparent); }
+:root[data-theme="dark"] .badge.red { background: color-mix(in srgb, var(--danger) 22%, transparent); }
+:root[data-theme="dark"] .badge.blue { background: color-mix(in srgb, var(--primary) 22%, transparent); }
+
+:root[data-theme="dark"] .emp-tile.success { background: color-mix(in srgb, var(--success) 18%, transparent); }
+:root[data-theme="dark"] .emp-tile.danger { background: color-mix(in srgb, var(--danger) 18%, transparent); }
+:root[data-theme="dark"] .emp-net { background: color-mix(in srgb, var(--primary) 18%, transparent); color: #8fb4ff; }
+:root[data-theme="dark"] .quote-final-table .cat-header-row td { background: color-mix(in srgb, var(--primary) 20%, transparent); color: var(--text); }
+:root[data-theme="dark"] .grand-total-box { background: color-mix(in srgb, var(--success) 14%, transparent); border-color: var(--border); }
+:root[data-theme="dark"] .grand-total-box .num { color: #38d9a9; }
+:root[data-theme="dark"] .notif-item.unread { background: color-mix(in srgb, var(--primary) 22%, transparent); }
+:root[data-theme="dark"] .notif-item.unread:hover { background: color-mix(in srgb, var(--primary) 30%, transparent); }
+:root[data-theme="dark"] table.data-table tr.row-expired { background: color-mix(in srgb, var(--danger) 20%, transparent); }
+:root[data-theme="dark"] table.data-table tr.row-near { background: color-mix(in srgb, var(--warning) 20%, transparent); }
+
+/* بطاقات/أسطر ملونة بخلفية Inline ثابتة (كروت ملاحظات في الإعدادات والعقود وكشف حساب المقاول)
+   — نستهدفها بمطابقة نص الـ style مباشرة بدل تعديل كل ملف JS على حدة */
+:root[data-theme="dark"] [style*="background:#f6f9fd"],
+:root[data-theme="dark"] [style*="background:#f8f9fb"],
+:root[data-theme="dark"] [style*="background:#f4f5f7"],
+:root[data-theme="dark"] [style*="background:#f8f5f0"] {
+  background: var(--surface-2) !important;
+}
+:root[data-theme="dark"] [style*="background:#fdf6ec"] { background: color-mix(in srgb, var(--warning) 18%, transparent) !important; }
+:root[data-theme="dark"] [style*="background:#fdecea"] { background: color-mix(in srgb, var(--danger) 18%, transparent) !important; }
+:root[data-theme="dark"] [style*="background:#eef4fd"] { background: color-mix(in srgb, var(--primary) 18%, transparent) !important; }
+:root[data-theme="dark"] .client-suggest:hover,
+:root[data-theme="dark"] .btn-icon:hover,
+:root[data-theme="dark"] .hamburger-btn:hover,
+:root[data-theme="dark"] .pill:hover {
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+}

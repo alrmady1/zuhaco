@@ -1376,10 +1376,10 @@ function docMonthsRemaining(days) {
   return days === null ? null : Math.round((days / 30.44) * 10) / 10;
 }
 function docStatus(days) {
-  if (days === null) return { key: "unknown", label: "بدون تاريخ", bg: "", badge: "gray" };
-  if (days < 0) return { key: "expired", label: "منتهية", bg: "#fbe6e2", badge: "red" };
-  if (days <= DOC_EXPIRY_NEAR_DAYS) return { key: "near", label: "تقترب من الانتهاء", bg: "#fdecd6", badge: "orange" };
-  return { key: "ok", label: "سارية", bg: "#e5f6ec", badge: "green" };
+  if (days === null) return { key: "unknown", label: "بدون تاريخ", rowClass: "", badge: "gray" };
+  if (days < 0) return { key: "expired", label: "منتهية", rowClass: "row-expired", badge: "red" };
+  if (days <= DOC_EXPIRY_NEAR_DAYS) return { key: "near", label: "تقترب من الانتهاء", rowClass: "row-near", badge: "orange" };
+  return { key: "ok", label: "سارية", rowClass: "", badge: "green" };
 }
 function vehicleLabel(v) {
   return (v.brand || v.modelTrim) ? [v.brand, v.modelTrim].filter(Boolean).join(" ") : (v.category || v.type || "مركبة");
@@ -1493,7 +1493,7 @@ function renderPersonalDatesTab(el) {
               const months = docMonthsRemaining(days);
               const st = docStatus(days);
               return `
-              <tr style="${st.bg ? `background:${st.bg}` : ""}">
+              <tr class="${st.rowClass}">
                 <td>${d.category || "-"}</td>
                 <td><strong>${d.name}</strong></td>
                 <td>${d.idNumber || "-"}</td>
@@ -1620,7 +1620,7 @@ function renderDocumentsTab(el) {
               const months = docMonthsRemaining(days);
               const st = docStatus(days);
               return `
-              <tr style="${st.bg ? `background:${st.bg}` : ""}">
+              <tr class="${st.rowClass}">
                 <td>${d.category || "-"}</td>
                 <td><strong>${d.name}</strong>${d.vehicleId ? (() => { const veh = dbGet("vehicles", []).find(v => v.id === d.vehicleId); return veh ? `<div class="text-muted" style="font-size:11px">${svgIcon("truck", 12)} ${vehicleLabel(veh)}${veh.regNumber ? " — استمارة " + veh.regNumber : ""}</div>` : ""; })() : ""}${d.employeeId ? (() => { const emp = dbGet("users", []).find(u => u.id === d.employeeId); return emp ? `<div class="text-muted" style="font-size:11px">${svgIcon("user", 12)} ${emp.name} — ${emp.role}</div>` : ""; })() : ""}</td>
                 <td>${d.expiryDate ? fmtDate(d.expiryDate) : "-"}</td>
