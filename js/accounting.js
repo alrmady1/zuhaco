@@ -1374,6 +1374,9 @@ function docStatus(days) {
   if (days <= DOC_EXPIRY_NEAR_DAYS) return { key: "near", label: "تقترب من الانتهاء", bg: "#fdecd6", badge: "orange" };
   return { key: "ok", label: "سارية", bg: "#e5f6ec", badge: "green" };
 }
+function vehicleLabel(v) {
+  return (v.brand || v.modelTrim) ? [v.brand, v.modelTrim].filter(Boolean).join(" ") : (v.category || v.type || "مركبة");
+}
 
 /* تُستدعى عند بدء التشغيل وكل 5 دقائق (app.js) — تنبيه عبر جرس التنبيهات عند الاقتراب من الشهرين أو الانتهاء فعلياً */
 function checkDocumentExpiryNotifications() {
@@ -1445,7 +1448,7 @@ function renderDocumentsTab(el) {
               return `
               <tr style="${st.bg ? `background:${st.bg}` : ""}">
                 <td>${d.category || "-"}</td>
-                <td><strong>${d.name}</strong></td>
+                <td><strong>${d.name}</strong>${d.vehicleId ? (() => { const veh = dbGet("vehicles", []).find(v => v.id === d.vehicleId); return veh ? `<div class="text-muted" style="font-size:11px">${svgIcon("truck", 12)} ${vehicleLabel(veh)}${veh.regNumber ? " — استمارة " + veh.regNumber : ""}</div>` : ""; })() : ""}</td>
                 <td>${d.expiryDate ? fmtDate(d.expiryDate) : "-"}</td>
                 <td>${days === null ? "-" : `${days} يوم${months !== null ? ` <span class="text-muted" style="font-size:11px">(${months} شهر)</span>` : ""}`}</td>
                 <td>${d.cost ? fmtMoney(d.cost) : "-"}</td>
@@ -1477,11 +1480,21 @@ function renderDocumentsTab(el) {
 
 function openDocExpiryModal(el, existing, categories) {
   const isEdit = !!existing;
+  const vehicles = dbGet("vehicles", []);
   const html = `
     <div class="modal-head"><h3>${isEdit ? "تعديل مستند" : "إضافة مستند"}</h3><button class="modal-close" id="mClose">×</button></div>
+    ${vehicles.length ? `
+    <div class="field"><label>ربط بمركبة مسجلة (اختياري)</label>
+      <select id="d_vehicle">
+        <option value="">— بدون ربط —</option>
+        ${vehicles.map(v => `<option value="${v.id}" ${isEdit && existing.vehicleId === v.id ? "selected" : ""}>${vehicleLabel(v)}${v.regNumber ? " — استمارة " + v.regNumber : ""}</option>`).join("")}
+      </select>
+      <div class="hint">عند اختيار مركبة يُملأ التصنيف تلقائياً باسمها ويمكنك اختيار نوع الورقة أدناه</div>
+    </div>` : ""}
     <div class="field"><label>التصنيف</label><input id="d_category" list="d_catList" value="${isEdit ? (existing.category || "") : ""}" placeholder="مثال: سجلات المنشأة">
       <datalist id="d_catList">${[...new Set([...DOC_CATEGORY_PRESETS, ...categories])].map(c => `<option value="${c}">`).join("")}</datalist></div>
-    <div class="field"><label>البند</label><input id="d_name" value="${isEdit ? existing.name : ""}" placeholder="مثال: سجل تجاري، إقامة - محمد علي، استمارة - تويوتا هايلكس"></div>
+    <div class="field"><label>البند</label><input id="d_name" list="d_nameList" value="${isEdit ? existing.name : ""}" placeholder="مثال: سجل تجاري، إقامة - محمد علي، الاستمارة">
+      <datalist id="d_nameList"><option value="الاستمارة"><option value="الفحص الدوري"><option value="التأمين"><option value="رخصة السير"></datalist></div>
     <div class="grid cols-2">
       <div class="field"><label>تاريخ الانتهاء</label><input type="date" id="d_expiry" value="${isEdit ? (existing.expiryDate || "") : ""}"></div>
       <div class="field"><label>التكلفة (اختياري)</label><input type="number" min="0" step="0.01" id="d_cost" value="${isEdit ? (existing.cost || "") : ""}"></div>
@@ -1492,6 +1505,11 @@ function openDocExpiryModal(el, existing, categories) {
   const ov = openModalShell(html);
   ov.querySelector("#mClose").onclick = closeModal;
   ov.querySelector("#d_cancel").onclick = closeModal;
+  const vehicleSelect = ov.querySelector("#d_vehicle");
+  if (vehicleSelect) vehicleSelect.onchange = () => {
+    const veh = vehicles.find(v => v.id === vehicleSelect.value);
+    if (veh) ov.querySelector("#d_category").value = vehicleLabel(veh);
+  };
   ov.querySelector("#d_save").onclick = () => {
     const name = ov.querySelector("#d_name").value.trim();
     const expiryDate = ov.querySelector("#d_expiry").value;
@@ -1501,6 +1519,7 @@ function openDocExpiryModal(el, existing, categories) {
     const data = {
       category: ov.querySelector("#d_category").value.trim(), name, expiryDate,
       cost: Number(ov.querySelector("#d_cost").value) || 0, notes: ov.querySelector("#d_notes").value.trim(),
+      vehicleId: vehicleSelect ? (vehicleSelect.value || "") : "",
     };
     if (isEdit) {
       const idx = list.findIndex(x => x.id === existing.id);
