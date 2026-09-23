@@ -418,6 +418,7 @@ function renderAccGeneral(el) {
       <div class="tab-btn ${ACC_GENERAL_TAB === "custody" ? "active" : ""}" data-gtab="custody">العهد</div>
       <div class="tab-btn ${ACC_GENERAL_TAB === "employees" ? "active" : ""}" data-gtab="employees">الموظفون</div>
       <div class="tab-btn ${ACC_GENERAL_TAB === "assets" ? "active" : ""}" data-gtab="assets">الأصول</div>
+      <div class="tab-btn ${ACC_GENERAL_TAB === "documents" ? "active" : ""}" data-gtab="documents">تواريخ الانتهاء</div>
       <div class="tab-btn ${ACC_GENERAL_TAB === "projects" ? "active" : ""}" data-gtab="projects">المشاريع</div>
       <div class="tab-btn ${ACC_GENERAL_TAB === "vat" ? "active" : ""}" data-gtab="vat">الضريبة</div>
     </div>
@@ -429,6 +430,7 @@ function renderAccGeneral(el) {
   if (ACC_GENERAL_TAB === "custody") renderCustodyTab(body);
   else if (ACC_GENERAL_TAB === "employees") renderEmployeesTab(body);
   else if (ACC_GENERAL_TAB === "assets") renderAssetsTab(body);
+  else if (ACC_GENERAL_TAB === "documents") renderDocumentsTab(body);
   else if (ACC_GENERAL_TAB === "projects") renderAccGeneralProjectsTab(body);
   else if (ACC_GENERAL_TAB === "vat") renderAccGeneralVatTab(body);
   else renderGeneralExpensesTab(body);
@@ -1348,6 +1350,173 @@ function renderAssetsTab(el) {
       ${untrackedCount > 0 ? `<p class="text-muted" style="font-size:12px;margin-top:12px">${untrackedCount} مركبة مملوكة بلا بيانات شراء كاملة (سعر/تاريخ الشراء) — أكملها من الإعدادات ← المركبات لتظهر هنا.</p>` : ""}
     </div>
   `;
+}
+
+/* ================= تواريخ انتهاء الأوراق الرسمية (سجلات المنشأة، إقامات الموظفين، أوراق المركبات...) ================= */
+const DOC_EXPIRY_NEAR_DAYS = 60; // تنبيه "يقترب من الانتهاء" خلال شهرين
+const DOC_CATEGORY_PRESETS = ["سجلات المنشأة", "إقامات الموظفين", "أوراق المركبات"];
+
+function docDaysRemaining(dateStr) {
+  if (!dateStr) return null;
+  const [y, m, d] = dateStr.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  const exp = new Date(y, m - 1, d);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((exp - today) / 86400000);
+}
+function docMonthsRemaining(days) {
+  return days === null ? null : Math.round((days / 30.44) * 10) / 10;
+}
+function docStatus(days) {
+  if (days === null) return { key: "unknown", label: "بدون تاريخ", bg: "", badge: "gray" };
+  if (days < 0) return { key: "expired", label: "منتهية", bg: "#fbe6e2", badge: "red" };
+  if (days <= DOC_EXPIRY_NEAR_DAYS) return { key: "near", label: "تقترب من الانتهاء", bg: "#fdecd6", badge: "orange" };
+  return { key: "ok", label: "سارية", bg: "#e5f6ec", badge: "green" };
+}
+
+/* تُستدعى عند بدء التشغيل وكل 5 دقائق (app.js) — تنبيه عبر جرس التنبيهات عند الاقتراب من الشهرين أو الانتهاء فعلياً */
+function checkDocumentExpiryNotifications() {
+  const docs = dbGet("docExpiries", []);
+  let changed = false;
+  docs.forEach(d => {
+    const days = docDaysRemaining(d.expiryDate);
+    if (days === null) return;
+    if (days < 0) {
+      if (!d.expiredNotified) {
+        addNotification({
+          type: "doc_expired", title: "انتهت صلاحية مستند",
+          message: `انتهت صلاحية "${d.name}"${d.category ? " (" + d.category + ")" : ""} بتاريخ ${fmtDate(d.expiryDate)}.`,
+          targetRoles: ["مدير عام", "مدير النظام"], targetUserIds: [], relatedRoute: "acc_general",
+        });
+        d.expiredNotified = true; d.nearNotified = true; changed = true;
+      }
+    } else if (days <= DOC_EXPIRY_NEAR_DAYS) {
+      if (!d.nearNotified) {
+        addNotification({
+          type: "doc_near_expiry", title: "اقتراب انتهاء مستند",
+          message: `سينتهي "${d.name}"${d.category ? " (" + d.category + ")" : ""} خلال ${days} يوم (بتاريخ ${fmtDate(d.expiryDate)}).`,
+          targetRoles: ["مدير عام", "مدير النظام"], targetUserIds: [], relatedRoute: "acc_general",
+        });
+        d.nearNotified = true; changed = true;
+      }
+    } else if (d.nearNotified || d.expiredNotified) {
+      // تاريخ الانتهاء تغيّر ليصبح بعيداً مجدداً (تجديد المستند) — إعادة ضبط ليصلح للتنبيه لاحقاً عند الاقتراب مجدداً
+      d.nearNotified = false; d.expiredNotified = false; changed = true;
+    }
+  });
+  if (changed) dbSet("docExpiries", docs);
+}
+
+function renderDocumentsTab(el) {
+  const docs = dbGet("docExpiries", []).slice().sort((a, b) => (a.expiryDate || "9999").localeCompare(b.expiryDate || "9999"));
+  const role = (getCurrentUser() || {}).role;
+  const canEdit = hasPermission(role, "acc_general");
+  const categories = [...new Set(dbGet("docExpiries", []).map(d => d.category).filter(Boolean))];
+  const counts = docs.reduce((s, d) => { const st = docStatus(docDaysRemaining(d.expiryDate)); s[st.key] = (s[st.key] || 0) + 1; return s; }, {});
+
+  el.innerHTML = `
+    <div class="card">
+      <h3 class="mt-0">تواريخ انتهاء الأوراق الرسمية</h3>
+      <p class="text-muted" style="font-size:12.5px;margin-top:-6px">سجلات المنشأة (السجل التجاري، القوى العاملة، شهادة الاستثمار...)، إقامات الموظفين، وأوراق المركبات (الاستمارة، الفحص، التأمين) — مرتبة حسب الأقرب انتهاءً</p>
+    </div>
+
+    <div class="grid cols-4" style="margin-bottom:18px">
+      <div class="stat-card"><div class="label">إجمالي المستندات</div><div class="value">${docs.length}</div></div>
+      <div class="stat-card"><div class="label">منتهية</div><div class="value danger">${counts.expired || 0}</div></div>
+      <div class="stat-card"><div class="label">تقترب من الانتهاء (خلال شهرين)</div><div class="value warning">${counts.near || 0}</div></div>
+      <div class="stat-card"><div class="label">سارية</div><div class="value success">${counts.ok || 0}</div></div>
+    </div>
+
+    <div class="card">
+      <div class="flex between" style="align-items:center;margin-bottom:14px">
+        <h3 class="mt-0" style="margin:0">السجل</h3>
+        ${canEdit ? `<button class="btn sm primary" id="addDocExpiryBtn">${svgIcon("plus")} إضافة مستند</button>` : ""}
+      </div>
+      ${docs.length ? `
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>التصنيف</th><th>البند</th><th>تاريخ الانتهاء</th><th>المتبقي</th><th>التكلفة</th><th>الحالة</th><th>ملاحظات</th><th></th></tr></thead>
+          <tbody>
+            ${docs.map(d => {
+              const days = docDaysRemaining(d.expiryDate);
+              const months = docMonthsRemaining(days);
+              const st = docStatus(days);
+              return `
+              <tr style="${st.bg ? `background:${st.bg}` : ""}">
+                <td>${d.category || "-"}</td>
+                <td><strong>${d.name}</strong></td>
+                <td>${d.expiryDate ? fmtDate(d.expiryDate) : "-"}</td>
+                <td>${days === null ? "-" : `${days} يوم${months !== null ? ` <span class="text-muted" style="font-size:11px">(${months} شهر)</span>` : ""}`}</td>
+                <td>${d.cost ? fmtMoney(d.cost) : "-"}</td>
+                <td><span class="badge ${st.badge}">${st.label}</span></td>
+                <td class="text-muted">${d.notes || "-"}</td>
+                <td style="white-space:nowrap">${canEdit ? `<button class="btn-icon" data-editdoc="${d.id}" title="تعديل">${ICON_EDIT}</button><button class="btn-icon danger" data-deldoc="${d.id}" title="حذف">${ICON_DELETE}</button>` : ""}</td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>` : `<div class="empty-state"><div class="ic">${svgIcon("file-text", 40)}</div>لا توجد مستندات مسجلة بعد${canEdit ? " — أضف أول مستند من الزر أعلاه" : ""}</div>`}
+    </div>
+  `;
+
+  const addBtn = document.getElementById("addDocExpiryBtn");
+  if (addBtn) addBtn.onclick = () => openDocExpiryModal(el, null, categories);
+  el.querySelectorAll("[data-editdoc]").forEach(b => b.onclick = () => {
+    const target = dbGet("docExpiries", []).find(x => x.id === b.dataset.editdoc);
+    if (target) openDocExpiryModal(el, target, categories);
+  });
+  el.querySelectorAll("[data-deldoc]").forEach(b => b.onclick = () => {
+    const target = dbGet("docExpiries", []).find(x => x.id === b.dataset.deldoc);
+    if (!target || !confirm(`حذف "${target.name}" من سجل تواريخ الانتهاء؟`)) return;
+    dbSet("docExpiries", dbGet("docExpiries", []).filter(x => x.id !== target.id));
+    logActivity(`تم حذف مستند "${target.name}" من سجل تواريخ الانتهاء`);
+    renderDocumentsTab(el);
+  });
+}
+
+function openDocExpiryModal(el, existing, categories) {
+  const isEdit = !!existing;
+  const html = `
+    <div class="modal-head"><h3>${isEdit ? "تعديل مستند" : "إضافة مستند"}</h3><button class="modal-close" id="mClose">×</button></div>
+    <div class="field"><label>التصنيف</label><input id="d_category" list="d_catList" value="${isEdit ? (existing.category || "") : ""}" placeholder="مثال: سجلات المنشأة">
+      <datalist id="d_catList">${[...new Set([...DOC_CATEGORY_PRESETS, ...categories])].map(c => `<option value="${c}">`).join("")}</datalist></div>
+    <div class="field"><label>البند</label><input id="d_name" value="${isEdit ? existing.name : ""}" placeholder="مثال: سجل تجاري، إقامة - محمد علي، استمارة - تويوتا هايلكس"></div>
+    <div class="grid cols-2">
+      <div class="field"><label>تاريخ الانتهاء</label><input type="date" id="d_expiry" value="${isEdit ? (existing.expiryDate || "") : ""}"></div>
+      <div class="field"><label>التكلفة (اختياري)</label><input type="number" min="0" step="0.01" id="d_cost" value="${isEdit ? (existing.cost || "") : ""}"></div>
+    </div>
+    <div class="field"><label>ملاحظات (اختياري)</label><textarea id="d_notes">${isEdit ? (existing.notes || "") : ""}</textarea></div>
+    <div class="flex gap"><button class="btn primary" id="d_save">حفظ</button><button class="btn" id="d_cancel">إلغاء</button></div>
+  `;
+  const ov = openModalShell(html);
+  ov.querySelector("#mClose").onclick = closeModal;
+  ov.querySelector("#d_cancel").onclick = closeModal;
+  ov.querySelector("#d_save").onclick = () => {
+    const name = ov.querySelector("#d_name").value.trim();
+    const expiryDate = ov.querySelector("#d_expiry").value;
+    if (!name) { toast("يرجى إدخال اسم البند"); return; }
+    if (!expiryDate) { toast("يرجى إدخال تاريخ الانتهاء"); return; }
+    const list = dbGet("docExpiries", []);
+    const data = {
+      category: ov.querySelector("#d_category").value.trim(), name, expiryDate,
+      cost: Number(ov.querySelector("#d_cost").value) || 0, notes: ov.querySelector("#d_notes").value.trim(),
+    };
+    if (isEdit) {
+      const idx = list.findIndex(x => x.id === existing.id);
+      // تاريخ انتهاء جديد → إعادة ضبط أعلام التنبيه ليُعاد تقييمها بالتاريخ الجديد
+      list[idx] = Object.assign({}, list[idx], data, existing.expiryDate !== expiryDate ? { nearNotified: false, expiredNotified: false } : {});
+      logActivity(`تم تعديل مستند "${name}" في سجل تواريخ الانتهاء`);
+    } else {
+      list.push(Object.assign({ id: uid("doc"), createdAt: new Date().toISOString(), nearNotified: false, expiredNotified: false }, data));
+      logActivity(`تم إضافة مستند "${name}" (ينتهي ${fmtDate(expiryDate)}) إلى سجل تواريخ الانتهاء`);
+    }
+    dbSet("docExpiries", list);
+    toast(isEdit ? "تم حفظ التعديلات" : "تمت إضافة المستند");
+    closeModal();
+    checkDocumentExpiryNotifications();
+    renderDocumentsTab(el);
+  };
 }
 
 function openGeneralExpenseViewModal(e) {
