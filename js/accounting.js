@@ -413,7 +413,9 @@ let EMPLOYEES_LIST_MODE = "grid"; // grid | rows
 function renderAccGeneral(el) {
   const role = (getCurrentUser() || {}).role;
   const canViewDocuments = hasPermission(role, "acc_documents");
+  const isGM = role === "مدير عام";
   if (ACC_GENERAL_TAB === "documents" && !canViewDocuments) ACC_GENERAL_TAB = "expenses";
+  if (ACC_GENERAL_TAB === "personal" && !isGM) ACC_GENERAL_TAB = "expenses";
   el.innerHTML = `
     <div class="section-title-row"><div><h2>المحاسبة العامة</h2><p>المصاريف الإدارية العامة للمؤسسة وعُهد الموظفين</p></div></div>
     <div class="tabs">
@@ -422,6 +424,7 @@ function renderAccGeneral(el) {
       <div class="tab-btn ${ACC_GENERAL_TAB === "employees" ? "active" : ""}" data-gtab="employees">الموظفون</div>
       <div class="tab-btn ${ACC_GENERAL_TAB === "assets" ? "active" : ""}" data-gtab="assets">الأصول</div>
       ${canViewDocuments ? `<div class="tab-btn ${ACC_GENERAL_TAB === "documents" ? "active" : ""}" data-gtab="documents">تواريخ الانتهاء</div>` : ""}
+      ${isGM ? `<div class="tab-btn ${ACC_GENERAL_TAB === "personal" ? "active" : ""}" data-gtab="personal">تواريخ شخصية</div>` : ""}
       <div class="tab-btn ${ACC_GENERAL_TAB === "projects" ? "active" : ""}" data-gtab="projects">المشاريع</div>
       <div class="tab-btn ${ACC_GENERAL_TAB === "vat" ? "active" : ""}" data-gtab="vat">الضريبة</div>
     </div>
@@ -434,6 +437,7 @@ function renderAccGeneral(el) {
   else if (ACC_GENERAL_TAB === "employees") renderEmployeesTab(body);
   else if (ACC_GENERAL_TAB === "assets") renderAssetsTab(body);
   else if (ACC_GENERAL_TAB === "documents" && canViewDocuments) renderDocumentsTab(body);
+  else if (ACC_GENERAL_TAB === "personal" && isGM) renderPersonalDatesTab(body);
   else if (ACC_GENERAL_TAB === "projects") renderAccGeneralProjectsTab(body);
   else if (ACC_GENERAL_TAB === "vat") renderAccGeneralVatTab(body);
   else renderGeneralExpensesTab(body);
@@ -1412,6 +1416,152 @@ function checkDocumentExpiryNotifications() {
     }
   });
   if (changed) dbSet("docExpiries", docs);
+}
+
+/* تُستدعى عند بدء التشغيل وكل 5 دقائق (app.js) — نسخة خاصة بالتواريخ الشخصية لحساب المدير العام فقط، تستهدفه هو حصرياً بالتنبيه */
+function checkPersonalDocumentExpiryNotifications() {
+  const docs = dbGet("personalDocExpiries", []);
+  let changed = false;
+  docs.forEach(d => {
+    const days = docDaysRemaining(d.expiryDate);
+    if (days === null) return;
+    if (days < 0) {
+      if (!d.expiredNotified) {
+        addNotification({
+          type: "personal_doc_expired", title: "انتهت صلاحية مستند شخصي",
+          message: `انتهت صلاحية "${d.name}"${d.category ? " (" + d.category + ")" : ""} بتاريخ ${fmtDate(d.expiryDate)}.`,
+          targetRoles: ["مدير عام"], targetUserIds: [], relatedRoute: "acc_general",
+        });
+        d.expiredNotified = true; d.nearNotified = true; changed = true;
+      }
+    } else if (days <= DOC_EXPIRY_NEAR_DAYS) {
+      if (!d.nearNotified) {
+        addNotification({
+          type: "personal_doc_near_expiry", title: "اقتراب انتهاء مستند شخصي",
+          message: `سينتهي "${d.name}"${d.category ? " (" + d.category + ")" : ""} خلال ${days} يوم (بتاريخ ${fmtDate(d.expiryDate)}).`,
+          targetRoles: ["مدير عام"], targetUserIds: [], relatedRoute: "acc_general",
+        });
+        d.nearNotified = true; changed = true;
+      }
+    } else if (d.nearNotified || d.expiredNotified) {
+      d.nearNotified = false; d.expiredNotified = false; changed = true;
+    }
+  });
+  if (changed) dbSet("personalDocExpiries", docs);
+}
+
+const PERSONAL_DOC_PERSON_PRESETS = ["أنا", "الزوجة", "الأبناء"];
+const PERSONAL_DOC_ITEM_PRESETS = ["الإقامة", "جواز السفر", "رخصة القيادة", "استمارة السيارة", "الفحص الدوري", "التأمين الطبي", "تأمين السيارة", "إيجار المنزل"];
+
+function renderPersonalDatesTab(el) {
+  const docs = dbGet("personalDocExpiries", []).slice().sort((a, b) => (a.expiryDate || "9999").localeCompare(b.expiryDate || "9999"));
+  const persons = [...new Set(dbGet("personalDocExpiries", []).map(d => d.category).filter(Boolean))];
+  const counts = docs.reduce((s, d) => { const st = docStatus(docDaysRemaining(d.expiryDate)); s[st.key] = (s[st.key] || 0) + 1; return s; }, {});
+
+  el.innerHTML = `
+    <div class="card">
+      <h3 class="mt-0">تواريخ شخصية</h3>
+      <p class="text-muted" style="font-size:12.5px;margin-top:-6px">سجل خاص بحسابك فقط — إقامتك وإقامات العائلة، السيارة، التأمين الطبي، إيجار المنزل، وأي أوراق شخصية أخرى</p>
+    </div>
+
+    <div class="grid cols-4" style="margin-bottom:18px">
+      <div class="stat-card"><div class="label">إجمالي المستندات</div><div class="value">${docs.length}</div></div>
+      <div class="stat-card"><div class="label">منتهية</div><div class="value danger">${counts.expired || 0}</div></div>
+      <div class="stat-card"><div class="label">تقترب من الانتهاء (خلال شهرين)</div><div class="value warning">${counts.near || 0}</div></div>
+      <div class="stat-card"><div class="label">سارية</div><div class="value success">${counts.ok || 0}</div></div>
+    </div>
+
+    <div class="card">
+      <div class="flex between" style="align-items:center;margin-bottom:14px">
+        <h3 class="mt-0" style="margin:0">السجل</h3>
+        <button class="btn sm primary" id="addPersonalDocBtn">${svgIcon("plus")} إضافة مستند</button>
+      </div>
+      ${docs.length ? `
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>الشخص</th><th>البند</th><th>رقم الهوية/المرجع</th><th>تاريخ الانتهاء</th><th>المتبقي</th><th>التكلفة</th><th>الحالة</th><th>ملاحظات</th><th></th></tr></thead>
+          <tbody>
+            ${docs.map(d => {
+              const days = docDaysRemaining(d.expiryDate);
+              const months = docMonthsRemaining(days);
+              const st = docStatus(days);
+              return `
+              <tr style="${st.bg ? `background:${st.bg}` : ""}">
+                <td>${d.category || "-"}</td>
+                <td><strong>${d.name}</strong></td>
+                <td>${d.idNumber || "-"}</td>
+                <td>${d.expiryDate ? fmtDate(d.expiryDate) : "-"}</td>
+                <td>${days === null ? "-" : `${days} يوم${months !== null ? ` <span class="text-muted" style="font-size:11px">(${months} شهر)</span>` : ""}`}</td>
+                <td>${d.cost ? fmtMoney(d.cost) : "-"}</td>
+                <td><span class="badge ${st.badge}">${st.label}</span></td>
+                <td class="text-muted">${d.notes || "-"}</td>
+                <td style="white-space:nowrap"><button class="btn-icon" data-editpdoc="${d.id}" title="تعديل">${ICON_EDIT}</button><button class="btn-icon danger" data-delpdoc="${d.id}" title="حذف">${ICON_DELETE}</button></td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>` : `<div class="empty-state"><div class="ic">${svgIcon("file-text", 40)}</div>لا توجد مستندات مسجلة بعد — أضف أول مستند من الزر أعلاه</div>`}
+    </div>
+  `;
+
+  document.getElementById("addPersonalDocBtn").onclick = () => openPersonalDocModal(el, null, persons);
+  el.querySelectorAll("[data-editpdoc]").forEach(b => b.onclick = () => {
+    const target = dbGet("personalDocExpiries", []).find(x => x.id === b.dataset.editpdoc);
+    if (target) openPersonalDocModal(el, target, persons);
+  });
+  el.querySelectorAll("[data-delpdoc]").forEach(b => b.onclick = () => {
+    const target = dbGet("personalDocExpiries", []).find(x => x.id === b.dataset.delpdoc);
+    if (!target || !confirm(`حذف "${target.name}" من سجل التواريخ الشخصية؟`)) return;
+    dbSet("personalDocExpiries", dbGet("personalDocExpiries", []).filter(x => x.id !== target.id));
+    logActivity(`تم حذف مستند شخصي "${target.name}" من سجل التواريخ الشخصية`);
+    renderPersonalDatesTab(el);
+  });
+}
+
+function openPersonalDocModal(el, existing, persons) {
+  const isEdit = !!existing;
+  const html = `
+    <div class="modal-head"><h3>${isEdit ? "تعديل مستند شخصي" : "إضافة مستند شخصي"}</h3><button class="modal-close" id="mClose">×</button></div>
+    <div class="field"><label>الشخص</label><input id="pd_person" list="pd_personList" value="${isEdit ? (existing.category || "") : ""}" placeholder="مثال: أنا، الزوجة، اسم الابن">
+      <datalist id="pd_personList">${[...new Set([...PERSONAL_DOC_PERSON_PRESETS, ...persons])].map(c => `<option value="${c}">`).join("")}</datalist></div>
+    <div class="field"><label>البند</label><input id="pd_name" list="pd_nameList" value="${isEdit ? existing.name : ""}" placeholder="مثال: الإقامة، استمارة السيارة">
+      <datalist id="pd_nameList">${PERSONAL_DOC_ITEM_PRESETS.map(c => `<option value="${c}">`).join("")}</datalist></div>
+    <div class="field"><label>رقم الهوية/المرجع (اختياري)</label><input id="pd_idnum" value="${isEdit ? (existing.idNumber || "") : ""}" placeholder="رقم الهوية، رقم اللوحة، رقم بوليصة التأمين..."></div>
+    <div class="grid cols-2">
+      <div class="field"><label>تاريخ الانتهاء</label><input type="date" id="pd_expiry" value="${isEdit ? (existing.expiryDate || "") : ""}"></div>
+      <div class="field"><label>التكلفة (اختياري)</label><input type="number" min="0" step="0.01" id="pd_cost" value="${isEdit ? (existing.cost || "") : ""}"></div>
+    </div>
+    <div class="field"><label>ملاحظات (اختياري)</label><textarea id="pd_notes">${isEdit ? (existing.notes || "") : ""}</textarea></div>
+    <div class="flex gap"><button class="btn primary" id="pd_save">حفظ</button><button class="btn" id="pd_cancel">إلغاء</button></div>
+  `;
+  const ov = openModalShell(html);
+  ov.querySelector("#mClose").onclick = closeModal;
+  ov.querySelector("#pd_cancel").onclick = closeModal;
+  ov.querySelector("#pd_save").onclick = () => {
+    const name = ov.querySelector("#pd_name").value.trim();
+    const expiryDate = ov.querySelector("#pd_expiry").value;
+    if (!name) { toast("يرجى إدخال اسم البند"); return; }
+    if (!expiryDate) { toast("يرجى إدخال تاريخ الانتهاء"); return; }
+    const list = dbGet("personalDocExpiries", []);
+    const data = {
+      category: ov.querySelector("#pd_person").value.trim(), name,
+      idNumber: ov.querySelector("#pd_idnum").value.trim(), expiryDate,
+      cost: Number(ov.querySelector("#pd_cost").value) || 0, notes: ov.querySelector("#pd_notes").value.trim(),
+    };
+    if (isEdit) {
+      const idx = list.findIndex(x => x.id === existing.id);
+      list[idx] = Object.assign({}, list[idx], data, existing.expiryDate !== expiryDate ? { nearNotified: false, expiredNotified: false } : {});
+      logActivity(`تم تعديل مستند شخصي "${name}" في سجل التواريخ الشخصية`);
+    } else {
+      list.push(Object.assign({ id: uid("pdoc"), createdAt: new Date().toISOString(), nearNotified: false, expiredNotified: false }, data));
+      logActivity(`تم إضافة مستند شخصي "${name}" (ينتهي ${fmtDate(expiryDate)}) إلى سجل التواريخ الشخصية`);
+    }
+    dbSet("personalDocExpiries", list);
+    toast(isEdit ? "تم حفظ التعديلات" : "تمت إضافة المستند");
+    closeModal();
+    checkPersonalDocumentExpiryNotifications();
+    renderPersonalDatesTab(el);
+  };
 }
 
 function renderDocumentsTab(el) {
