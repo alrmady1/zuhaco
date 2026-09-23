@@ -1753,46 +1753,52 @@ function openDocExpiryModal(el, existing, categories) {
   };
 }
 
-/* ---------- الشركة القابضة (حسابات وتواريخ انتهاء مشتركة بين زهى الاعمال للمقاولات وزهى كلين) ---------- */
+/* ---------- الشركة القابضة (حسابات وتواريخ انتهاء مشتركة بين زهى الاعمال للمقاولات وزهى كلين) ----------
+   جدول التواريخ هنا للعرض فقط — يُجمَع حيّاً من مصدرين حقيقيين بدل إدخال يدوي مكرر:
+   دفتر تواريخ الانتهاء المحلي لهذا التطبيق (docExpiries، بدون التواريخ الشخصية)، وسجل
+   تواريخ الانتهاء العلني في تطبيق zuhaclean عبر GET /api/expiry-documents (بلا مصادقة،
+   مفتوح CORS للجميع — نفس نمط lib/zuhaclean.js في zuha-group-finance). التعديل يبقى من
+   صفحة كل شركة الأصلية (تواريخ الانتهاء هنا، أو داخل تطبيق zuhaclean نفسه). */
 const HOLDING_GROUP_FINANCE_URL = "https://zuha-group-finance.vercel.app/";
-const HOLDING_COMPANY_PRESETS = ["شركة زهى الاعمال للمقاولات", "زهى كلين"];
-const HOLDING_CATEGORY_PRESETS = ["إقامة", "مركبة", "إيجار سكن"];
+const ZUHACLEAN_EXPIRY_API = "https://zuhaclean.vercel.app/api/expiry-documents";
+const HOLDING_MAIN_COMPANY_LABEL = "زهى الاعمال للمقاولات";
+const HOLDING_SUB_COMPANY_LABEL = "زهى كلين";
 
-function checkHoldingDocumentExpiryNotifications() {
-  const docs = dbGet("holdingDocExpiries", []);
-  let changed = false;
-  docs.forEach(d => {
-    const days = docDaysRemaining(d.expiryDate);
-    if (days === null) return;
-    if (days < 0) {
-      if (!d.expiredNotified) {
-        addNotification({
-          type: "holding_doc_expired", title: "انتهت صلاحية مستند (الشركة القابضة)",
-          message: `انتهت صلاحية "${d.name}"${d.company ? " — " + d.company : ""} بتاريخ ${fmtDate(d.expiryDate)}.`,
-          targetRoles: ["مدير عام", "محاسب"], targetUserIds: [], relatedRoute: "acc_general",
-        });
-        d.expiredNotified = true; d.nearNotified = true; changed = true;
-      }
-    } else if (days <= DOC_EXPIRY_NEAR_DAYS) {
-      if (!d.nearNotified) {
-        addNotification({
-          type: "holding_doc_near_expiry", title: "اقتراب انتهاء مستند (الشركة القابضة)",
-          message: `سينتهي "${d.name}"${d.company ? " — " + d.company : ""} خلال ${days} يوم (بتاريخ ${fmtDate(d.expiryDate)}).`,
-          targetRoles: ["مدير عام", "محاسب"], targetUserIds: [], relatedRoute: "acc_general",
-        });
-        d.nearNotified = true; changed = true;
-      }
-    } else if (d.nearNotified || d.expiredNotified) {
-      d.nearNotified = false; d.expiredNotified = false; changed = true;
-    }
-  });
-  if (changed) dbSet("holdingDocExpiries", docs);
+function holdingAttachmentCell(url) {
+  if (!url) return "-";
+  const pathPart = url.split("?")[0].toLowerCase();
+  if (/\.(png|jpe?g|gif|webp|bmp)$/.test(pathPart)) {
+    return `<a href="${url}" target="_blank" rel="noopener" class="veh-doc-thumb" title="عرض المرفق"><img src="${url}"></a>`;
+  }
+  return `<a href="${url}" target="_blank" rel="noopener" class="badge blue" style="text-decoration:none">${svgIcon("paperclip", 14)} عرض المرفق</a>`;
+}
+
+function localHoldingExpiryRows() {
+  return dbGet("docExpiries", []).map(d => ({
+    company: HOLDING_MAIN_COMPANY_LABEL,
+    category: d.category || "-",
+    name: d.name,
+    expiryDate: d.expiryDate || "",
+    cost: d.cost || 0,
+    attachmentUrl: d.attachment ? d.attachment.url : null,
+  }));
+}
+
+async function fetchZuhacleanExpiryRows() {
+  const res = await fetch(ZUHACLEAN_EXPIRY_API);
+  if (!res.ok) throw new Error("http " + res.status);
+  const rows = await res.json();
+  return rows.map(r => ({
+    company: HOLDING_SUB_COMPANY_LABEL,
+    category: r.category || "-",
+    name: r.name,
+    expiryDate: r.expiry_date || "",
+    cost: r.cost || 0,
+    attachmentUrl: r.attachment_url || null,
+  }));
 }
 
 function renderHoldingTab(el) {
-  const docs = dbGet("holdingDocExpiries", []).slice().sort((a, b) => (a.expiryDate || "9999").localeCompare(b.expiryDate || "9999"));
-  const counts = docs.reduce((s, d) => { const st = docStatus(docDaysRemaining(d.expiryDate)); s[st.key] = (s[st.key] || 0) + 1; return s; }, {});
-
   el.innerHTML = `
     <div class="card">
       <h3 class="mt-0">الشركة القابضة</h3>
@@ -1810,22 +1816,39 @@ function renderHoldingTab(el) {
       <p class="text-muted" style="font-size:11.5px;margin:8px 0 0">إذا لم تظهر الصفحة أعلاه، استخدم زر "فتح في نافذة جديدة".</p>
     </div>
 
+    <div id="holdingExpiryBody">
+      <div class="card"><div class="empty-state"><div class="ic">${svgIcon("clock", 40)}</div>جارٍ تحميل تواريخ الانتهاء من الشركتين...</div></div>
+    </div>
+  `;
+
+  const body = document.getElementById("holdingExpiryBody");
+  const localRows = localHoldingExpiryRows();
+  fetchZuhacleanExpiryRows()
+    .then(cleanRows => renderHoldingExpiryTable(body, localRows.concat(cleanRows), null))
+    .catch(err => {
+      console.error("holding expiry fetch error", err);
+      renderHoldingExpiryTable(body, localRows, "تعذّر جلب تواريخ الانتهاء من زهى كلين (تحقق من الاتصال) — المعروض أدناه لشركة زهى الاعمال للمقاولات فقط.");
+    });
+}
+
+function renderHoldingExpiryTable(body, rows, errorMsg) {
+  const docs = rows.slice().sort((a, b) => (a.expiryDate || "9999").localeCompare(b.expiryDate || "9999"));
+  const counts = docs.reduce((s, d) => { const st = docStatus(docDaysRemaining(d.expiryDate)); s[st.key] = (s[st.key] || 0) + 1; return s; }, {});
+
+  body.innerHTML = `
+    ${errorMsg ? `<div class="card" style="background:#fdf6ec;border-color:#f2dfb8"><span style="font-size:12.5px;color:var(--warning)">${svgIcon("alert", 15)} ${errorMsg}</span></div>` : ""}
     <div class="grid cols-4" style="margin-bottom:18px">
-      <div class="stat-card"><div class="label">إجمالي المستندات</div><div class="value">${docs.length}</div></div>
+      <div class="stat-card"><div class="label">إجمالي البنود</div><div class="value">${docs.length}</div></div>
       <div class="stat-card"><div class="label">منتهية</div><div class="value danger">${counts.expired || 0}</div></div>
       <div class="stat-card"><div class="label">تقترب من الانتهاء (خلال شهرين)</div><div class="value warning">${counts.near || 0}</div></div>
       <div class="stat-card"><div class="label">سارية</div><div class="value success">${counts.ok || 0}</div></div>
     </div>
-
     <div class="card">
-      <div class="flex between" style="align-items:center;margin-bottom:14px">
-        <h3 class="mt-0" style="margin:0">جدول التواريخ المشترك (إقامات، مركبات، إيجار سكن...)</h3>
-        <button class="btn sm primary" id="addHoldingDocBtn">${svgIcon("plus")} إضافة مستند</button>
-      </div>
+      <h3 class="mt-0">جدول التواريخ المشترك (إقامات، مركبات، إيجار سكن، سجلات...)</h3>
       ${docs.length ? `
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>الشركة</th><th>التصنيف</th><th>البند</th><th>رقم الهوية/المرجع</th><th>تاريخ الانتهاء</th><th>المتبقي</th><th>التكلفة</th><th>الحالة</th><th>المرفق</th><th></th></tr></thead>
+          <thead><tr><th>الشركة</th><th>التصنيف</th><th>البند</th><th>تاريخ الانتهاء</th><th>المتبقي</th><th>التكلفة</th><th>الحالة</th><th>المرفق</th></tr></thead>
           <tbody>
             ${docs.map(d => {
               const days = docDaysRemaining(d.expiryDate);
@@ -1833,97 +1856,21 @@ function renderHoldingTab(el) {
               const st = docStatus(days);
               return `
               <tr class="${st.rowClass}">
-                <td>${d.company || "-"}</td>
+                <td>${d.company}</td>
                 <td>${d.category || "-"}</td>
                 <td><strong>${d.name}</strong></td>
-                <td>${d.idNumber || "-"}</td>
                 <td>${d.expiryDate ? fmtDate(d.expiryDate) : "-"}</td>
                 <td>${days === null ? "-" : `${days} يوم${months !== null ? ` <span class="text-muted" style="font-size:11px">(${months} شهر)</span>` : ""}`}</td>
                 <td>${d.cost ? fmtMoney(d.cost) : "-"}</td>
                 <td><span class="badge ${st.badge}">${st.label}</span></td>
-                <td>${docAttachmentCell(d.attachment)}</td>
-                <td style="white-space:nowrap"><button class="btn-icon" data-editholding="${d.id}" title="تعديل">${ICON_EDIT}</button><button class="btn-icon danger" data-delholding="${d.id}" title="حذف">${ICON_DELETE}</button></td>
+                <td>${holdingAttachmentCell(d.attachmentUrl)}</td>
               </tr>`;
             }).join("")}
           </tbody>
         </table>
-      </div>` : `<div class="empty-state"><div class="ic">${svgIcon("file-text", 40)}</div>لا توجد مستندات مسجلة بعد — أضف أول مستند من الزر أعلاه</div>`}
+      </div>` : `<div class="empty-state"><div class="ic">${svgIcon("file-text", 40)}</div>لا توجد تواريخ انتهاء مسجلة حالياً في الشركتين</div>`}
     </div>
   `;
-
-  document.getElementById("addHoldingDocBtn").onclick = () => openHoldingDocModal(el, null);
-  el.querySelectorAll("[data-editholding]").forEach(b => b.onclick = () => {
-    const target = dbGet("holdingDocExpiries", []).find(x => x.id === b.dataset.editholding);
-    if (target) openHoldingDocModal(el, target);
-  });
-  el.querySelectorAll("[data-delholding]").forEach(b => b.onclick = () => {
-    const target = dbGet("holdingDocExpiries", []).find(x => x.id === b.dataset.delholding);
-    if (!target || !confirm(`حذف "${target.name}" من جدول التواريخ المشترك؟`)) return;
-    dbSet("holdingDocExpiries", dbGet("holdingDocExpiries", []).filter(x => x.id !== target.id));
-    logActivity(`تم حذف مستند "${target.name}" من جدول تواريخ الشركة القابضة`);
-    renderHoldingTab(el);
-  });
-}
-
-function openHoldingDocModal(el, existing) {
-  const isEdit = !!existing;
-  const html = `
-    <div class="modal-head"><h3>${isEdit ? "تعديل مستند" : "إضافة مستند"} — الشركة القابضة</h3><button class="modal-close" id="mClose">×</button></div>
-    <div class="field"><label>الشركة</label><input id="h_company" list="h_companyList" value="${isEdit ? (existing.company || "") : ""}" placeholder="مثال: شركة زهى الاعمال للمقاولات">
-      <datalist id="h_companyList">${HOLDING_COMPANY_PRESETS.map(c => `<option value="${c}">`).join("")}</datalist></div>
-    <div class="field"><label>التصنيف</label><input id="h_category" list="h_categoryList" value="${isEdit ? (existing.category || "") : ""}" placeholder="مثال: إقامة، مركبة، إيجار سكن">
-      <datalist id="h_categoryList">${HOLDING_CATEGORY_PRESETS.map(c => `<option value="${c}">`).join("")}</datalist></div>
-    <div class="field"><label>البند</label><input id="h_name" value="${isEdit ? existing.name : ""}" placeholder="مثال: إقامة - محمد علي، استمارة السيارة"></div>
-    <div class="field"><label>رقم الهوية/المرجع (اختياري)</label><input id="h_idnum" value="${isEdit ? (existing.idNumber || "") : ""}" placeholder="رقم الهوية، رقم اللوحة، رقم العقد..."></div>
-    <div class="grid cols-2">
-      <div class="field"><label>تاريخ الانتهاء</label><input type="date" id="h_expiry" value="${isEdit ? (existing.expiryDate || "") : ""}"></div>
-      <div class="field"><label>التكلفة (اختياري)</label><input type="number" min="0" step="0.01" id="h_cost" value="${isEdit ? (existing.cost || "") : ""}"></div>
-    </div>
-    <div class="field"><label>ملاحظات (اختياري)</label><textarea id="h_notes">${isEdit ? (existing.notes || "") : ""}</textarea></div>
-    <div class="field"><label>صورة أو ملف المستند (اختياري)</label>
-      <input type="file" id="h_attachment" accept=".pdf,image/*">
-      <div id="h_attachmentPreview" class="flex wrap" style="margin-top:8px">${isEdit && existing.attachment ? `<span class="file-chip">${svgIcon("paperclip", 14)} ${existing.attachment.name || "المرفق الحالي"}</span>` : ""}</div>
-    </div>
-    <div class="flex gap"><button class="btn primary" id="h_save">حفظ</button><button class="btn" id="h_cancel">إلغاء</button></div>
-  `;
-  const ov = openModalShell(html);
-  ov.querySelector("#mClose").onclick = closeModal;
-  ov.querySelector("#h_cancel").onclick = closeModal;
-  let attachment = isEdit ? (existing.attachment || null) : null;
-  ov.querySelector("#h_attachment").onchange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) { attachment = null; ov.querySelector("#h_attachmentPreview").innerHTML = ""; return; }
-    const url = await fileToDataURL(file);
-    attachment = { name: file.name, type: file.type, url };
-    ov.querySelector("#h_attachmentPreview").innerHTML = `<span class="file-chip">${svgIcon("paperclip", 14)} ${file.name}</span>`;
-  };
-  ov.querySelector("#h_save").onclick = () => {
-    const name = ov.querySelector("#h_name").value.trim();
-    const expiryDate = ov.querySelector("#h_expiry").value;
-    if (!name) { toast("يرجى إدخال اسم البند"); return; }
-    if (!expiryDate) { toast("يرجى إدخال تاريخ الانتهاء"); return; }
-    const list = dbGet("holdingDocExpiries", []);
-    const data = {
-      company: ov.querySelector("#h_company").value.trim(),
-      category: ov.querySelector("#h_category").value.trim(), name,
-      idNumber: ov.querySelector("#h_idnum").value.trim(), expiryDate,
-      cost: Number(ov.querySelector("#h_cost").value) || 0, notes: ov.querySelector("#h_notes").value.trim(),
-      attachment,
-    };
-    if (isEdit) {
-      const idx = list.findIndex(x => x.id === existing.id);
-      list[idx] = Object.assign({}, list[idx], data, existing.expiryDate !== expiryDate ? { nearNotified: false, expiredNotified: false } : {});
-      logActivity(`تم تعديل مستند "${name}" في جدول تواريخ الشركة القابضة`);
-    } else {
-      list.push(Object.assign({ id: uid("hdoc"), createdAt: new Date().toISOString(), nearNotified: false, expiredNotified: false }, data));
-      logActivity(`تم إضافة مستند "${name}" (ينتهي ${fmtDate(expiryDate)}) إلى جدول تواريخ الشركة القابضة`);
-    }
-    dbSet("holdingDocExpiries", list);
-    toast(isEdit ? "تم حفظ التعديلات" : "تمت إضافة المستند");
-    closeModal();
-    checkHoldingDocumentExpiryNotifications();
-    renderHoldingTab(el);
-  };
 }
 
 function openGeneralExpenseViewModal(e) {
