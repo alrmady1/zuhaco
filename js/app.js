@@ -258,6 +258,7 @@ function renderApp() {
     checkVisitNotifications();
     checkDocumentExpiryNotifications();
     checkPersonalDocumentExpiryNotifications();
+    checkHoldingDocumentExpiryNotifications();
     APP_BOOTSTRAPPED = true;
   }
 
@@ -584,6 +585,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     checkVisitNotifications();
     checkDocumentExpiryNotifications();
     checkPersonalDocumentExpiryNotifications();
+    checkHoldingDocumentExpiryNotifications();
     renderNotifBell(); // تحديث عداد التنبيهات فقط دون إعادة رسم الصفحة الحالية (حتى لا تُفقد أي بيانات قيد الإدخال)
   }, 5 * 60 * 1000); // إعادة فحص التنبيهات كل 5 دقائق أثناء بقاء التطبيق مفتوحاً
 });
