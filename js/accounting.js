@@ -411,6 +411,9 @@ let EMPLOYEE_VIEW_ID = null;
 let EMPLOYEES_LIST_MODE = "grid"; // grid | rows
 
 function renderAccGeneral(el) {
+  const role = (getCurrentUser() || {}).role;
+  const canViewDocuments = hasPermission(role, "acc_documents");
+  if (ACC_GENERAL_TAB === "documents" && !canViewDocuments) ACC_GENERAL_TAB = "expenses";
   el.innerHTML = `
     <div class="section-title-row"><div><h2>المحاسبة العامة</h2><p>المصاريف الإدارية العامة للمؤسسة وعُهد الموظفين</p></div></div>
     <div class="tabs">
@@ -418,7 +421,7 @@ function renderAccGeneral(el) {
       <div class="tab-btn ${ACC_GENERAL_TAB === "custody" ? "active" : ""}" data-gtab="custody">العهد</div>
       <div class="tab-btn ${ACC_GENERAL_TAB === "employees" ? "active" : ""}" data-gtab="employees">الموظفون</div>
       <div class="tab-btn ${ACC_GENERAL_TAB === "assets" ? "active" : ""}" data-gtab="assets">الأصول</div>
-      <div class="tab-btn ${ACC_GENERAL_TAB === "documents" ? "active" : ""}" data-gtab="documents">تواريخ الانتهاء</div>
+      ${canViewDocuments ? `<div class="tab-btn ${ACC_GENERAL_TAB === "documents" ? "active" : ""}" data-gtab="documents">تواريخ الانتهاء</div>` : ""}
       <div class="tab-btn ${ACC_GENERAL_TAB === "projects" ? "active" : ""}" data-gtab="projects">المشاريع</div>
       <div class="tab-btn ${ACC_GENERAL_TAB === "vat" ? "active" : ""}" data-gtab="vat">الضريبة</div>
     </div>
@@ -430,7 +433,7 @@ function renderAccGeneral(el) {
   if (ACC_GENERAL_TAB === "custody") renderCustodyTab(body);
   else if (ACC_GENERAL_TAB === "employees") renderEmployeesTab(body);
   else if (ACC_GENERAL_TAB === "assets") renderAssetsTab(body);
-  else if (ACC_GENERAL_TAB === "documents") renderDocumentsTab(body);
+  else if (ACC_GENERAL_TAB === "documents" && canViewDocuments) renderDocumentsTab(body);
   else if (ACC_GENERAL_TAB === "projects") renderAccGeneralProjectsTab(body);
   else if (ACC_GENERAL_TAB === "vat") renderAccGeneralVatTab(body);
   else renderGeneralExpensesTab(body);
@@ -1414,7 +1417,7 @@ function checkDocumentExpiryNotifications() {
 function renderDocumentsTab(el) {
   const docs = dbGet("docExpiries", []).slice().sort((a, b) => (a.expiryDate || "9999").localeCompare(b.expiryDate || "9999"));
   const role = (getCurrentUser() || {}).role;
-  const canEdit = hasPermission(role, "acc_general");
+  const canEdit = hasPermission(role, "acc_documents");
   const categories = [...new Set(dbGet("docExpiries", []).map(d => d.category).filter(Boolean))];
   const counts = docs.reduce((s, d) => { const st = docStatus(docDaysRemaining(d.expiryDate)); s[st.key] = (s[st.key] || 0) + 1; return s; }, {});
 
@@ -1448,7 +1451,7 @@ function renderDocumentsTab(el) {
               return `
               <tr style="${st.bg ? `background:${st.bg}` : ""}">
                 <td>${d.category || "-"}</td>
-                <td><strong>${d.name}</strong>${d.vehicleId ? (() => { const veh = dbGet("vehicles", []).find(v => v.id === d.vehicleId); return veh ? `<div class="text-muted" style="font-size:11px">${svgIcon("truck", 12)} ${vehicleLabel(veh)}${veh.regNumber ? " — استمارة " + veh.regNumber : ""}</div>` : ""; })() : ""}</td>
+                <td><strong>${d.name}</strong>${d.vehicleId ? (() => { const veh = dbGet("vehicles", []).find(v => v.id === d.vehicleId); return veh ? `<div class="text-muted" style="font-size:11px">${svgIcon("truck", 12)} ${vehicleLabel(veh)}${veh.regNumber ? " — استمارة " + veh.regNumber : ""}</div>` : ""; })() : ""}${d.employeeId ? (() => { const emp = dbGet("users", []).find(u => u.id === d.employeeId); return emp ? `<div class="text-muted" style="font-size:11px">${svgIcon("user", 12)} ${emp.name} — ${emp.role}</div>` : ""; })() : ""}</td>
                 <td>${d.expiryDate ? fmtDate(d.expiryDate) : "-"}</td>
                 <td>${days === null ? "-" : `${days} يوم${months !== null ? ` <span class="text-muted" style="font-size:11px">(${months} شهر)</span>` : ""}`}</td>
                 <td>${d.cost ? fmtMoney(d.cost) : "-"}</td>
@@ -1478,9 +1481,11 @@ function renderDocumentsTab(el) {
   });
 }
 
+const DOC_EMPLOYEE_CATEGORY = "إقامات الموظفين";
 function openDocExpiryModal(el, existing, categories) {
   const isEdit = !!existing;
   const vehicles = dbGet("vehicles", []);
+  const users = dbGet("users", []);
   const html = `
     <div class="modal-head"><h3>${isEdit ? "تعديل مستند" : "إضافة مستند"}</h3><button class="modal-close" id="mClose">×</button></div>
     ${vehicles.length ? `
@@ -1493,6 +1498,15 @@ function openDocExpiryModal(el, existing, categories) {
     </div>` : ""}
     <div class="field"><label>التصنيف</label><input id="d_category" list="d_catList" value="${isEdit ? (existing.category || "") : ""}" placeholder="مثال: سجلات المنشأة">
       <datalist id="d_catList">${[...new Set([...DOC_CATEGORY_PRESETS, ...categories])].map(c => `<option value="${c}">`).join("")}</datalist></div>
+    ${users.length ? `
+    <div class="field" id="d_empField" style="display:none">
+      <label>ربط بموظف مسجل (اختياري)</label>
+      <select id="d_employee">
+        <option value="">— بدون ربط —</option>
+        ${users.map(u => `<option value="${u.id}" ${isEdit && existing.employeeId === u.id ? "selected" : ""}>${u.name} — ${u.role}</option>`).join("")}
+      </select>
+      <div class="hint">عند اختيار موظف يُملأ البند تلقائياً باسمه</div>
+    </div>` : ""}
     <div class="field"><label>البند</label><input id="d_name" list="d_nameList" value="${isEdit ? existing.name : ""}" placeholder="مثال: سجل تجاري، إقامة - محمد علي، الاستمارة">
       <datalist id="d_nameList"><option value="الاستمارة"><option value="الفحص الدوري"><option value="التأمين"><option value="رخصة السير"></datalist></div>
     <div class="grid cols-2">
@@ -1510,6 +1524,17 @@ function openDocExpiryModal(el, existing, categories) {
     const veh = vehicles.find(v => v.id === vehicleSelect.value);
     if (veh) ov.querySelector("#d_category").value = vehicleLabel(veh);
   };
+  const categoryInput = ov.querySelector("#d_category");
+  const empField = ov.querySelector("#d_empField");
+  const empSelect = ov.querySelector("#d_employee");
+  const syncEmpField = () => { if (empField) empField.style.display = categoryInput.value.trim() === DOC_EMPLOYEE_CATEGORY ? "block" : "none"; };
+  categoryInput.addEventListener("input", syncEmpField);
+  categoryInput.addEventListener("change", syncEmpField);
+  syncEmpField();
+  if (empSelect) empSelect.onchange = () => {
+    const emp = users.find(u => u.id === empSelect.value);
+    if (emp) ov.querySelector("#d_name").value = "إقامة - " + emp.name;
+  };
   ov.querySelector("#d_save").onclick = () => {
     const name = ov.querySelector("#d_name").value.trim();
     const expiryDate = ov.querySelector("#d_expiry").value;
@@ -1520,6 +1545,7 @@ function openDocExpiryModal(el, existing, categories) {
       category: ov.querySelector("#d_category").value.trim(), name, expiryDate,
       cost: Number(ov.querySelector("#d_cost").value) || 0, notes: ov.querySelector("#d_notes").value.trim(),
       vehicleId: vehicleSelect ? (vehicleSelect.value || "") : "",
+      employeeId: (empSelect && empField && empField.style.display !== "none") ? (empSelect.value || "") : "",
     };
     if (isEdit) {
       const idx = list.findIndex(x => x.id === existing.id);

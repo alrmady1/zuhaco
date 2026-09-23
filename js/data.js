@@ -220,6 +220,7 @@ const PERMISSION_GROUPS = [
   { group: "المحاسبة", perms: [
     { key: "acc_projects", label: "محاسبة المشاريع" },
     { key: "acc_general", label: "المحاسبة العامة والعُهد" },
+    { key: "acc_documents", label: "تواريخ انتهاء الأوراق الرسمية", parent: "acc_general" },
     { key: "acc_vat", label: "ضريبة القيمة المضافة" },
   ]},
   { group: "الإعدادات", perms: [
