@@ -355,6 +355,7 @@ function renderProjectsList(el) {
         </div>
         <div class="contract-row-actions no-print">
           <button class="btn-icon" data-openproj="${p.id}" title="فتح">${ICON_VIEW}</button>
+          <button class="btn-icon" data-editproj="${p.id}" title="تعديل الاسم والمعلومات">${ICON_EDIT}</button>
           ${canDeleteProject ? `<button class="btn-icon danger" data-delproj="${p.id}" title="حذف">${ICON_DELETE}</button>` : ""}
         </div>
       </div>`).join("") : `<div class="card empty-state"><div class="ic">${svgIcon("building", 40)}</div>لا توجد مشاريع بعد</div>`}
@@ -367,6 +368,14 @@ function renderProjectsList(el) {
     PROJECTS_VIEW = "builder"; router();
   };
   el.querySelectorAll("[data-openproj]").forEach(x => x.onclick = () => { PROJECT_VIEW_ID = x.dataset.openproj; PROJECTS_VIEW = "detail"; router(); });
+  el.querySelectorAll("[data-editproj]").forEach(x => x.onclick = (e) => {
+    e.stopPropagation();
+    const target = projects.find(p => p.id === x.dataset.editproj);
+    if (!target) return;
+    DRAFT_PROJECT = Object.assign(newDraftProject(), JSON.parse(JSON.stringify(target)));
+    PROJECT_CLIENT_SEARCH = ""; PROJECT_SHOW_ADD_CLIENT = false;
+    PROJECTS_VIEW = "builder"; router();
+  });
   el.querySelectorAll("[data-delproj]").forEach(x => x.onclick = (e) => {
     e.stopPropagation();
     if (!confirm("حذف هذا المشروع؟")) return;
