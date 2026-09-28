@@ -48,26 +48,41 @@ function extraKindInfo(key) {
   return EXTRA_KINDS.find(k => k.key === key) || EXTRA_KINDS[1];
 }
 
-// القيمة المطلقة للبند كما أُدخلت (الكمية × السعر) — قد تكون شاملة الضريبة أو لا حسب w.vatIncluded
+// القيمة المطلقة للبند كما أُدخلت (الكمية × السعر)
 function extraWorkTotal(w) {
   return (Number(w.qty) || 0) * (Number(w.unitPrice) || 0);
 }
 
+// هل تُطبَّق الضريبة على هذا البند أصلاً؟ (بنود قديمة بلا هذا الحقل تُعامَل كخاضعة للضريبة — نفس السلوك السابق)
+function extraWorkVatApplicable(w) {
+  return w.vatApplicable !== false;
+}
+
 // القيمة بدون ضريبة (الأساس الخاضع للضريبة) — تُستخدم في إجماليات المشروع
+// مبلغ مقطوع بلا ضريبة أصلاً: القيمة المُدخلة هي الأساس والإجمالي معاً، بلا أي حساب ضريبي
 function extraWorkBaseTotal(w) {
   const total = extraWorkTotal(w);
+  if (!extraWorkVatApplicable(w)) return total;
   return w.vatIncluded ? total / (1 + VAT_RATE) : total;
 }
 
-// مقدار الضريبة داخل/على البند
+// مقدار الضريبة داخل/على البند (صفر للبنود المقطوعة بلا ضريبة)
 function extraWorkVatAmount(w) {
+  if (!extraWorkVatApplicable(w)) return 0;
   const total = extraWorkTotal(w);
   return w.vatIncluded ? total - extraWorkBaseTotal(w) : total * VAT_RATE;
 }
 
-// القيمة شاملة الضريبة
+// القيمة شاملة الضريبة (= القيمة المُدخلة نفسها للبنود المقطوعة بلا ضريبة)
 function extraWorkGrossTotal(w) {
+  if (!extraWorkVatApplicable(w)) return extraWorkTotal(w);
   return w.vatIncluded ? extraWorkTotal(w) : extraWorkTotal(w) * (1 + VAT_RATE);
+}
+
+// وصف نصي قصير لحالة الضريبة — يُستخدم في جدول البنود وصفحة الطباعة
+function extraWorkVatLabel(w) {
+  if (!extraWorkVatApplicable(w)) return "بدون ضريبة (مبلغ مقطوع)";
+  return w.vatIncluded ? "شامل الضريبة" : "غير شامل الضريبة (+15%)";
 }
 
 // القيمة بالإشارة: البنود غير المنفذة تُخصم من قيمة المشروع
@@ -81,10 +96,14 @@ function signedMoney(w) {
 
 function projectExtrasTotals(p) {
   const works = p.extraWorks || [];
-  const additions = works.filter(w => w.kind !== "deduction").reduce((s, w) => s + extraWorkBaseTotal(w), 0);
-  const deductions = works.filter(w => w.kind === "deduction").reduce((s, w) => s + extraWorkBaseTotal(w), 0);
+  const additionsWorks = works.filter(w => w.kind !== "deduction");
+  const deductionsWorks = works.filter(w => w.kind === "deduction");
+  const additions = additionsWorks.reduce((s, w) => s + extraWorkBaseTotal(w), 0);
+  const deductions = deductionsWorks.reduce((s, w) => s + extraWorkBaseTotal(w), 0);
+  // مقدار الضريبة الفعلي لكل بند على حدة (صفر للبنود المقطوعة بلا ضريبة) بدل افتراض 15% موحدة على الصافي —
+  // يبقى صحيحاً عند خلط بنود خاضعة للضريبة وأخرى معفاة منها بالكامل في نفس المشروع.
+  const vat = additionsWorks.reduce((s, w) => s + extraWorkVatAmount(w), 0) - deductionsWorks.reduce((s, w) => s + extraWorkVatAmount(w), 0);
   const net = additions - deductions;
-  const vat = net * VAT_RATE;
   return { additions, deductions, subtotal: net, vat, total: net + vat };
 }
 
@@ -100,6 +119,7 @@ function openProjectExtraModal(p, existing, onSaved) {
   const w = existing || { kind: "extra_qty", name: "", unit: "", qty: 1, unitPrice: "", date: todayISO(), invoiceNumber: "", notes: "" };
   const contractItems = projectContractItems(p);
   let kind = w.kind;
+  let vatApplicable = w.vatApplicable !== false;
   let vatIncluded = !!w.vatIncluded;
 
   const html = `
@@ -120,8 +140,15 @@ function openProjectExtraModal(p, existing, onSaved) {
     </div>
     <div class="field" id="ew_amountWrap"><label id="ew_amountLabel">مبلغ الفاتورة (ر.س)</label><input type="number" min="0" step="0.01" id="ew_amount" value="${w.kind === "invoice" ? w.unitPrice : ""}"></div>
     <div class="field"><label>الضريبة</label>
+      <div class="pill-group" id="ew_vatApplicableToggle">
+        <div class="pill ${vatApplicable ? "active" : ""}" data-evatapp="1">عليه ضريبة</div>
+        <div class="pill ${!vatApplicable ? "active" : ""}" data-evatapp="0">بدون ضريبة (مبلغ مقطوع)</div>
+      </div>
+      <div class="hint">اختر "بدون ضريبة" للمبالغ التي تُحتسب للعميل كمبلغ مقطوع لا علاقة له بضريبة القيمة المضافة إطلاقاً — لن تُضاف أي ضريبة على هذا البند في أي حساب.</div>
+    </div>
+    <div class="field" id="ew_vatSubWrap">
       <div class="pill-group" id="ew_vatToggle">
-        <div class="pill ${!w.vatIncluded ? "active" : ""}" data-evat="0">بدون ضريبة (تُضاف 15%)</div>
+        <div class="pill ${!w.vatIncluded ? "active" : ""}" data-evat="0">غير شامل الضريبة (تُضاف 15%)</div>
         <div class="pill ${w.vatIncluded ? "active" : ""}" data-evat="1">شامل الضريبة (15% داخل السعر)</div>
       </div>
     </div>
@@ -141,6 +168,10 @@ function openProjectExtraModal(p, existing, onSaved) {
   function currentQty() { return kind === "invoice" ? 1 : Number($("ew_qty").value) || 0; }
   function refreshTotal() {
     const entered = currentQty() * currentPrice();
+    if (!vatApplicable) {
+      $("ew_total").innerHTML = `${fmtMoney(entered)}<div class="text-muted" style="font-size:11px;font-weight:400">مبلغ مقطوع بدون ضريبة — لن تُضاف عليه أي ضريبة</div>`;
+      return;
+    }
     const base = vatIncluded ? entered / (1 + VAT_RATE) : entered;
     const vatAmount = vatIncluded ? entered - base : entered * VAT_RATE;
     const gross = vatIncluded ? entered : entered * (1 + VAT_RATE);
@@ -156,11 +187,17 @@ function openProjectExtraModal(p, existing, onSaved) {
     $("ew_invoiceWrap").style.display = isInvoice ? "block" : "none";
     $("ew_qtyRow").style.display = isInvoice ? "none" : "grid";
     $("ew_amountWrap").style.display = isInvoice ? "block" : "none";
-    $("ew_amountLabel").textContent = "مبلغ الفاتورة (ر.س)" + (vatIncluded ? " — شامل الضريبة" : " — غير شامل الضريبة");
+    $("ew_amountLabel").textContent = "مبلغ الفاتورة (ر.س)" + (!vatApplicable ? " — بدون ضريبة" : vatIncluded ? " — شامل الضريبة" : " — غير شامل الضريبة");
+    $("ew_vatSubWrap").style.display = vatApplicable ? "block" : "none";
     refreshTotal();
   }
   applyKind();
   ov.querySelectorAll("[data-ekind]").forEach(p => p.onclick = () => { kind = p.dataset.ekind; applyKind(); });
+  ov.querySelectorAll("[data-evatapp]").forEach(p => p.onclick = () => {
+    vatApplicable = p.dataset.evatapp === "1";
+    ov.querySelectorAll("[data-evatapp]").forEach(x => x.classList.toggle("active", x.dataset.evatapp === (vatApplicable ? "1" : "0")));
+    applyKind();
+  });
   ov.querySelectorAll("[data-evat]").forEach(p => p.onclick = () => {
     vatIncluded = p.dataset.evat === "1";
     ov.querySelectorAll("[data-evat]").forEach(x => x.classList.toggle("active", x.dataset.evat === (vatIncluded ? "1" : "0")));
@@ -181,7 +218,7 @@ function openProjectExtraModal(p, existing, onSaved) {
     if (price <= 0) { toast("يرجى إدخال سعر أو مبلغ صحيح"); return; }
     if (kind !== "invoice" && currentQty() <= 0) { toast("يرجى إدخال كمية صحيحة"); return; }
     const data = {
-      kind, name, qty: currentQty(), unitPrice: price, vatIncluded,
+      kind, name, qty: currentQty(), unitPrice: price, vatApplicable, vatIncluded,
       unit: kind === "invoice" ? "فاتورة" : $("ew_unit").value.trim(),
       invoiceNumber: kind === "invoice" ? $("ew_invoiceNumber").value.trim() : "",
       date: $("ew_date").value || todayISO(), notes: $("ew_notes").value.trim(),
@@ -250,7 +287,7 @@ function projectExtrasCardHtml(p, contract) {
                 <td>${w.kind === "invoice" ? "-" : w.qty}</td>
                 <td>${escHtml(w.unit || "-")}</td>
                 <td>${fmtMoney(w.unitPrice)}</td>
-                <td><strong style="${w.kind === "deduction" ? "color:var(--danger)" : ""}">${signedMoney(w)}</strong><div class="text-muted" style="font-size:10.5px">${w.vatIncluded ? "شامل الضريبة" : "بدون ضريبة"}</div></td>
+                <td><strong style="${w.kind === "deduction" ? "color:var(--danger)" : ""}">${signedMoney(w)}</strong><div class="text-muted" style="font-size:10.5px">${extraWorkVatLabel(w)}</div></td>
                 <td>${fmtDate(w.date)}</td>
                 <td style="white-space:nowrap">
                   <button class="btn-icon" data-editextra="${w.id}" title="تعديل">${ICON_EDIT}</button>
@@ -294,7 +331,7 @@ function renderProjectExtras(el) {
           <td>${w.kind === "invoice" ? "-" : w.qty}</td>
           <td>${escHtml(w.unit || "-")}</td>
           <td>${fmtMoney(w.unitPrice)}</td>
-          <td><strong style="${w.kind === "deduction" ? "color:var(--danger)" : ""}">${signedMoney(w)}</strong><div class="text-muted" style="font-size:10px">${w.vatIncluded ? "شامل الضريبة" : "بدون ضريبة"}</div></td>
+          <td><strong style="${w.kind === "deduction" ? "color:var(--danger)" : ""}">${signedMoney(w)}</strong><div class="text-muted" style="font-size:10px">${extraWorkVatLabel(w)}</div></td>
           <td>${fmtDate(w.date)}</td>
         </tr>`).join("")}
       <tr><td colspan="5" style="text-align:left;font-weight:700">إجمالي ${k.section}</td><td colspan="2"><strong style="${sectionTotal < 0 ? "color:var(--danger)" : ""}">${sectionTotal < 0 ? "- " : ""}${fmtMoney(Math.abs(sectionTotal))}</strong></td></tr>
