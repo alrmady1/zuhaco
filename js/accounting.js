@@ -892,6 +892,125 @@ function openAddCustodyTxnModal(custodyId, type, el) {
   };
 }
 
+/* ================= كشف الراتب (طباعة / PDF) ================= */
+function escHtml(s) {
+  return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+// يبني كشف الراتب من حركة "رواتب" المسجلة (لقطة التفاصيل محفوظة عند الصرف؛ الحركات القديمة بلا لقطة تظهر بالصافي فقط)
+function payslipFromEntry(entry) {
+  const users = dbGet("users", []);
+  const u = users.find(x => x.id === entry.employeeId) || {};
+  const snap = entry.payslip;
+  return {
+    employeeName: entry.employeeName || u.name || "",
+    employeeRole: u.role || "",
+    idNumber: u.idNumber || "",
+    month: entry.salaryMonth || (entry.date || "").slice(0, 7),
+    paidDate: entry.date,
+    hasBreakdown: !!snap,
+    baseSalary: snap ? snap.baseSalary : Number(entry.amount || 0),
+    advances: snap ? snap.advances : [],
+    advancesTotal: snap ? snap.advancesTotal : 0,
+    violations: snap ? snap.violations : [],
+    violationsTotal: snap ? snap.violationsTotal : 0,
+    net: Number(entry.amount || 0),
+  };
+}
+
+function buildPayslipBodyHtml(slip) {
+  const profile = getCompanyProfile();
+  const monthText = slip.month ? salaryMonthLabel(slip.month) : "";
+  const totalDeductions = slip.advancesTotal + slip.violationsTotal;
+  const itemRows = (items, labelFn) => items.map(i => `<tr class="sub"><td>${labelFn(i)}</td><td class="amt">- ${fmtMoney(i.amount)}</td></tr>`).join("");
+  return `
+    <div class="ps-head">
+      ${profile.logo ? `<img class="ps-logo" src="${profile.logo}">` : ""}
+      <div>
+        <div class="ps-company">${escHtml(profile.name || "")}</div>
+        <div class="ps-meta">${[profile.phone, profile.address].filter(Boolean).map(escHtml).join(" — ")}</div>
+      </div>
+    </div>
+    <h2 class="ps-title">كشف راتب${monthText ? " شهر " + escHtml(monthText) : ""}</h2>
+    <table class="ps-info">
+      <tr><td class="k">اسم الموظف</td><td>${escHtml(slip.employeeName)}</td><td class="k">المسمى الوظيفي</td><td>${escHtml(slip.employeeRole || "-")}</td></tr>
+      <tr><td class="k">رقم الهوية</td><td>${escHtml(slip.idNumber || "-")}</td><td class="k">تاريخ تسليم الراتب</td><td>${slip.paidDate ? fmtDate(slip.paidDate) : "-"}</td></tr>
+    </table>
+    <table class="ps-table">
+      <thead><tr><th>البند</th><th class="amt">المبلغ</th></tr></thead>
+      <tbody>
+        <tr class="strong"><td>إجمالي الراتب (الراتب الأساسي)</td><td class="amt">${slip.hasBreakdown ? fmtMoney(slip.baseSalary) : "-"}</td></tr>
+        ${slip.hasBreakdown ? `
+          <tr class="ded"><td>المخصوم من السلفيات</td><td class="amt">- ${fmtMoney(slip.advancesTotal)}</td></tr>
+          ${itemRows(slip.advances, a => `سلفية بتاريخ ${fmtDate(a.date)}`)}
+          <tr class="ded"><td>الخصميات (المخالفات)</td><td class="amt">- ${fmtMoney(slip.violationsTotal)}</td></tr>
+          ${itemRows(slip.violations, v => `${escHtml(v.description || "مخالفة")} — ${fmtDate(v.date)}`)}
+          <tr class="strong"><td>إجمالي الاستقطاعات</td><td class="amt">- ${fmtMoney(totalDeductions)}</td></tr>
+        ` : `<tr class="sub"><td colspan="2">لا تتوفر تفاصيل الاستقطاعات لهذا الصرف (سُجّل قبل تفعيل كشف الراتب التفصيلي)</td></tr>`}
+        <tr class="net"><td>صافي المبلغ المستحق</td><td class="amt">${fmtMoney(slip.net)}</td></tr>
+      </tbody>
+    </table>
+    <div class="ps-sign"><div>توقيع الموظف: ................................</div><div>توقيع المحاسب: ................................</div></div>
+  `;
+}
+
+const PAYSLIP_CSS = `
+  * { box-sizing: border-box; }
+  body { font-family: "Cairo", "Segoe UI", Tahoma, sans-serif; direction: rtl; color: #1f2430; margin: 0; padding: 22px; font-size: 13px; }
+  .ps-head { display: flex; align-items: center; gap: 14px; border-bottom: 2px solid #b5651d; padding-bottom: 12px; margin-bottom: 14px; }
+  .ps-logo { width: 62px; height: 62px; object-fit: contain; }
+  .ps-company { font-size: 18px; font-weight: 800; }
+  .ps-meta { color: #6b7280; font-size: 11.5px; margin-top: 3px; }
+  .ps-title { text-align: center; margin: 8px 0 14px; font-size: 17px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+  .ps-info td { padding: 7px 10px; border: 1px solid #e3e6ec; }
+  .ps-info td.k { background: #f8f9fb; font-weight: 700; width: 18%; }
+  .ps-table th { background: #f2e2d0; padding: 9px 10px; border: 1px solid #e3e6ec; text-align: right; }
+  .ps-table td { padding: 8px 10px; border: 1px solid #e3e6ec; }
+  .amt { text-align: left; white-space: nowrap; font-weight: 700; width: 32%; }
+  tr.strong td { font-weight: 800; background: #fafbfc; }
+  tr.ded td { color: #b42318; font-weight: 700; }
+  tr.sub td { color: #6b7280; font-size: 12px; padding-right: 26px; font-weight: 400; }
+  tr.net td { background: #e5f6ec; color: #1a7f4e; font-size: 15px; font-weight: 800; }
+  .ps-sign { display: flex; justify-content: space-between; margin-top: 46px; color: #4b5563; }
+  @media print { @page { size: A4; margin: 12mm; } * { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+`;
+
+function payslipDocHtml(slip) {
+  return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>كشف راتب - ${escHtml(slip.employeeName)}</title><style>${PAYSLIP_CSS}</style></head><body>${buildPayslipBodyHtml(slip)}</body></html>`;
+}
+
+// طباعة عبر إطار مخفي (لا حاجة لنافذة منبثقة) — من نافذة الطباعة يمكن اختيار "حفظ بصيغة PDF"
+function printPayslip(slip) {
+  const iframe = document.createElement("iframe");
+  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
+  document.body.appendChild(iframe);
+  const doc = iframe.contentWindow.document;
+  doc.open(); doc.write(payslipDocHtml(slip)); doc.close();
+  setTimeout(() => {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+    setTimeout(() => iframe.remove(), 1500);
+  }, 350);
+}
+
+function openPayslipModal(slip) {
+  const html = `
+    <div class="modal-head"><h3>كشف الراتب</h3><button class="modal-close" id="mClose">×</button></div>
+    <iframe id="psPreview" style="width:100%;height:520px;border:1px solid var(--border);border-radius:10px;background:#fff"></iframe>
+    <div class="flex gap" style="margin-top:14px">
+      <button class="btn primary" id="psPrint">${svgIcon("printer")} طباعة / حفظ PDF</button>
+      <button class="btn" id="psClose">إغلاق</button>
+    </div>
+    <p class="text-muted" style="font-size:11.5px;margin-top:8px">لحفظ الكشف كملف PDF اختر "حفظ بصيغة PDF" كوجهة في نافذة الطباعة.</p>
+  `;
+  const ov = openModalShell(html, true);
+  ov.querySelector("#psPreview").srcdoc = payslipDocHtml(slip);
+  ov.querySelector("#mClose").onclick = closeModal;
+  ov.querySelector("#psClose").onclick = closeModal;
+  ov.querySelector("#psPrint").onclick = () => printPayslip(slip);
+}
+
 /* ================= تبويب الموظفين (بيانات شخصية، إجازات، عهد، سلفيات، رواتب، مخالفات) ================= */
 function renderEmployeesTab(el) {
   if (EMPLOYEES_VIEW === "detail" && EMPLOYEE_VIEW_ID) renderEmployeeDetail(el);
@@ -1019,6 +1138,7 @@ function renderEmployeeDetail(el) {
   const pendingViolationsTotal = pendingViolations.reduce((s, i) => s + Number(i.deductionAmount || 0), 0);
   const baseSalary = Number(u.baseSalary || 0);
   const netSalary = baseSalary - pendingAdvancesTotal - pendingViolationsTotal;
+  const paidSalaries = dbGet("accGeneral", []).filter(e => e.category === "رواتب" && e.employeeId === u.id).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 
   const entitlement = employeeLeaveEntitlement(u.id);
   const usedLeave = employeeUsedAnnualLeave(u.id);
@@ -1111,8 +1231,27 @@ function renderEmployeeDetail(el) {
         <div class="stat-card"><div class="label">صافي الراتب المستحق</div><div class="value success">${fmtMoney(netSalary)}</div></div>
       </div>
       <button class="btn primary" id="empPaySalary" style="margin-top:14px" ${baseSalary <= 0 ? "disabled" : ""}>${svgIcon("save")} تسجيل صرف الراتب</button>
-      <p class="text-muted" style="font-size:11.5px;margin-top:6px">يُنشئ حركة "رواتب" في المصاريف الإدارية بالصافي، ويعتبر السلفيات والمخالفات المعلّقة أعلاه "مخصومة".</p>
+      <p class="text-muted" style="font-size:11.5px;margin-top:6px">يُنشئ حركة "رواتب" في المصاريف الإدارية بالصافي، ويعتبر السلفيات والمخالفات المعلّقة أعلاه "مخصومة". بعد الصرف يظهر كشف الراتب مباشرة للطباعة أو الحفظ بصيغة PDF.</p>
     </div>
+
+    ${paidSalaries.length ? `
+    <div class="card">
+      <h3 class="mt-0">سجل الرواتب المصروفة (${paidSalaries.length})</h3>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>عن شهر</th><th>تاريخ الصرف</th><th>الصافي المصروف</th><th></th></tr></thead>
+          <tbody>
+            ${paidSalaries.map(s => `
+              <tr>
+                <td>${s.salaryMonth ? salaryMonthLabel(s.salaryMonth) : "-"}</td>
+                <td>${fmtDate(s.date)}</td>
+                <td><strong>${fmtMoney(s.amount)}</strong></td>
+                <td><button class="btn sm" data-printslip="${s.id}">${svgIcon("printer")} كشف الراتب</button></td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>` : ""}
 
     <div class="card">
       <div class="flex between" style="align-items:center;margin-bottom:10px">
@@ -1180,14 +1319,23 @@ function renderEmployeeDetail(el) {
   if (payBtn) payBtn.onclick = () => {
     if (!confirm(`تسجيل صرف راتب بقيمة ${fmtMoney(netSalary)} للموظف "${u.name}"؟ سيتم اعتبار السلفيات والمخالفات المعلّقة أعلاه "مخصومة".`)) return;
     const genList = dbGet("accGeneral", []);
-    genList.push({
+    const salaryEntry = {
       id: uid("ge"), category: "رواتب", amount: netSalary,
       vatApplicable: false, vatAmount: 0,
       date: todayISO(), note: `صافي بعد خصم سلفيات (${fmtMoney(pendingAdvancesTotal)}) ومخالفات (${fmtMoney(pendingViolationsTotal)})`,
       paymentMethod: "",
       attachment: null,
       employeeId: u.id, employeeName: u.name, salaryMonth: todayISO().slice(0, 7),
-    });
+      // لقطة تفاصيل الراتب وقت الصرف (لأن السلفيات والمخالفات تُعتبر "مخصومة" بعده) — تُستخدم في كشف الراتب
+      payslip: {
+        baseSalary,
+        advances: pendingAdvances.map(a => ({ date: a.date, amount: Number(a.amount || 0) })),
+        advancesTotal: pendingAdvancesTotal,
+        violations: pendingViolations.map(i => ({ date: i.date, description: i.description || "", amount: Number(i.deductionAmount || 0) })),
+        violationsTotal: pendingViolationsTotal,
+      },
+    };
+    genList.push(salaryEntry);
     dbSet("accGeneral", genList);
 
     if (pendingAdvances.length) {
@@ -1204,7 +1352,13 @@ function renderEmployeeDetail(el) {
     logActivity(`تم تسجيل صرف راتب للموظف "${u.name}" بقيمة ${fmtMoney(netSalary)}`);
     toast("تم تسجيل الراتب");
     renderEmployeesTab(el);
+    openPayslipModal(payslipFromEntry(salaryEntry)); // عرض كشف الراتب مباشرة بعد الصرف مع خيار الطباعة/PDF
   };
+
+  el.querySelectorAll("[data-printslip]").forEach(b => b.onclick = () => {
+    const entry = dbGet("accGeneral", []).find(x => x.id === b.dataset.printslip);
+    if (entry) openPayslipModal(payslipFromEntry(entry));
+  });
 
   const termBtn = document.getElementById("empTerminate");
   if (termBtn) termBtn.onclick = () => {
@@ -2181,6 +2335,7 @@ function openGeneralExpenseModal(el, existingEntry, preset) {
       if (subSelect && subSelect.value) { entry.subItem = subSelect.value; logSuffix = ` (${subSelect.value})`; }
     }
     if (isEdit) {
+      if (category === "رواتب" && existingEntry.payslip) entry.payslip = existingEntry.payslip; // الحفاظ على لقطة كشف الراتب عند تعديل الحركة
       const idx = list.findIndex(x => x.id === existingEntry.id);
       if (idx >= 0) list[idx] = entry; else list.push(entry);
     } else {
