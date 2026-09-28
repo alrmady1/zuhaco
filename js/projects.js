@@ -36,8 +36,298 @@ function projectTypeLabel(key) {
   return label.replace("عقد ", "");
 }
 
+/* ---------- الأعمال الإضافية (خارج العقد) ---------- */
+const EXTRA_KINDS = [
+  { key: "extra_qty", label: "كمية إضافية لبند بالعقد", section: "كميات إضافية لبنود العقد" },
+  { key: "new_item", label: "بند جديد", section: "بنود جديدة غير واردة في العقد" },
+  { key: "invoice", label: "فاتورة إضافية", section: "فواتير إضافية" },
+  { key: "deduction", label: "بند غير منفذ (خصم)", section: "بنود غير منفذة (مخصومة من العقد)" },
+];
+
+function extraKindInfo(key) {
+  return EXTRA_KINDS.find(k => k.key === key) || EXTRA_KINDS[1];
+}
+
+// القيمة المطلقة للبند (الكمية × السعر)
+function extraWorkTotal(w) {
+  return (Number(w.qty) || 0) * (Number(w.unitPrice) || 0);
+}
+
+// القيمة بالإشارة: البنود غير المنفذة تُخصم من قيمة المشروع
+function extraWorkSigned(w) {
+  return w.kind === "deduction" ? -extraWorkTotal(w) : extraWorkTotal(w);
+}
+
+function signedMoney(w) {
+  return (w.kind === "deduction" ? "- " : "") + fmtMoney(extraWorkTotal(w));
+}
+
+function projectExtrasTotals(p) {
+  const works = p.extraWorks || [];
+  const additions = works.filter(w => w.kind !== "deduction").reduce((s, w) => s + extraWorkTotal(w), 0);
+  const deductions = works.filter(w => w.kind === "deduction").reduce((s, w) => s + extraWorkTotal(w), 0);
+  const net = additions - deductions;
+  const vat = net * VAT_RATE;
+  return { additions, deductions, subtotal: net, vat, total: net + vat };
+}
+
+// بنود العقد (من عرض السعر المعتمد) لاقتراحها عند إضافة كمية إضافية
+function projectContractItems(p) {
+  const quote = p.approvedQuoteId ? dbGet("quotes", []).find(q => q.id === p.approvedQuoteId) : null;
+  if (!quote) return [];
+  return quote.categories.flatMap(c => c.items.map(it => ({ name: it.name, unit: it.unit || "", price: itemUnitPrice(it) })));
+}
+
+function openProjectExtraModal(p, existing, onSaved) {
+  const isEdit = !!existing;
+  const w = existing || { kind: "extra_qty", name: "", unit: "", qty: 1, unitPrice: "", date: todayISO(), invoiceNumber: "", notes: "" };
+  const contractItems = projectContractItems(p);
+  let kind = w.kind;
+
+  const html = `
+    <div class="modal-head"><h3>${isEdit ? "تعديل عمل إضافي" : "إضافة عمل إضافي"}</h3><button class="modal-close" id="mClose">×</button></div>
+    <div class="field"><label>نوع البند</label>
+      <div class="pill-group" id="ew_kinds">${EXTRA_KINDS.map(k => `<div class="pill ${kind === k.key ? "active" : ""}" data-ekind="${k.key}">${k.label}</div>`).join("")}</div>
+    </div>
+    <div class="field"><label id="ew_nameLabel">البند</label>
+      <input id="ew_name" list="ew_contractItems" value="${escHtml(w.name)}" autocomplete="off">
+      <datalist id="ew_contractItems">${contractItems.map(i => `<option value="${escHtml(i.name)}"></option>`).join("")}</datalist>
+      <div class="hint" id="ew_hint"></div>
+    </div>
+    <div class="field" id="ew_invoiceWrap"><label>رقم الفاتورة / المرجع (اختياري)</label><input id="ew_invoiceNumber" value="${escHtml(w.invoiceNumber || "")}"></div>
+    <div class="grid cols-3" id="ew_qtyRow">
+      <div class="field"><label>الكمية</label><input type="number" min="0" step="0.01" id="ew_qty" value="${w.qty}"></div>
+      <div class="field"><label>الوحدة</label><input id="ew_unit" value="${escHtml(w.unit || "")}" placeholder="م² / عدد / مقطوعية"></div>
+      <div class="field"><label>سعر الوحدة (ر.س)</label><input type="number" min="0" step="0.01" id="ew_price" value="${w.unitPrice}"></div>
+    </div>
+    <div class="field" id="ew_amountWrap"><label>مبلغ الفاتورة (ر.س) — غير شامل الضريبة</label><input type="number" min="0" step="0.01" id="ew_amount" value="${w.kind === "invoice" ? w.unitPrice : ""}"></div>
+    <div class="grid cols-2">
+      <div class="field"><label>التاريخ</label><input type="date" id="ew_date" value="${w.date || todayISO()}"></div>
+      <div class="field"><label>الإجمالي</label><div id="ew_total" style="padding:10px 0;font-weight:800"></div></div>
+    </div>
+    <div class="field"><label>ملاحظات (اختياري)</label><textarea id="ew_notes">${escHtml(w.notes || "")}</textarea></div>
+    <div class="flex gap"><button class="btn primary" id="ew_save">حفظ</button><button class="btn" id="ew_cancel">إلغاء</button></div>
+  `;
+  const ov = openModalShell(html);
+  const $ = (id) => ov.querySelector("#" + id);
+  $("mClose").onclick = closeModal;
+  $("ew_cancel").onclick = closeModal;
+
+  function currentPrice() { return kind === "invoice" ? Number($("ew_amount").value) || 0 : Number($("ew_price").value) || 0; }
+  function currentQty() { return kind === "invoice" ? 1 : Number($("ew_qty").value) || 0; }
+  function refreshTotal() { $("ew_total").textContent = fmtMoney(currentQty() * currentPrice()); }
+
+  function applyKind() {
+    ov.querySelectorAll("[data-ekind]").forEach(p => p.classList.toggle("active", p.dataset.ekind === kind));
+    const isInvoice = kind === "invoice";
+    const fromContract = kind === "extra_qty" || kind === "deduction";
+    $("ew_nameLabel").textContent = isInvoice ? "وصف الفاتورة" : kind === "extra_qty" ? "البند من العقد (اختر من القائمة أو اكتب اسمه)" : kind === "deduction" ? "البند غير المنفذ من العقد (اختر من القائمة أو اكتب اسمه)" : "اسم البند الجديد";
+    $("ew_hint").textContent = fromContract ? (contractItems.length ? "تظهر بنود العرض المعتمد للمشروع كاقتراحات، ويُملأ السعر والوحدة تلقائياً عند اختيار بند." + (kind === "deduction" ? " الكمية هنا هي الكمية التي لم تُنفَّذ، وتُخصم من قيمة المشروع." : "") : "لا يوجد عرض سعر معتمد للمشروع — اكتب اسم البند يدوياً.") : "";
+    $("ew_invoiceWrap").style.display = isInvoice ? "block" : "none";
+    $("ew_qtyRow").style.display = isInvoice ? "none" : "grid";
+    $("ew_amountWrap").style.display = isInvoice ? "block" : "none";
+    refreshTotal();
+  }
+  applyKind();
+  ov.querySelectorAll("[data-ekind]").forEach(p => p.onclick = () => { kind = p.dataset.ekind; applyKind(); });
+  ["ew_qty", "ew_price", "ew_amount"].forEach(id => $(id).oninput = refreshTotal);
+
+  $("ew_name").onchange = () => {
+    if (kind !== "extra_qty" && kind !== "deduction") return;
+    const item = contractItems.find(i => i.name === $("ew_name").value.trim());
+    if (item) { $("ew_unit").value = item.unit; $("ew_price").value = item.price; refreshTotal(); }
+  };
+
+  $("ew_save").onclick = () => {
+    const name = $("ew_name").value.trim();
+    const price = currentPrice();
+    if (!name) { toast("يرجى إدخال اسم البند"); return; }
+    if (price <= 0) { toast("يرجى إدخال سعر أو مبلغ صحيح"); return; }
+    if (kind !== "invoice" && currentQty() <= 0) { toast("يرجى إدخال كمية صحيحة"); return; }
+    const data = {
+      kind, name, qty: currentQty(), unitPrice: price,
+      unit: kind === "invoice" ? "فاتورة" : $("ew_unit").value.trim(),
+      invoiceNumber: kind === "invoice" ? $("ew_invoiceNumber").value.trim() : "",
+      date: $("ew_date").value || todayISO(), notes: $("ew_notes").value.trim(),
+    };
+    closeModal();
+    onSaved(data);
+  };
+}
+
+function bindProjectExtras(el, p, persist, rerender) {
+  const addBtn = document.getElementById("addExtraWork");
+  if (addBtn) addBtn.onclick = () => openProjectExtraModal(p, null, (data) => {
+    p.extraWorks = p.extraWorks || [];
+    p.extraWorks.push(Object.assign({ id: uid("ew") }, data));
+    persist();
+    logActivity(`تم إضافة عمل إضافي "${data.name}" بقيمة ${fmtMoney(data.qty * data.unitPrice)} على المشروع "${p.name}"`);
+    toast("تمت إضافة العمل الإضافي");
+    rerender();
+  });
+  el.querySelectorAll("[data-editextra]").forEach(b => b.onclick = () => {
+    const w = (p.extraWorks || []).find(x => x.id === b.dataset.editextra);
+    if (!w) return;
+    openProjectExtraModal(p, w, (data) => {
+      Object.assign(w, data);
+      persist();
+      logActivity(`تم تعديل عمل إضافي "${w.name}" على المشروع "${p.name}"`);
+      toast("تم حفظ التعديل");
+      rerender();
+    });
+  });
+  el.querySelectorAll("[data-delextra]").forEach(b => b.onclick = () => {
+    const w = (p.extraWorks || []).find(x => x.id === b.dataset.delextra);
+    if (!w || !confirm(`حذف العمل الإضافي "${w.name}"؟`)) return;
+    p.extraWorks = p.extraWorks.filter(x => x.id !== w.id);
+    persist();
+    logActivity(`تم حذف عمل إضافي "${w.name}" من المشروع "${p.name}"`);
+    rerender();
+  });
+  const printBtn = document.getElementById("openExtrasPrint");
+  if (printBtn) printBtn.onclick = () => { PROJECTS_VIEW = "extras"; router(); };
+}
+
+function projectExtrasCardHtml(p, contract) {
+  const works = p.extraWorks || [];
+  const t = projectExtrasTotals(p);
+  return `
+    <div class="card">
+      <div class="flex between" style="align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+        <h3 class="mt-0">الأعمال الإضافية والبنود غير المنفذة (التمرير النهائي) <span class="badge gray">${works.length}</span></h3>
+        <div class="flex gap">
+          ${works.length ? `<button class="btn sm" id="openExtrasPrint">${svgIcon("printer")} صفحة الطباعة</button>` : ""}
+          <button class="btn sm primary" id="addExtraWork">+ إضافة بند</button>
+        </div>
+      </div>
+      <p class="text-muted" style="font-size:12px;margin-top:-4px">كل ما لم يُحسب في العقد (كميات إضافية لبنود العقد، بنود جديدة، فواتير إضافية)، وكذلك البنود التي لم تُنفَّذ وتُخصم من قيمة المشروع — لتكون الصفحة الكشف الختامي للمشروع.</p>
+      ${works.length ? `
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>#</th><th>النوع</th><th>البند</th><th>الكمية</th><th>الوحدة</th><th>سعر الوحدة</th><th>الإجمالي</th><th>التاريخ</th><th></th></tr></thead>
+          <tbody>
+            ${works.map((w, i) => `
+              <tr>
+                <td>${i + 1}</td>
+                <td><span class="badge ${w.kind === "invoice" ? "orange" : w.kind === "extra_qty" ? "blue" : w.kind === "deduction" ? "red" : "gray"}">${extraKindInfo(w.kind).label}</span></td>
+                <td>${escHtml(w.name)}${w.invoiceNumber ? ` <span class="text-muted" style="font-size:11px">(${escHtml(w.invoiceNumber)})</span>` : ""}</td>
+                <td>${w.kind === "invoice" ? "-" : w.qty}</td>
+                <td>${escHtml(w.unit || "-")}</td>
+                <td>${fmtMoney(w.unitPrice)}</td>
+                <td><strong style="${w.kind === "deduction" ? "color:var(--danger)" : ""}">${signedMoney(w)}</strong></td>
+                <td>${fmtDate(w.date)}</td>
+                <td style="white-space:nowrap">
+                  <button class="btn-icon" data-editextra="${w.id}" title="تعديل">${ICON_EDIT}</button>
+                  <button class="btn-icon danger" data-delextra="${w.id}" title="حذف">${ICON_DELETE}</button>
+                </td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+      <div class="grid cols-4" style="margin-top:14px">
+        <div class="stat-card"><div class="label">إجمالي الأعمال الإضافية</div><div class="value">${fmtMoney(t.additions)}</div></div>
+        <div class="stat-card"><div class="label">إجمالي البنود غير المنفذة (خصم)</div><div class="value danger">- ${fmtMoney(t.deductions)}</div></div>
+        <div class="stat-card"><div class="label">صافي التغيير (قبل الضريبة)</div><div class="value ${t.subtotal >= 0 ? "" : "danger"}">${fmtMoney(t.subtotal)}</div></div>
+        <div class="stat-card"><div class="label">الصافي شامل الضريبة (15%)</div><div class="value warning">${fmtMoney(t.total)}</div></div>
+      </div>
+      <div class="stat-card" style="margin-top:12px;max-width:380px"><div class="label">${contract ? "القيمة النهائية للمشروع (العقد ± التغيير) — قبل الضريبة" : "قيمة العقد"}</div><div class="value success">${contract ? fmtMoney(Number(contract.totalAmount || 0) + t.subtotal) : "-"}</div><div class="text-muted" style="font-size:11px;margin-top:4px">${contract ? "شاملة الضريبة: " + fmtMoney((Number(contract.totalAmount || 0) + t.subtotal) * (1 + VAT_RATE)) : "لا يوجد عقد مرتبط"}</div></div>` : `<p class="text-muted" style="font-size:13px">لا توجد أعمال إضافية أو بنود غير منفذة مسجلة على هذا المشروع</p>`}
+    </div>
+  `;
+}
+
+/* صفحة مستقلة للأعمال الإضافية قابلة للطباعة */
+function renderProjectExtras(el) {
+  const p = dbGet("projects", []).find(x => x.id === PROJECT_VIEW_ID);
+  if (!p) { PROJECTS_VIEW = "list"; router(); return; }
+  const client = p.clientId ? dbGet("clients", []).find(c => c.id === p.clientId) : null;
+  const contract = p.contractId ? dbGet("contracts", []).find(c => c.id === p.contractId) : null;
+  const works = p.extraWorks || [];
+  const t = projectExtrasTotals(p);
+  let n = 0;
+
+  const sectionsHtml = EXTRA_KINDS.map(k => {
+    const rows = works.filter(w => w.kind === k.key);
+    if (!rows.length) return "";
+    const sectionTotal = rows.reduce((s, w) => s + extraWorkSigned(w), 0);
+    return `
+      <tr class="cat-header-row"><td colspan="7"><strong>${k.section}</strong></td></tr>
+      ${rows.map(w => `
+        <tr>
+          <td>${++n}</td>
+          <td>${escHtml(w.name)}${w.invoiceNumber ? `<div class="text-muted" style="font-size:11px">فاتورة/مرجع: ${escHtml(w.invoiceNumber)}</div>` : ""}${w.notes ? `<div class="text-muted" style="font-size:11px">${escHtml(w.notes)}</div>` : ""}</td>
+          <td>${w.kind === "invoice" ? "-" : w.qty}</td>
+          <td>${escHtml(w.unit || "-")}</td>
+          <td>${fmtMoney(w.unitPrice)}</td>
+          <td><strong style="${w.kind === "deduction" ? "color:var(--danger)" : ""}">${signedMoney(w)}</strong></td>
+          <td>${fmtDate(w.date)}</td>
+        </tr>`).join("")}
+      <tr><td colspan="5" style="text-align:left;font-weight:700">إجمالي ${k.section}</td><td colspan="2"><strong style="${sectionTotal < 0 ? "color:var(--danger)" : ""}">${sectionTotal < 0 ? "- " : ""}${fmtMoney(Math.abs(sectionTotal))}</strong></td></tr>
+    `;
+  }).join("");
+
+  el.innerHTML = `
+    <div class="breadcrumb no-print"><a id="bcProjects">المشاريع</a>${svgIcon("chevron-left")}<a id="bcProject">${escHtml(p.name)}</a>${svgIcon("chevron-left")}<span>الأعمال الإضافية</span></div>
+    <div class="section-title-row no-print">
+      <div><h2>الكشف الختامي — ${escHtml(p.name)}</h2><p>الأعمال الإضافية والبنود غير المنفذة، جاهز للطباعة</p></div>
+      <div class="flex gap">
+        <button class="btn" id="extrasBack">رجوع للمشروع</button>
+        <button class="btn primary" id="extrasPrint">${svgIcon("printer")} طباعة</button>
+      </div>
+    </div>
+
+    ${companyHeaderHtml()}
+
+    <div class="card">
+      <h2 style="text-align:center;margin:0 0 12px">الكشف الختامي للمشروع — الأعمال الإضافية والبنود غير المنفذة</h2>
+      <div class="grid cols-2">
+        <div>
+          <div class="kv-row"><span class="k">المشروع</span><span class="v">${escHtml(p.name)}</span></div>
+          <div class="kv-row"><span class="k">العميل</span><span class="v">${escHtml(client ? client.name : (p.client || "-"))}</span></div>
+          <div class="kv-row"><span class="k">الموقع</span><span class="v">${p.location ? (/^https?:\/\//i.test(p.location) ? "رابط خرائط جوجل" : escHtml(p.location)) : "-"}</span></div>
+        </div>
+        <div>
+          <div class="kv-row"><span class="k">تاريخ الكشف</span><span class="v">${fmtDate(todayISO())}</span></div>
+          <div class="kv-row"><span class="k">قيمة العقد الأصلي (قبل الضريبة)</span><span class="v">${contract ? fmtMoney(contract.totalAmount) : "-"}</span></div>
+          <div class="kv-row"><span class="k">عدد البنود الإضافية</span><span class="v">${works.length}</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      ${works.length ? `
+      <div class="table-wrap">
+        <table class="data-table quote-final-table">
+          <thead><tr><th>#</th><th>البند</th><th>الكمية</th><th>الوحدة</th><th>سعر الوحدة</th><th>الإجمالي</th><th>التاريخ</th></tr></thead>
+          <tbody>${sectionsHtml}</tbody>
+        </table>
+      </div>
+      <div class="grand-total-box" style="margin-top:14px;flex-direction:column;align-items:stretch;gap:6px">
+        <div class="flex between"><span>إجمالي الأعمال الإضافية</span><strong>${fmtMoney(t.additions)}</strong></div>
+        <div class="flex between"><span>إجمالي البنود غير المنفذة (مخصومة)</span><strong style="color:var(--danger)">- ${fmtMoney(t.deductions)}</strong></div>
+        <div class="flex between"><span>صافي التغيير على العقد (قبل الضريبة)</span><strong>${t.subtotal < 0 ? "- " : ""}${fmtMoney(Math.abs(t.subtotal))}</strong></div>
+        <div class="flex between"><span>ضريبة القيمة المضافة (15%)</span><strong>${t.vat < 0 ? "- " : ""}${fmtMoney(Math.abs(t.vat))}</strong></div>
+        <div class="flex between" style="border-top:1px solid rgba(0,0,0,.12);padding-top:8px"><span>صافي التغيير شامل الضريبة</span><div class="num">${t.total < 0 ? "- " : ""}${fmtMoney(Math.abs(t.total))}</div></div>
+      </div>
+      ${contract ? `
+      <div class="grand-total-box" style="margin-top:12px;flex-direction:column;align-items:stretch;gap:6px">
+        <div class="flex between"><span>قيمة العقد الأصلي (قبل الضريبة)</span><strong>${fmtMoney(contract.totalAmount)}</strong></div>
+        <div class="flex between"><span>± صافي التغيير</span><strong>${t.subtotal < 0 ? "- " : "+ "}${fmtMoney(Math.abs(t.subtotal))}</strong></div>
+        <div class="flex between" style="border-top:1px solid rgba(0,0,0,.12);padding-top:8px"><span>القيمة النهائية للمشروع (قبل الضريبة)</span><div class="num">${fmtMoney(Number(contract.totalAmount || 0) + t.subtotal)}</div></div>
+        <div class="flex between"><span>القيمة النهائية شاملة الضريبة (15%)</span><strong>${fmtMoney((Number(contract.totalAmount || 0) + t.subtotal) * (1 + VAT_RATE))}</strong></div>
+      </div>` : ""}
+      <div style="display:flex;justify-content:space-between;margin-top:46px;color:var(--text-muted);font-size:13px"><div>توقيع الطرف الأول (المقاول): ......................</div><div>توقيع الطرف الثاني (المالك): ......................</div></div>` : `<div class="empty-state">لا توجد أعمال إضافية مسجلة</div>`}
+    </div>
+  `;
+  document.getElementById("bcProjects").onclick = () => { PROJECTS_VIEW = "list"; router(); };
+  const backToProject = () => { PROJECTS_VIEW = "detail"; router(); };
+  document.getElementById("bcProject").onclick = backToProject;
+  document.getElementById("extrasBack").onclick = backToProject;
+  document.getElementById("extrasPrint").onclick = () => window.print();
+}
+
 function renderProjects(el) {
   if (PROJECTS_VIEW === "builder") return renderProjectBuilder(el);
+  if (PROJECTS_VIEW === "extras") return renderProjectExtras(el);
   if (PROJECTS_VIEW === "detail") return renderProjectDetail(el);
   renderProjectsList(el);
 }
@@ -509,6 +799,8 @@ function renderProjectDetail(el) {
       </div>
     </div>
 
+    ${projectExtrasCardHtml(p, contract)}
+
     <div class="card">
       <h3>الفنيون والمهندسون المتابعون</h3>
       <div class="pill-group">
@@ -564,6 +856,7 @@ function renderProjectDetail(el) {
   `;
 
   document.getElementById("backList2").onclick = () => { PROJECTS_VIEW = "list"; router(); };
+  bindProjectExtras(el, p, persist, () => renderProjectDetail(el));
 
   // ---- بيانات أساسية (حفظ تلقائي) ----
   document.getElementById("pd_name").onchange = (e) => { p.name = e.target.value.trim() || p.name; persist(); };
