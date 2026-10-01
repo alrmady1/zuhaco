@@ -4,51 +4,28 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>شركة زهى الاعمال للمقاولات | نظام إدارة المشاريع</title>
-<link rel="icon" type="image/jpeg" href="logo.jpg?v=110">
-<link rel="stylesheet" href="css/style.css?v=110">
+<link rel="icon" type="image/jpeg" href="logo.jpg?v=111">
+<link rel="stylesheet" href="css/style.css?v=111">
 <script>(function(){try{if(localStorage.getItem("zac_darkMode")==="1")document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();</script>
 <!-- Leaflet + Leaflet.draw — خريطة مناطق الرياض التفاعلية (الإعدادات ← مناطق الرياض) — مجانية عبر OpenStreetMap بلا مفتاح API -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-<!-- انترو شعار الشركة عند فتح التطبيق على الجوال فقط — خاص بهذا المشروع، غير موجود في نهوض نجد -->
-<style>
-  #introSplash { display: none; position: fixed; inset: 0; z-index: 9999; background: #fff; align-items: center; justify-content: center; transition: opacity .35s ease; }
-  #introSplash video { width: 100%; height: 100%; object-fit: cover; }
-  @media (max-width: 700px) { #introSplash { display: flex; } }
-</style>
 </head>
 <body>
-<div id="introSplash"><video src="intro.mp4?v=110" autoplay muted playsinline></video></div>
-<script>
-(function () {
-  var el = document.getElementById("introSplash");
-  var video = el.querySelector("video");
-  var hidden = false;
-  function hide() {
-    if (hidden) return;
-    hidden = true;
-    el.style.opacity = "0";
-    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 350);
-  }
-  video.addEventListener("ended", hide);
-  video.addEventListener("error", hide);
-  setTimeout(hide, 2500); // شبكة بطيئة أو منع التشغيل التلقائي — لا يحجب التطبيق أكثر من هذا
-})();
-</script>
 <div id="root"></div>
 
-<script src="js/data.js?v=110"></script>
-<script src="js/clients.js?v=110"></script>
-<script src="js/projects.js?v=110"></script>
-<script src="js/quotes.js?v=110"></script>
-<script src="js/visits.js?v=110"></script>
-<script src="js/reports.js?v=110"></script>
-<script src="js/accounting.js?v=110"></script>
-<script src="js/contractors.js?v=110"></script>
-<script src="js/contracts.js?v=110"></script>
-<script src="js/settings.js?v=110"></script>
-<script src="js/app.js?v=110"></script>
+<script src="js/data.js?v=111"></script>
+<script src="js/clients.js?v=111"></script>
+<script src="js/projects.js?v=111"></script>
+<script src="js/quotes.js?v=111"></script>
+<script src="js/visits.js?v=111"></script>
+<script src="js/reports.js?v=111"></script>
+<script src="js/accounting.js?v=111"></script>
+<script src="js/contractors.js?v=111"></script>
+<script src="js/contracts.js?v=111"></script>
+<script src="js/settings.js?v=111"></script>
+<script src="js/app.js?v=111"></script>
 </body>
 </html>
