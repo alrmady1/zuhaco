@@ -673,6 +673,16 @@ table.data-table tr:hover td { background: #fafcff; }
   .content { padding: 18px 16px 60px; }
   .topbar { padding: 0 14px; }
   .section-title-row h2 { font-size: 22px; }
+  /* لوحة التنبيهات بعرض ثابت (340px) تفيض خارج الشاشة على الجوال أياً كان موضع زر الجرس —
+     على الشاشات الضيقة نجعلها overlay ثابت بعرض الشاشة ناقص هوامش بدل التموضع المرتبط بالزر */
+  .notif-panel {
+    position: fixed;
+    top: 64px;
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-height: calc(100vh - 90px);
+  }
 }
 
 /* الطباعة: نلغي مظهر الحقول التفاعلية داخل الجداول حتى يخرج العرض كنص نظيف */
