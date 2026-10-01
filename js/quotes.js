@@ -962,11 +962,10 @@ function buildQuotePrintTables(q) {
         </thead>
         <tbody>
           ${qc.items.map((it, ii) => {
-            const label = supplyInstallLabel(it);
             return `
             <tr>
               <td class="pc-num">${catNum}-${toArabicNum(ii + 1, 2)}</td>
-              <td class="pc-desc">${label ? escHtml(label) + " - " : ""}${escHtml(it.name)}</td>
+              <td class="pc-desc">${escHtml(it.name)}</td>
               <td class="pc-unit">${escHtml(it.unit)}</td>
               ${showQty ? `<td class="pc-qty">${plainMoney(it.qty)}</td>` : ""}
               ${showPrice ? `<td class="pc-price">${plainMoney(itemUnitPrice(it))}</td><td class="pc-total">${plainMoney(itemTotal(it))}</td>` : ""}
