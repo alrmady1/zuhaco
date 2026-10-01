@@ -649,7 +649,12 @@ function renderGeneralExpensesTab(el) {
   list.forEach(e => byCat[e.category] = (byCat[e.category] || 0) + Number(e.amount || 0));
 
   el.innerHTML = `
-    <div class="flex between" style="margin-bottom:14px"><div></div><button class="btn primary" id="addGeneralBtn">+ إضافة مصروف</button></div>
+    <div class="flex between" style="margin-bottom:14px"><div></div>
+      <div class="flex gap">
+        <button class="btn" id="printGeneralBtn">${svgIcon("printer")} طباعة السجل</button>
+        <button class="btn primary" id="addGeneralBtn">+ إضافة مصروف</button>
+      </div>
+    </div>
 
     <div class="grid cols-4" style="margin-bottom:18px">
       ${catNames.map(c => `<div class="stat-card"><div class="label">${c}</div><div class="value">${fmtMoney(byCat[c])}</div></div>`).join("")}
@@ -685,6 +690,7 @@ function renderGeneralExpensesTab(el) {
   `;
 
   document.getElementById("addGeneralBtn").onclick = () => openGeneralExpenseModal(el);
+  document.getElementById("printGeneralBtn").onclick = () => openGeneralExpensesPrintModal();
   el.querySelectorAll("[data-sortkey]").forEach(th => th.onclick = () => {
     const k = th.dataset.sortkey;
     if (GEN_EXP_SORT.key === k) GEN_EXP_SORT.dir = GEN_EXP_SORT.dir === "asc" ? "desc" : "asc";
@@ -706,6 +712,98 @@ function renderGeneralExpensesTab(el) {
     if (target) logActivity(`تم حذف مصروف إداري "${target.category}" بقيمة ${fmtMoney(target.amount)}`);
     renderGeneralExpensesTab(el);
   });
+}
+
+function openGeneralExpensesPrintModal() {
+  const catNames = getExpenseCategoryNames();
+  const html = `
+    <div class="modal-head"><h3>طباعة سجل المصاريف الإدارية</h3><button class="modal-close" id="mClose">×</button></div>
+    <div class="grid cols-2">
+      <div class="field"><label>من تاريخ (اختياري)</label><input type="date" id="gp_from"></div>
+      <div class="field"><label>إلى تاريخ (اختياري)</label><input type="date" id="gp_to"></div>
+    </div>
+    <div class="field">
+      <div class="flex between" style="align-items:center;margin-bottom:8px">
+        <label style="margin:0">التصنيفات</label>
+        <span class="text-muted" style="font-size:11.5px;cursor:pointer;text-decoration:underline" id="gp_toggleAll">تحديد الكل / إلغاء التحديد</span>
+      </div>
+      <div class="pill-group">
+        ${catNames.map(c => `<label class="chk" style="border:1px solid var(--border);border-radius:20px;padding:7px 14px"><input type="checkbox" data-gpcat value="${escHtml(c)}" checked> ${c}</label>`).join("")}
+      </div>
+    </div>
+    <div class="flex gap"><button class="btn primary" id="gp_print">${svgIcon("printer")} طباعة</button><button class="btn" id="gp_cancel">إلغاء</button></div>
+  `;
+  const ov = openModalShell(html);
+  ov.querySelector("#mClose").onclick = closeModal;
+  ov.querySelector("#gp_cancel").onclick = closeModal;
+  ov.querySelector("#gp_toggleAll").onclick = () => {
+    const boxes = ov.querySelectorAll("[data-gpcat]");
+    const allChecked = Array.from(boxes).every(b => b.checked);
+    boxes.forEach(b => b.checked = !allChecked);
+  };
+  ov.querySelector("#gp_print").onclick = () => {
+    const from = ov.querySelector("#gp_from").value;
+    const to = ov.querySelector("#gp_to").value;
+    if (from && to && from > to) { toast("تاريخ البداية يجب أن يسبق تاريخ النهاية"); return; }
+    const categories = Array.from(ov.querySelectorAll("[data-gpcat]")).filter(b => b.checked).map(b => b.value);
+    if (!categories.length) { toast("يرجى اختيار تصنيف واحد على الأقل"); return; }
+    closeModal();
+    printGeneralExpensesLog(from, to, categories);
+  };
+}
+
+function printGeneralExpensesLog(from, to, categories) {
+  const allCats = getExpenseCategoryNames();
+  const allSelected = categories.length === allCats.length;
+  const list = dbGet("accGeneral", [])
+    .filter(e => categories.includes(e.category))
+    .filter(e => !from || (e.date || "") >= from)
+    .filter(e => !to || (e.date || "") <= to)
+    .slice().sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+  const total = list.reduce((s, e) => s + Number(e.amount || 0), 0);
+
+  const rangeLabel = from && to ? `من ${fmtDate(from)} إلى ${fmtDate(to)}` : from ? `من ${fmtDate(from)}` : to ? `حتى ${fmtDate(to)}` : "كل الفترات";
+  const catsLabel = allSelected ? "جميع التصنيفات" : categories.join("، ");
+
+  const html = `
+    ${companyHeaderHtml()}
+    <div class="card">
+      <h2 style="margin:0 0 4px">سجل المصاريف الإدارية</h2>
+      <p class="text-muted" style="margin:0">الفترة: ${rangeLabel}</p>
+      <p class="text-muted" style="margin:2px 0 0">التصنيفات: ${catsLabel}</p>
+    </div>
+    <div class="card">
+      ${list.length ? `
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>التصنيف</th><th>التفاصيل</th><th>المبلغ</th><th>طريقة الدفع</th><th>التاريخ</th><th>ملاحظات</th></tr></thead>
+          <tbody>
+            ${list.map(e => `
+              <tr>
+                <td>${escHtml(e.category)}</td>
+                <td>${escHtml(generalExpenseSubtitle(e) || "-")}</td>
+                <td><strong>${fmtMoney(e.amount)}</strong></td>
+                <td>${e.paymentMethod || "-"}</td>
+                <td>${fmtDate(e.date)}</td>
+                <td>${escHtml(e.note || "-")}</td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+      <div class="grand-total-box" style="margin-top:14px"><div>إجمالي المصاريف (${list.length} بند)</div><div class="num">${fmtMoney(total)}</div></div>
+      ` : `<div class="empty-state"><div class="ic">${svgIcon("building", 40)}</div>لا توجد مصاريف ضمن الفترة/التصنيفات المحددة</div>`}
+    </div>
+  `;
+
+  let area = document.getElementById("genExpPrintArea");
+  if (!area) {
+    area = document.createElement("div");
+    area.id = "genExpPrintArea";
+    area.className = "print-only";
+    document.body.appendChild(area);
+  }
+  area.innerHTML = html;
+  window.print();
 }
 
 /* ================= العهد ================= */
