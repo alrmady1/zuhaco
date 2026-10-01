@@ -5,6 +5,7 @@
 const VAT_RATE = 0.15;
 let ACC_SELECTED_PROJECT = null;
 let GEN_EXP_SORT = { key: "date", dir: "desc" };
+let ACC_PROJ_SORT = { key: "date", dir: "desc" };
 
 const ACC_TYPES = ["إيراد مشروع", "دفعة مشتريات", "دفعة مقاول باطن", "مصروف مواد", "مصروف عمال", "مصروف نثرية"];
 const ACC_EXPENSE_TYPES = ["دفعة مشتريات", "دفعة مقاول باطن", "مصروف مواد", "مصروف عمال", "مصروف نثرية"];
@@ -69,7 +70,18 @@ function renderAccProjects(el) {
   const projects = dbGet("projects", []);
   if (!ACC_SELECTED_PROJECT && projects.length) ACC_SELECTED_PROJECT = projects[0].id;
   const project = projects.find(p => p.id === ACC_SELECTED_PROJECT);
-  const entries = dbGet("accProjects", []).filter(e => e.projectId === ACC_SELECTED_PROJECT).sort((a, b) => (b.date > a.date ? 1 : -1));
+  const entries = dbGet("accProjects", []).filter(e => e.projectId === ACC_SELECTED_PROJECT);
+  const { key: apKey, dir: apDir } = ACC_PROJ_SORT;
+  const apMul = apDir === "asc" ? 1 : -1;
+  entries.sort((a, b) => {
+    let av, bv;
+    if (apKey === "amount") { av = Number(a.amount) || 0; bv = Number(b.amount) || 0; }
+    else if (apKey === "type") { av = a.type || ""; bv = b.type || ""; }
+    else { av = a.date || ""; bv = b.date || ""; }
+    if (av < bv) return -1 * apMul;
+    if (av > bv) return 1 * apMul;
+    return 0;
+  });
 
   const EXPENSE_TYPES = ACC_EXPENSE_TYPES;
   const revenue = entries.filter(e => e.type === "إيراد مشروع" || e.type === "فاتورة ضريبية").reduce((s, e) => s + Number(e.amount || 0), 0);
@@ -113,6 +125,7 @@ function renderAccProjects(el) {
       <div class="flex between wrap" style="margin-bottom:10px">
         <h3 class="mt-0">حركة الحساب — ${project ? project.name : ""}</h3>
         <div class="flex gap">
+          <button class="btn sm" id="printAccProjBtn">${svgIcon("printer")} طباعة السجل</button>
           <button class="btn sm" id="addEntryBtn">+ إضافة حركة</button>
           <button class="btn sm primary" id="addInvoiceBtn">+ إصدار فاتورة ضريبية</button>
         </div>
@@ -120,7 +133,7 @@ function renderAccProjects(el) {
       ${entries.length ? `
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>النوع</th><th>المبلغ</th><th>ضريبة القيمة المضافة</th><th>التاريخ</th><th>ملاحظات</th><th>المرفق</th><th></th></tr></thead>
+          <thead><tr>${accProjSortTh("النوع", "type")}${accProjSortTh("المبلغ", "amount")}<th>ضريبة القيمة المضافة</th>${accProjSortTh("التاريخ", "date")}<th>ملاحظات</th><th>المرفق</th><th></th></tr></thead>
           <tbody>
             ${entries.map(e => `
               <tr>
@@ -149,6 +162,13 @@ function renderAccProjects(el) {
   document.getElementById("accProjectSelect").onchange = (e) => { ACC_SELECTED_PROJECT = e.target.value; renderAccProjects(el); };
   document.getElementById("addEntryBtn").onclick = () => openAccEntryModal(el);
   document.getElementById("addInvoiceBtn").onclick = () => openInvoiceModal(el);
+  document.getElementById("printAccProjBtn").onclick = () => openAccProjectsPrintModal(project);
+  el.querySelectorAll("[data-sortkey]").forEach(th => th.onclick = () => {
+    const k = th.dataset.sortkey;
+    if (ACC_PROJ_SORT.key === k) ACC_PROJ_SORT.dir = ACC_PROJ_SORT.dir === "asc" ? "desc" : "asc";
+    else ACC_PROJ_SORT = { key: k, dir: k === "date" ? "desc" : "asc" };
+    renderAccProjects(el);
+  });
   el.querySelectorAll("[data-delentry]").forEach(b => b.onclick = () => {
     if (!confirm("حذف هذه الحركة؟")) return;
     const target = dbGet("accProjects", []).find(x => x.id === b.dataset.delentry);
@@ -165,6 +185,110 @@ function renderAccProjects(el) {
     const target = dbGet("accProjects", []).find(x => x.id === b.dataset.viewentry);
     if (target) openAccEntryViewModal(target);
   });
+}
+
+function accProjSortTh(label, key) {
+  const active = ACC_PROJ_SORT.key === key;
+  const arrow = active ? (ACC_PROJ_SORT.dir === "asc" ? ` ${svgIcon("chevron-up", 12)}` : ` ${svgIcon("chevron-down", 12)}`) : "";
+  return `<th class="sortable-th" data-sortkey="${key}">${label}${arrow}</th>`;
+}
+
+function openAccProjectsPrintModal(project) {
+  const types = [...ACC_TYPES, "فاتورة ضريبية"];
+  const html = `
+    <div class="modal-head"><h3>طباعة حركة الحساب — ${project ? escHtml(project.name) : ""}</h3><button class="modal-close" id="mClose">×</button></div>
+    <div class="grid cols-2">
+      <div class="field"><label>من تاريخ (اختياري)</label><input type="date" id="ap_from"></div>
+      <div class="field"><label>إلى تاريخ (اختياري)</label><input type="date" id="ap_to"></div>
+    </div>
+    <div class="field">
+      <div class="flex between" style="align-items:center;margin-bottom:8px">
+        <label style="margin:0">الأنواع</label>
+        <span class="text-muted" style="font-size:11.5px;cursor:pointer;text-decoration:underline" id="ap_toggleAll">تحديد الكل / إلغاء التحديد</span>
+      </div>
+      <div class="pill-group">
+        ${types.map(t => `<label class="chk" style="border:1px solid var(--border);border-radius:20px;padding:7px 14px"><input type="checkbox" data-apcat value="${escHtml(t)}" checked> ${t}</label>`).join("")}
+      </div>
+    </div>
+    <div class="flex gap"><button class="btn primary" id="ap_print">${svgIcon("printer")} طباعة</button><button class="btn" id="ap_cancel">إلغاء</button></div>
+  `;
+  const ov = openModalShell(html);
+  ov.querySelector("#mClose").onclick = closeModal;
+  ov.querySelector("#ap_cancel").onclick = closeModal;
+  ov.querySelector("#ap_toggleAll").onclick = () => {
+    const boxes = ov.querySelectorAll("[data-apcat]");
+    const allChecked = Array.from(boxes).every(b => b.checked);
+    boxes.forEach(b => b.checked = !allChecked);
+  };
+  ov.querySelector("#ap_print").onclick = () => {
+    const from = ov.querySelector("#ap_from").value;
+    const to = ov.querySelector("#ap_to").value;
+    if (from && to && from > to) { toast("تاريخ البداية يجب أن يسبق تاريخ النهاية"); return; }
+    const selectedTypes = Array.from(ov.querySelectorAll("[data-apcat]")).filter(b => b.checked).map(b => b.value);
+    if (!selectedTypes.length) { toast("يرجى اختيار نوع واحد على الأقل"); return; }
+    closeModal();
+    printAccProjectsLog(project, from, to, selectedTypes);
+  };
+}
+
+function printAccProjectsLog(project, from, to, types) {
+  const allTypes = [...ACC_TYPES, "فاتورة ضريبية"];
+  const allSelected = types.length === allTypes.length;
+  const list = dbGet("accProjects", [])
+    .filter(e => e.projectId === (project ? project.id : null))
+    .filter(e => types.includes(e.type))
+    .filter(e => !from || (e.date || "") >= from)
+    .filter(e => !to || (e.date || "") <= to)
+    .slice().sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+
+  const revenue = list.filter(e => e.type === "إيراد مشروع" || e.type === "فاتورة ضريبية").reduce((s, e) => s + Number(e.amount || 0), 0);
+  const expenses = list.filter(e => ACC_EXPENSE_TYPES.includes(e.type)).reduce((s, e) => s + Number(e.amount || 0), 0);
+  const net = revenue - expenses;
+
+  const rangeLabel = from && to ? `من ${fmtDate(from)} إلى ${fmtDate(to)}` : from ? `من ${fmtDate(from)}` : to ? `حتى ${fmtDate(to)}` : "كل الفترات";
+  const typesLabel = allSelected ? "جميع الأنواع" : types.join("، ");
+
+  const html = `
+    ${companyHeaderHtml()}
+    <div class="card">
+      <h2 style="margin:0 0 4px">حركة الحساب — ${project ? escHtml(project.name) : ""}</h2>
+      <p class="text-muted" style="margin:0">الفترة: ${rangeLabel}</p>
+      <p class="text-muted" style="margin:2px 0 0">الأنواع: ${typesLabel}</p>
+    </div>
+    <div class="card">
+      ${list.length ? `
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>النوع</th><th>المبلغ</th><th>التاريخ</th><th>ملاحظات</th></tr></thead>
+          <tbody>
+            ${list.map(e => `
+              <tr>
+                <td>${escHtml(e.type)}</td>
+                <td><strong>${fmtMoney(e.amount)}</strong></td>
+                <td>${fmtDate(e.date)}</td>
+                <td>${escHtml(e.note || (e.invoiceNumber ? "فاتورة رقم " + e.invoiceNumber : "-"))}</td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+      <div class="grid cols-3" style="margin-top:14px">
+        <div class="stat-card"><div class="label">إجمالي الإيرادات</div><div class="value success">${fmtMoney(revenue)}</div></div>
+        <div class="stat-card"><div class="label">إجمالي المصاريف</div><div class="value danger">${fmtMoney(expenses)}</div></div>
+        <div class="stat-card"><div class="label">الصافي</div><div class="value ${net >= 0 ? "success" : "danger"}">${fmtMoney(net)}</div></div>
+      </div>
+      ` : `<div class="empty-state"><div class="ic">${svgIcon("dollar", 40)}</div>لا توجد حركات ضمن الفترة/الأنواع المحددة</div>`}
+    </div>
+  `;
+
+  let area = document.getElementById("genExpPrintArea");
+  if (!area) {
+    area = document.createElement("div");
+    area.id = "genExpPrintArea";
+    area.className = "print-only";
+    document.body.appendChild(area);
+  }
+  area.innerHTML = html;
+  window.print();
 }
 
 /* عرض تفصيلي للحركة المالية (بدون تعديل) — يوضّح كل بياناتها بما فيها التاجر ورقم الفاتورة وطريقة السداد والمرفق */
