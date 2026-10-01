@@ -267,6 +267,14 @@ table.data-table input[type="number"] { padding: 7px 9px; border: 1px solid var(
 .quote-final-table tr.dragging { opacity: .4; }
 .quote-final-table .drag-handle { cursor: grab; color: var(--text-muted); font-size: 13px; user-select: none; margin-inline-end: 4px; }
 .quote-final-table .drag-handle:active { cursor: grabbing; }
+@media print {
+  .quote-final-table.print-hide-qty .qty-col { display: none !important; }
+  .quote-final-table.print-hide-price .price-col { display: none !important; }
+}
+.cat-block.dragging, .qitem-row.dragging { opacity: .4; }
+.cat-block .drag-handle, .qitem-row .drag-handle { cursor: grab; color: var(--text-muted); user-select: none; margin-inline-end: 6px; display: inline-flex; vertical-align: -3px; }
+.cat-block .drag-handle:active, .qitem-row .drag-handle:active { cursor: grabbing; }
+.cat-head-side { display: flex; align-items: center; gap: 8px; }
 .quote-final-table td.no-print .btn.sm { padding: 5px 8px; margin-inline-start: 3px; }
 .quote-final-table td.no-print .btn.sm:first-child { margin-inline-start: 0; }
 .quote-final-table tr.cat-header-row { cursor: grab; }

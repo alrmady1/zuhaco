@@ -380,6 +380,14 @@ function renderQuoteBuilder(el) {
         <input type="checkbox" id="f_showHeader" ${q.showCompanyHeader !== false ? "checked" : ""}>
         إظهار بيانات المؤسسة والشعار في ترويسة عرض السعر النهائي
       </label>
+      <label class="chk" style="font-weight:700;margin-top:8px">
+        <input type="checkbox" id="f_hideQty" ${q.hideQty ? "checked" : ""}>
+        إخفاء عمود الكمية عند طباعة العرض النهائي (إظهار البند فقط)
+      </label>
+      <label class="chk" style="font-weight:700;margin-top:8px">
+        <input type="checkbox" id="f_hidePrice" ${q.hidePrice ? "checked" : ""}>
+        إخفاء عمود السعر والإجمالي لكل بند عند طباعة العرض النهائي (يبقى الإجمالي الكلي ظاهراً)
+      </label>
     </div>
 
     <div class="card">
@@ -391,7 +399,7 @@ function renderQuoteBuilder(el) {
     </div>
 
     <div id="catBlocks">
-      ${q.categories.map(qc => renderCatBlock(qc, catalog)).join("") || `<div class="card empty-state"><div class="ic">${svgIcon("box", 40)}</div>اختر تصنيفاً أعلاه للبدء بإضافة البنود</div>`}
+      ${q.categories.map((qc, idx) => renderCatBlock(qc, catalog, idx, q.categories.length)).join("") || `<div class="card empty-state"><div class="ic">${svgIcon("box", 40)}</div>اختر تصنيفاً أعلاه للبدء بإضافة البنود</div>`}
     </div>
 
     <div class="grand-total-box">
@@ -415,7 +423,7 @@ function renderQuoteBuilder(el) {
   bindQuoteBuilderEvents(el);
 }
 
-function renderCatBlock(qc, catalog) {
+function renderCatBlock(qc, catalog, catIdx, catCount) {
   const cat = catalog.find(c => c.id === qc.catId);
   const catItems = cat ? cat.items : [];
   const alreadyIds = qc.items.map(i => i.itemId).filter(Boolean);
@@ -425,8 +433,15 @@ function renderCatBlock(qc, catalog) {
   return `
     <div class="cat-block" data-block="${qc.catId}">
       <div class="cat-head">
-        <strong>${qc.catName}</strong>
-        <span class="cat-total">إجمالي التصنيف: ${fmtMoney(blockTotal)}</span>
+        <span class="cat-head-side">
+          <span class="drag-handle" data-dragcat="${qc.catId}" title="اسحب لإعادة ترتيب التصنيف">${svgIcon("grip", 14)}</span>
+          <strong>${qc.catName}</strong>
+        </span>
+        <span class="cat-head-side">
+          <span class="cat-total">إجمالي التصنيف: ${fmtMoney(blockTotal)}</span>
+          <button class="btn-icon" data-catup="${qc.catId}" title="نقل التصنيف لأعلى" ${catIdx === 0 ? "disabled" : ""}>${svgIcon("chevron-up", 14)}</button>
+          <button class="btn-icon" data-catdown="${qc.catId}" title="نقل التصنيف لأسفل" ${catIdx === catCount - 1 ? "disabled" : ""}>${svgIcon("chevron-down", 14)}</button>
+        </span>
       </div>
 
       ${qc.items.map((it, idx) => renderQuoteItemRow(qc, it, idx)).join("")}
@@ -456,6 +471,7 @@ function renderQuoteItemRow(qc, it, idx) {
     return `
     <div class="qitem-row" data-item-row="${key}">
       <div class="qitem-name">
+        <span class="drag-handle" title="اسحب لإعادة ترتيب البند">${svgIcon("grip", 14)}</span>
         <input value="${it.name}" data-itemname="${key}" style="font-weight:700;border:1px solid var(--border);border-radius:6px;padding:5px 8px;width:100%;margin-bottom:5px">
         <div class="flex" style="align-items:center;gap:6px">
           <span class="text-muted" style="font-size:11.5px">الوحدة:</span>
@@ -479,6 +495,7 @@ function renderQuoteItemRow(qc, it, idx) {
   return `
     <div class="qitem-row" data-item-row="${key}">
       <div class="qitem-name">
+        <span class="drag-handle" title="اسحب لإعادة ترتيب البند">${svgIcon("grip", 14)}</span>
         <input value="${it.name}" data-itemname="${key}" style="font-weight:700;border:1px solid var(--border);border-radius:6px;padding:5px 8px;width:100%;margin-bottom:5px">
         <div class="flex" style="align-items:center;gap:6px">
           <span class="text-muted" style="font-size:11.5px">الوحدة:</span>
@@ -531,6 +548,8 @@ function bindQuoteBuilderEvents(el) {
     );
   };
   document.getElementById("f_showHeader").onchange = (e) => { q.showCompanyHeader = e.target.checked; };
+  document.getElementById("f_hideQty").onchange = (e) => { q.hideQty = e.target.checked; };
+  document.getElementById("f_hidePrice").onchange = (e) => { q.hidePrice = e.target.checked; };
   document.getElementById("f_noteValidity").oninput = (e) => { q.noteValidity = e.target.value; };
   document.getElementById("f_notePayment").oninput = (e) => { q.notePayment = e.target.value; };
 
@@ -701,6 +720,75 @@ function bindQuoteBuilderEvents(el) {
     updateRowAndTotals(el, catId, idx);
   });
 
+  function moveCategoryB(fromIdx, toIdx) {
+    if (fromIdx < 0 || toIdx < 0 || toIdx >= q.categories.length || fromIdx === toIdx) return;
+    const [moved] = q.categories.splice(fromIdx, 1);
+    q.categories.splice(toIdx, 0, moved);
+    renderQuoteBuilder(el);
+  }
+  el.querySelectorAll("[data-catup]").forEach(b => b.onclick = () => {
+    const idx = q.categories.findIndex(c => c.catId === b.dataset.catup);
+    moveCategoryB(idx, idx - 1);
+  });
+  el.querySelectorAll("[data-catdown]").forEach(b => b.onclick = () => {
+    const idx = q.categories.findIndex(c => c.catId === b.dataset.catdown);
+    moveCategoryB(idx, idx + 1);
+  });
+  el.querySelectorAll("[data-block]").forEach(block => {
+    const handle = block.querySelector("[data-dragcat]");
+    if (handle) {
+      handle.draggable = true;
+      handle.ondragstart = (e) => {
+        DRAG_CAT_SRC = block.dataset.block;
+        DRAG_ITEM_SRC = null;
+        e.dataTransfer.effectAllowed = "move";
+        block.classList.add("dragging");
+      };
+      handle.ondragend = () => block.classList.remove("dragging");
+    }
+    block.ondragover = (e) => { if (DRAG_CAT_SRC !== null) e.preventDefault(); };
+    block.ondrop = (e) => {
+      if (DRAG_CAT_SRC === null) return;
+      e.preventDefault();
+      const fromIdx = q.categories.findIndex(c => c.catId === DRAG_CAT_SRC);
+      const toIdx = q.categories.findIndex(c => c.catId === block.dataset.block);
+      moveCategoryB(fromIdx, toIdx);
+      DRAG_CAT_SRC = null;
+    };
+  });
+
+  function moveItemB(catId, fromIdx, toIdx) {
+    const qc = q.categories.find(c => c.catId === catId);
+    const arr = qc.items;
+    if (toIdx < 0 || toIdx >= arr.length || fromIdx === toIdx) return;
+    const [moved] = arr.splice(fromIdx, 1);
+    arr.splice(toIdx, 0, moved);
+    renderQuoteBuilder(el);
+  }
+  el.querySelectorAll("[data-item-row]").forEach(row => {
+    const handle = row.querySelector(".drag-handle");
+    if (handle) {
+      handle.draggable = true;
+      handle.ondragstart = (e) => {
+        const [catId, idx] = row.dataset.itemRow.split(":");
+        DRAG_ITEM_SRC = { catId, idx: Number(idx) };
+        DRAG_CAT_SRC = null;
+        e.dataTransfer.effectAllowed = "move";
+        row.classList.add("dragging");
+      };
+      handle.ondragend = () => row.classList.remove("dragging");
+    }
+    row.ondragover = (e) => { if (DRAG_ITEM_SRC) e.preventDefault(); };
+    row.ondrop = (e) => {
+      if (!DRAG_ITEM_SRC) return;
+      e.preventDefault();
+      const [catId, idx] = row.dataset.itemRow.split(":");
+      if (catId !== DRAG_ITEM_SRC.catId) { toast("لا يمكن نقل بند بين تصنيفات مختلفة بالسحب"); DRAG_ITEM_SRC = null; return; }
+      moveItemB(catId, DRAG_ITEM_SRC.idx, Number(idx));
+      DRAG_ITEM_SRC = null;
+    };
+  });
+
   document.getElementById("saveQuoteBtn").onclick = () => {
     if (!q.client) { toast("يرجى اختيار العميل"); return; }
     if (!q.projectName.trim()) { toast("يرجى إدخال اسم المشروع"); return; }
@@ -814,7 +902,7 @@ function renderQuoteView(el) {
     </div>
 
     <div id="vCatBlocks">
-      ${q.categories.length ? renderViewItemsTable(q.categories) : `<div class="card empty-state"><div class="ic">${svgIcon("box", 40)}</div>لا توجد بنود بعد — أضف تصنيفاً من الأعلى</div>`}
+      ${q.categories.length ? renderViewItemsTable(q) : `<div class="card empty-state"><div class="ic">${svgIcon("box", 40)}</div>لا توجد بنود بعد — أضف تصنيفاً من الأعلى</div>`}
     </div>
 
     <div class="grand-total-box">
@@ -838,13 +926,17 @@ function renderQuoteView(el) {
   bindQuoteViewEvents(el, q, quotes, catalog);
 }
 
-function renderViewItemsTable(categories) {
+function renderViewItemsTable(q) {
+  const categories = q.categories;
+  const tableClasses = ["data-table", "quote-final-table"];
+  if (q.hideQty) tableClasses.push("print-hide-qty");
+  if (q.hidePrice) tableClasses.push("print-hide-price");
   return `
     <div class="card quote-items-card">
-      <p class="text-muted no-print" style="font-size:11.5px;margin:-4px 0 10px">${svgIcon("bulb", 14)} اسحب صف بند أو تصنيف من مقبض السحب (${svgIcon("grip", 14)}) وأفلته في مكان آخر لإعادة الترتيب — تُعاد ترقيم البنود تلقائياً.</p>
+      <p class="text-muted no-print" style="font-size:11.5px;margin:-4px 0 10px">${svgIcon("bulb", 14)} اسحب صف بند أو تصنيف من مقبض السحب (${svgIcon("grip", 14)}) وأفلته في مكان آخر لإعادة الترتيب — تُعاد ترقيم البنود تلقائياً.${q.hideQty || q.hidePrice ? ` عند الطباعة لن يظهر${q.hideQty ? " عمود الكمية" : ""}${q.hideQty && q.hidePrice ? " و" : ""}${q.hidePrice ? " عمود السعر/الإجمالي" : ""} (يمكن تغيير ذلك من "تعديل العرض").` : ""}</p>
       <div class="table-wrap">
-        <table class="data-table quote-final-table">
-          <thead><tr><th>#</th><th>البند</th><th>الكمية</th><th>الوحدة</th><th>السعر</th><th>الإجمالي</th><th class="no-print"></th></tr></thead>
+        <table class="${tableClasses.join(" ")}">
+          <thead><tr><th>#</th><th>البند</th><th class="qty-col">الكمية</th><th>الوحدة</th><th class="price-col">السعر</th><th class="price-col">الإجمالي</th><th class="no-print"></th></tr></thead>
           <tbody>
             ${categories.map((qc, ci) => `
               <tr class="cat-header-row" data-vcat="${ci}">
@@ -874,10 +966,10 @@ function renderViewItemsTable(categories) {
                     ` : ""}
                     ${it.name}
                   </td>
-                  <td><input type="number" min="0" step="0.01" value="${it.qty}" data-vqty="${key}" style="width:80px"></td>
+                  <td class="qty-col"><input type="number" min="0" step="0.01" value="${it.qty}" data-vqty="${key}" style="width:80px"></td>
                   <td>${it.unit}</td>
-                  <td><input type="number" min="0" step="0.01" value="${itemUnitPrice(it).toFixed(2)}" data-vprice="${key}" style="width:100px"></td>
-                  <td data-vtotal="${key}"><strong>${fmtMoney(itemTotal(it))}</strong></td>
+                  <td class="price-col"><input type="number" min="0" step="0.01" value="${itemUnitPrice(it).toFixed(2)}" data-vprice="${key}" style="width:100px"></td>
+                  <td class="price-col" data-vtotal="${key}"><strong>${fmtMoney(itemTotal(it))}</strong></td>
                   <td class="no-print">
                     <button class="btn-icon danger" data-vrmitem="${key}" title="حذف">${ICON_DELETE}</button>
                   </td>
