@@ -905,6 +905,8 @@ function renderQuoteView(el) {
       ${q.categories.length ? renderViewItemsTable(q) : `<div class="card empty-state"><div class="ic">${svgIcon("box", 40)}</div>لا توجد بنود بعد — أضف تصنيفاً من الأعلى</div>`}
     </div>
 
+    <div class="print-only">${buildQuotePrintTables(q)}</div>
+
     <div class="grand-total-box">
       <div>الإجمالي الكلي لعرض السعر</div>
       <div class="num" id="vGrandTotal">${fmtMoney(total)}</div>
@@ -926,13 +928,70 @@ function renderQuoteView(el) {
   bindQuoteViewEvents(el, q, quotes, catalog);
 }
 
+/* ---------- جدول طباعة عرض السعر — تصميم جدول منفصل مرقّم بالأرقام العربية الشرقية لكل تصنيف ---------- */
+const ARABIC_DIGITS = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
+function toArabicNum(n, pad) {
+  let s = String(n);
+  if (pad) s = s.padStart(pad, "0");
+  return s.replace(/[0-9]/g, d => ARABIC_DIGITS[+d]);
+}
+function plainMoney(n) {
+  n = Number(n) || 0;
+  const hasHalalas = Math.round(n * 100) % 100 !== 0;
+  return n.toLocaleString("ar-SA", { minimumFractionDigits: hasHalalas ? 2 : 0, maximumFractionDigits: 2 });
+}
+
+function buildQuotePrintTables(q) {
+  const showQty = !q.hideQty;
+  const showPrice = !q.hidePrice;
+  const totalCols = 3 + (showQty ? 1 : 0) + (showPrice ? 2 : 0); // رقم + الوصف + الوحدة (دائماً) + الكمية؟ + السعر/المجموع؟
+  return q.categories.map((qc, ci) => {
+    const catNum = toArabicNum(ci + 1, 2);
+    const blockTotal = qc.items.reduce((s, it) => s + itemTotal(it), 0);
+    return `
+      <table class="print-cat-table">
+        <thead>
+          <tr class="print-cat-title-row"><th colspan="${totalCols}">${catNum}-٠٠ &nbsp; ${escHtml(qc.catName)}</th></tr>
+          <tr class="print-cat-head-row">
+            <th class="pc-num">رقم</th>
+            <th class="pc-desc">الوصف</th>
+            <th class="pc-unit">الوحدة</th>
+            ${showQty ? `<th class="pc-qty">الكمية</th>` : ""}
+            ${showPrice ? `<th class="pc-price">السعر</th><th class="pc-total">المجموع</th>` : ""}
+          </tr>
+        </thead>
+        <tbody>
+          ${qc.items.map((it, ii) => {
+            const label = supplyInstallLabel(it);
+            return `
+            <tr>
+              <td class="pc-num">${catNum}-${toArabicNum(ii + 1, 2)}</td>
+              <td class="pc-desc">${label ? escHtml(label) + " - " : ""}${escHtml(it.name)}</td>
+              <td class="pc-unit">${escHtml(it.unit)}</td>
+              ${showQty ? `<td class="pc-qty">${plainMoney(it.qty)}</td>` : ""}
+              ${showPrice ? `<td class="pc-price">${plainMoney(itemUnitPrice(it))}</td><td class="pc-total">${plainMoney(itemTotal(it))}</td>` : ""}
+            </tr>`;
+          }).join("") || `<tr><td class="pc-desc" colspan="${totalCols}" style="text-align:center">لا توجد بنود في هذا التصنيف</td></tr>`}
+        </tbody>
+        ${qc.items.length ? `
+        <tfoot>
+          <tr class="print-cat-total-row">
+            <td colspan="${totalCols - 1}">المجموع</td>
+            <td>${plainMoney(blockTotal)}</td>
+          </tr>
+        </tfoot>` : ""}
+      </table>
+    `;
+  }).join("");
+}
+
 function renderViewItemsTable(q) {
   const categories = q.categories;
   const tableClasses = ["data-table", "quote-final-table"];
   if (q.hideQty) tableClasses.push("print-hide-qty");
   if (q.hidePrice) tableClasses.push("print-hide-price");
   return `
-    <div class="card quote-items-card">
+    <div class="card quote-items-card no-print">
       <p class="text-muted no-print" style="font-size:11.5px;margin:-4px 0 10px">${svgIcon("bulb", 14)} اسحب صف بند أو تصنيف من مقبض السحب (${svgIcon("grip", 14)}) وأفلته في مكان آخر لإعادة الترتيب — تُعاد ترقيم البنود تلقائياً.${q.hideQty || q.hidePrice ? ` عند الطباعة لن يظهر${q.hideQty ? " عمود الكمية" : ""}${q.hideQty && q.hidePrice ? " و" : ""}${q.hidePrice ? " عمود السعر/الإجمالي" : ""} (يمكن تغيير ذلك من "تعديل العرض").` : ""}</p>
       <div class="table-wrap">
         <table class="${tableClasses.join(" ")}">
