@@ -267,14 +267,15 @@ table.data-table input[type="number"] { padding: 7px 9px; border: 1px solid var(
 .quote-final-table tr.dragging { opacity: .4; }
 .quote-final-table .drag-handle { cursor: grab; color: var(--text-muted); font-size: 13px; user-select: none; margin-inline-end: 4px; }
 .quote-final-table .drag-handle:active { cursor: grabbing; }
-/* جدول طباعة عرض السعر — صندوق مستقل لكل تصنيف (رقم/وصف/وحدة/كمية/سعر/مجموع)، مرئي عند الطباعة فقط عبر print-only */
-.print-cat-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; border: 1px solid #333; font-size: 11.5px; }
-.print-cat-table th, .print-cat-table td { border: 1px solid #333; padding: 5px 8px; text-align: center; }
+/* جدول طباعة عرض السعر — صندوق مستقل لكل تصنيف (رقم/وصف/وحدة/كمية/سعر/مجموع)، مرئي عند الطباعة فقط عبر print-only
+   الألوان قابلة للتخصيص من الإعدادات ← المظهر (تُطبَّق عبر applyTheme على متغيرات --quote-*)، وإلا فالقيم الافتراضية هنا */
+.print-cat-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; border: 1px solid var(--quote-border-color, #333); font-size: 11.5px; }
+.print-cat-table th, .print-cat-table td { border: 1px solid var(--quote-border-color, #333); padding: 5px 8px; text-align: center; }
 .print-cat-table .pc-desc { text-align: right; }
 .print-cat-table .pc-num { white-space: nowrap; width: 54px; }
-.print-cat-title-row th { background: #e9e4da; font-weight: 800; font-size: 13px; text-align: right; padding: 7px 10px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-.print-cat-head-row th { background: #f3f1ec; font-weight: 700; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-.print-cat-total-row td { font-weight: 800; background: #f8f7f4; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.print-cat-title-row th { background: var(--quote-title-bg, #e9e4da); font-weight: 800; font-size: 13px; text-align: right; padding: 7px 10px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.print-cat-head-row th { background: var(--quote-header-bg, #f3f1ec); font-weight: 700; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.print-cat-total-row td { font-weight: 800; background: var(--quote-total-bg, #f8f7f4); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .print-cat-total-row td:first-child { text-align: right; }
 @media print { .print-cat-table { break-inside: avoid; page-break-inside: avoid; } }
 .cat-block.dragging, .qitem-row.dragging { opacity: .4; }

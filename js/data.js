@@ -523,7 +523,10 @@ function addInclusiveDays(dateStr, days) {
 
 /* ---------- إعدادات المظهر (الألوان والأيقونات والخط) ---------- */
 /* الافتراضي الجديد (تصميم v2): أزرق + كحلي + خط IBM Plex Sans Arabic */
-const THEME_DEFAULTS = { primaryColor: "#1a6cf0", sidebarColor: "#0f2747", fontFamily: "IBM Plex Sans Arabic", fontSize: "medium", showMenuIcons: true };
+const THEME_DEFAULTS = {
+  primaryColor: "#1a6cf0", sidebarColor: "#0f2747", fontFamily: "IBM Plex Sans Arabic", fontSize: "medium", showMenuIcons: true,
+  quoteTitleBg: "#e9e4da", quoteHeaderBg: "#f3f1ec", quoteTotalBg: "#f8f7f4", quoteBorderColor: "#333333",
+};
 const LEGACY_THEME_DEFAULTS = { primaryColor: "#b5651d", sidebarColor: "#16233a", fontFamily: "Cairo" };
 function getThemeSettings() {
   const saved = dbGet("themeSettings", null);

@@ -53,6 +53,17 @@ function renderAppearanceTab(el) {
     </div>
 
     <div class="card">
+      <h3 class="mt-0">ألوان جدول طباعة عرض السعر</h3>
+      <p class="text-muted" style="font-size:12px;margin-top:-6px">تتحكم في شكل الجدول عند طباعة عرض السعر النهائي (شريط عنوان كل تصنيف، صف عناوين الأعمدة، صف المجموع، وخطوط الجدول)</p>
+      <div class="grid cols-2">
+        <div class="field"><label>خلفية شريط عنوان التصنيف</label><input type="color" id="th_quoteTitleBg" value="${t.quoteTitleBg || THEME_DEFAULTS.quoteTitleBg}" style="height:42px;padding:4px"></div>
+        <div class="field"><label>خلفية صف عناوين الأعمدة</label><input type="color" id="th_quoteHeaderBg" value="${t.quoteHeaderBg || THEME_DEFAULTS.quoteHeaderBg}" style="height:42px;padding:4px"></div>
+        <div class="field"><label>خلفية صف المجموع</label><input type="color" id="th_quoteTotalBg" value="${t.quoteTotalBg || THEME_DEFAULTS.quoteTotalBg}" style="height:42px;padding:4px"></div>
+        <div class="field"><label>لون خطوط وحدود الجدول</label><input type="color" id="th_quoteBorder" value="${t.quoteBorderColor || THEME_DEFAULTS.quoteBorderColor}" style="height:42px;padding:4px"></div>
+      </div>
+    </div>
+
+    <div class="card">
       <h3 class="mt-0">الخط وحجمه</h3>
       <div class="grid cols-2">
         <div class="field"><label>نوع الخط</label>
@@ -84,6 +95,10 @@ function renderAppearanceTab(el) {
       fontFamily: document.getElementById("th_font").value,
       fontSize: document.getElementById("th_fontSize").value,
       showMenuIcons: document.getElementById("th_icons").checked,
+      quoteTitleBg: document.getElementById("th_quoteTitleBg").value,
+      quoteHeaderBg: document.getElementById("th_quoteHeaderBg").value,
+      quoteTotalBg: document.getElementById("th_quoteTotalBg").value,
+      quoteBorderColor: document.getElementById("th_quoteBorder").value,
     });
     applyTheme();
     toast("تم حفظ وتطبيق المظهر");

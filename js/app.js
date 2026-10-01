@@ -71,6 +71,10 @@ function applyTheme() {
   root.style.setProperty("--primary-light", shadeColor(t.primaryColor, 0.75));
   root.style.setProperty("--sidebar-bg", t.sidebarColor);
   root.style.setProperty("--sidebar-active", t.primaryColor);
+  root.style.setProperty("--quote-title-bg", t.quoteTitleBg || THEME_DEFAULTS.quoteTitleBg);
+  root.style.setProperty("--quote-header-bg", t.quoteHeaderBg || THEME_DEFAULTS.quoteHeaderBg);
+  root.style.setProperty("--quote-total-bg", t.quoteTotalBg || THEME_DEFAULTS.quoteTotalBg);
+  root.style.setProperty("--quote-border-color", t.quoteBorderColor || THEME_DEFAULTS.quoteBorderColor);
 
   const fontDef = FONT_OPTIONS[t.fontFamily] || FONT_OPTIONS.Cairo;
   ensureFontLoaded(t.fontFamily);
