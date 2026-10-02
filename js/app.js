@@ -378,7 +378,14 @@ function toggleNotifPanel() {
   const isOpen = panel.style.display !== "none";
   if (isOpen) { panel.style.display = "none"; return; }
   renderNotifPanelContent();
+  ["position", "top", "left", "right", "width"].forEach(k => panel.style[k] = "");
   panel.style.display = "block";
+  // شبكة أمان فوق قاعدة الجوال في CSS: إن فاضت اللوحة عن عرض الشاشة لأي سبب (متصفح لا يطابق
+  // media query، تكبير الخط، CSS قديم مخزّن...) نثبّتها كـ overlay بعرض الشاشة ناقص هوامش
+  const r = panel.getBoundingClientRect();
+  if (r.left < 0 || r.right > document.documentElement.clientWidth) {
+    Object.assign(panel.style, { position: "fixed", top: "64px", left: "10px", right: "10px", width: "auto" });
+  }
 }
 
 function notifTimeAgo(iso) {
