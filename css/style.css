@@ -816,3 +816,10 @@ table.data-table tr:hover td { background: #fafcff; }
 :root[data-theme="dark"] .pill:hover {
   background: color-mix(in srgb, var(--primary) 18%, transparent);
 }
+
+/* إبراز الحركة التي انتُقل إليها من صفحة أخرى (مثل دفعات مقاول الباطن) */
+@keyframes rowFocusPulse {
+  0%, 100% { background: color-mix(in srgb, var(--primary) 22%, transparent); }
+  50% { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+}
+.data-table tr.row-focus > td { animation: rowFocusPulse 1.2s ease-in-out 3; }

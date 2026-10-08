@@ -337,7 +337,7 @@ function contractorAllPayments(contractorId, projectId) {
   const invoicesById = {};
   dbGet("accProjects", []).forEach(x => { invoicesById[x.id] = x; });
   return [
-    ...contractorPaymentsOf(contractorId, projectId).map(e => ({ kind: "cash", id: e.id, date: e.date, amount: e.amount, method: e.paymentMethod, note: e.note })),
+    ...contractorPaymentsOf(contractorId, projectId).map(e => ({ kind: "cash", id: e.id, date: e.date, amount: e.amount, method: e.paymentMethod, note: e.note, source: e.source })),
     ...contractorPurchasePaymentsOf(contractorId, projectId).map(p => ({ kind: "purchase", id: p.id, date: p.date, amount: p.amount, label: p.label, note: p.note, entry: invoicesById[p.entryId] })),
     ...contractorProjectPaymentsOf(contractorId, projectId).map(e => ({ kind: "projectpay", id: e.id, date: e.date, amount: e.amount, method: e.paymentMethod, note: e.note, entry: e })),
   ].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
@@ -488,13 +488,13 @@ function accountBodyHtml(c, project, f, canEdit, canPay) {
                   ? `${p.label || "فاتورة مشتريات"}${p.entry && p.entry.attachment ? ` <a href="${p.entry.attachment.url}" target="_blank" rel="noopener" class="badge blue" style="text-decoration:none">${svgIcon("paperclip", 14)} الفاتورة</a>` : ""}`
                   : `${p.method || `<span class="text-muted">-</span>`}${p.kind === "projectpay" && p.entry && p.entry.attachment ? ` <a href="${p.entry.attachment.url}" target="_blank" rel="noopener" class="badge blue" style="text-decoration:none">${svgIcon("paperclip", 14)} المرفق</a>` : ""}`}</td>
                 <td>${p.note || `<span class="text-muted">-</span>`}</td>
-                <td>${p.kind === "purchase" && canEdit ? `<button class="btn-icon danger" data-rmpurchasepay="${p.id}" title="إلغاء هذه الدفعة (الفاتورة تبقى في المصاريف)">${ICON_DELETE}</button>` : ""}</td>
+                <td style="white-space:nowrap">${contractorPaymentActionsHtml(p, canEdit, canPay)}</td>
               </tr>`).join("")}
             <tr><td><strong>الإجمالي</strong></td><td></td><td colspan="4"><strong>${fmtMoney(f.paid)}</strong></td></tr>
           </tbody>
         </table>
       </div>
-      <div class="text-muted" style="font-size:12px;margin-top:8px">الدفعات المالية تُعدَّل أو تُحذف من المحاسبة العامة ← المصاريف الإدارية (تصنيف "دفعة أعمال")، ودفعات "محاسبة المشروع" من محاسبة المشاريع (نوع الحركة "دفعة مقاول باطن")، ودفعات المشتريات تُلغى من هنا وتبقى فواتيرها في محاسبة المشروع.</div>` : `<div class="text-muted" style="font-size:13px">لا توجد دفعات مسجلة لهذا المقاول على هذا المشروع.</div>`}
+      <div class="text-muted" style="font-size:12px;margin-top:8px">الدفعات المُدخلة من هذه الصفحة تُعدَّل وتُحذف من هنا مباشرة. الدفعات المُدخلة من المحاسبة (العامة أو محاسبة المشروع) تُعدَّل من هناك — اضغط أيقونة العرض ${ICON_VIEW} للانتقال إليها. إلغاء دفعة المشتريات لا يحذف فاتورتها من محاسبة المشروع.</div>` : `<div class="text-muted" style="font-size:13px">لا توجد دفعات مسجلة لهذا المقاول على هذا المشروع.</div>`}
     </div>
   `;
 }
@@ -506,12 +506,35 @@ function bindAccountEvents(el, c, project, f, canEdit, canPay) {
 
   document.getElementById("printStatementBtn").onclick = () => printContractorStatement(c, project, f);
   const payBtn = document.getElementById("addPaymentBtn");
-  if (payBtn) payBtn.onclick = () => openGeneralExpenseModal(el, null, { category: CONTRACTOR_PAYMENT_CATEGORY, contractorId: c.id, projectId: project.id, onSaved: rerender });
+  if (payBtn) payBtn.onclick = () => openGeneralExpenseModal(el, null, { category: CONTRACTOR_PAYMENT_CATEGORY, contractorId: c.id, projectId: project.id, source: "contractors", onSaved: rerender });
+
+  /* دفعة مالية مُدخلة من هذه الصفحة: تعديل / حذف */
+  el.querySelectorAll("[data-editcashpay]").forEach(b => b.onclick = () => {
+    const entry = dbGet("accGeneral", []).find(x => x.id === b.dataset.editcashpay);
+    if (entry) openGeneralExpenseModal(el, entry, { onSaved: rerender });
+  });
+  el.querySelectorAll("[data-rmcashpay]").forEach(b => b.onclick = () => {
+    const entry = dbGet("accGeneral", []).find(x => x.id === b.dataset.rmcashpay);
+    if (!entry || !confirm(`حذف دفعة الأعمال (${fmtMoney(entry.amount)}) بتاريخ ${fmtDate(entry.date)}؟ ستُحذف أيضاً من المصاريف الإدارية.`)) return;
+    dbSet("accGeneral", dbGet("accGeneral", []).filter(x => x.id !== entry.id));
+    logActivity(`تم حذف دفعة أعمال (${fmtMoney(entry.amount)}) للمقاول "${c.name}" على مشروع "${projLabel}"`);
+    toast("تم حذف الدفعة");
+    rerender();
+  });
+  /* دفعة مُدخلة من المحاسبة: الانتقال إليها لتعديلها هناك */
+  el.querySelectorAll("[data-gotopay]").forEach(b => b.onclick = () => {
+    ACC_FOCUS_ENTRY = b.dataset.gotopay;
+    if (b.dataset.gototype === "project") { ACC_SELECTED_PROJECT = project.id; location.hash = "#/acc_projects"; }
+    else { ACC_GENERAL_TAB = "expenses"; location.hash = "#/acc_general"; }
+  });
+  el.querySelectorAll("[data-editpurchasepay]").forEach(b => b.onclick = () => {
+    const pay = dbGet("contractorPurchasePayments", []).find(x => x.id === b.dataset.editpurchasepay);
+    if (pay) openEditPurchasePaymentModal(c, project, pay, rerender);
+  });
   const purchaseBtn = document.getElementById("addPurchasePaymentBtn");
   if (purchaseBtn) purchaseBtn.onclick = () => openPurchasePaymentModal(c, project, rerender);
 
   el.querySelectorAll("[data-rmpurchasepay]").forEach(b => b.onclick = () => {
-    if (!canEdit) return;
     const pay = dbGet("contractorPurchasePayments", []).find(x => x.id === b.dataset.rmpurchasepay);
     if (!pay || !confirm("إلغاء دفعة المشتريات هذه؟ (تبقى الفاتورة مسجلة في محاسبة المشروع)")) return;
     dbSet("contractorPurchasePayments", dbGet("contractorPurchasePayments", []).filter(x => x.id !== pay.id));
@@ -583,6 +606,54 @@ function bindAccountEvents(el, c, project, f, canEdit, canPay) {
     dbSet("contractorAgreements", dbGet("contractorAgreements", []).filter(a => a.id !== ag.id));
     logActivity(`تم حذف اتفاق المقاول "${c.name}" على مشروع "${projLabel}"`);
     rerender();
+  };
+}
+
+/* أزرار كل دفعة: المُدخلة من هنا تُعدَّل وتُحذف هنا، والمُدخلة من المحاسبة يُنتقل إليها بأيقونة العرض */
+function contractorPaymentActionsHtml(p, canEdit, canPay) {
+  if (p.kind === "projectpay")
+    return `<button class="btn-icon" data-gotopay="${p.id}" data-gototype="project" title="مُدخلة من محاسبة المشروع — اضغط للانتقال إليها وتعديلها هناك">${ICON_VIEW}</button>`;
+  if (p.kind === "cash" && p.source === "accounting")
+    return `<button class="btn-icon" data-gotopay="${p.id}" data-gototype="general" title="مُدخلة من المحاسبة العامة — اضغط للانتقال إليها وتعديلها هناك">${ICON_VIEW}</button>`;
+  if (!(canPay || canEdit)) return "";
+  if (p.kind === "purchase")
+    return `<button class="btn-icon" data-editpurchasepay="${p.id}" title="تعديل">${ICON_EDIT}</button><button class="btn-icon danger" data-rmpurchasepay="${p.id}" title="إلغاء هذه الدفعة (الفاتورة تبقى في محاسبة المشروع)">${ICON_DELETE}</button>`;
+  return `<button class="btn-icon" data-editcashpay="${p.id}" title="تعديل">${ICON_EDIT}</button><button class="btn-icon danger" data-rmcashpay="${p.id}" title="حذف">${ICON_DELETE}</button>`;
+}
+
+/* تعديل دفعة من مشتريات مسددة (المبلغ لا يتجاوز المتاح على الفاتورة) */
+function openEditPurchasePaymentModal(c, project, pay, onSaved) {
+  const entry = dbGet("accProjects", []).find(x => x.id === pay.entryId);
+  const max = entry ? Math.max((Number(entry.amount) || 0) - purchaseAllocatedAmount(entry.id) + (Number(pay.amount) || 0), 0) : Infinity;
+  const html = `
+    <div class="modal-head"><h3>تعديل دفعة من مشتريات — ${c.name}</h3><button class="modal-close" id="mClose">×</button></div>
+    <div class="kv-row"><span class="k">الفاتورة</span><span class="v">${pay.label || (entry ? purchaseInvoiceLabel(entry) : "فاتورة مشتريات")}</span></div>
+    ${entry ? `<div class="kv-row"><span class="k">الحد الأقصى المتاح لهذه الدفعة</span><span class="v">${fmtMoney(max)}</span></div>` : ""}
+    <div class="grid cols-2" style="margin-top:12px">
+      <div class="field"><label>المبلغ (ر.س)</label><input type="number" min="0" step="0.01" id="pp_amount" value="${Number(pay.amount) || 0}"></div>
+      <div class="field"><label>التاريخ</label><input type="date" id="pp_date" value="${pay.date || todayISO()}"></div>
+    </div>
+    <div class="field"><label>ملاحظات</label><textarea id="pp_note">${pay.note || ""}</textarea></div>
+    <div class="flex gap"><button class="btn primary" id="pp_save">حفظ</button><button class="btn" id="pp_cancel">إلغاء</button></div>
+  `;
+  const ov = openModalShell(html);
+  ov.querySelector("#mClose").onclick = closeModal;
+  ov.querySelector("#pp_cancel").onclick = closeModal;
+  ov.querySelector("#pp_save").onclick = () => {
+    const amount = Number(ov.querySelector("#pp_amount").value) || 0;
+    if (amount <= 0) { toast("يرجى إدخال مبلغ صحيح"); return; }
+    if (amount > max + 0.005) { toast("المبلغ أكبر من المتاح على الفاتورة (" + fmtMoney(max) + ")"); return; }
+    const list = dbGet("contractorPurchasePayments", []);
+    const it = list.find(x => x.id === pay.id);
+    if (!it) { closeModal(); return; }
+    it.amount = amount;
+    it.date = ov.querySelector("#pp_date").value || todayISO();
+    it.note = ov.querySelector("#pp_note").value.trim();
+    dbSet("contractorPurchasePayments", list);
+    logActivity(`تم تعديل دفعة مشتريات للمقاول "${c.name}" على مشروع "${project.name}" إلى ${fmtMoney(amount)}`);
+    toast("تم حفظ التعديل");
+    closeModal();
+    onSaved();
   };
 }
 

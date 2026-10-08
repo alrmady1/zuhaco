@@ -6,6 +6,18 @@ const VAT_RATE = 0.15;
 let ACC_SELECTED_PROJECT = null;
 let GEN_EXP_SORT = { key: "date", dir: "desc" };
 let ACC_PROJ_SORT = { key: "date", dir: "desc" };
+/* حركة مطلوب إبرازها بعد الانتقال إليها من صفحة أخرى (مثل دفعات مقاول الباطن) */
+let ACC_FOCUS_ENTRY = null;
+function focusAccRow(el) {
+  if (!ACC_FOCUS_ENTRY) return;
+  const id = ACC_FOCUS_ENTRY;
+  ACC_FOCUS_ENTRY = null;
+  const row = el.querySelector(`tr[data-rowid="${id}"]`);
+  if (!row) { toast("لم يتم العثور على الحركة — ربما حُذفت"); return; }
+  row.classList.add("row-focus");
+  setTimeout(() => row.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
+  setTimeout(() => row.classList.remove("row-focus"), 4000);
+}
 
 const ACC_TYPES = ["إيراد مشروع", "دفعة مشتريات", "دفعة مقاول باطن", "مصروف مواد", "مصروف عمال", "مصروف نثرية"];
 const ACC_EXPENSE_TYPES = ["دفعة مشتريات", "دفعة مقاول باطن", "مصروف مواد", "مصروف عمال", "مصروف نثرية"];
@@ -136,7 +148,7 @@ function renderAccProjects(el) {
           <thead><tr>${accProjSortTh("النوع", "type")}${accProjSortTh("المبلغ", "amount")}<th>ضريبة القيمة المضافة</th>${accProjSortTh("التاريخ", "date")}<th>ملاحظات</th><th>المرفق</th><th></th></tr></thead>
           <tbody>
             ${entries.map(e => `
-              <tr>
+              <tr data-rowid="${e.id}">
                 <td><span class="badge ${ACC_TYPE_BADGE[e.type] || "gray"}">${e.type}</span></td>
                 <td><strong>${fmtMoney(e.amount)}</strong></td>
                 <td>${e.vatApplicable ? `<span class="badge blue">خاضع (${fmtMoney(e.vatAmount || Number(e.amount) * VAT_RATE)})</span>` : `<span class="badge gray">غير خاضع</span>`}</td>
@@ -185,6 +197,7 @@ function renderAccProjects(el) {
     const target = dbGet("accProjects", []).find(x => x.id === b.dataset.viewentry);
     if (target) openAccEntryViewModal(target);
   });
+  focusAccRow(el);
 }
 
 function accProjSortTh(label, key) {
@@ -793,7 +806,7 @@ function renderGeneralExpensesTab(el) {
           <thead><tr>${generalExpenseSortTh("التصنيف", "category")}<th>التفاصيل</th>${generalExpenseSortTh("المبلغ", "amount")}<th>طريقة الدفع</th>${generalExpenseSortTh("التاريخ", "date")}<th>ملاحظات</th><th>المرفق</th><th></th></tr></thead>
           <tbody>
             ${list.map(e => `
-              <tr>
+              <tr data-rowid="${e.id}">
                 <td><span class="badge gray">${e.category}</span></td>
                 <td class="text-muted">${generalExpenseSubtitle(e) || "-"}</td>
                 <td><strong>${fmtMoney(e.amount)}</strong></td>
@@ -836,6 +849,7 @@ function renderGeneralExpensesTab(el) {
     if (target) logActivity(`تم حذف مصروف إداري "${target.category}" بقيمة ${fmtMoney(target.amount)}`);
     renderGeneralExpensesTab(el);
   });
+  focusAccRow(el);
 }
 
 function openGeneralExpensesPrintModal() {
@@ -2490,6 +2504,9 @@ function openGeneralExpenseModal(el, existingEntry, preset) {
       paymentMethod,
       attachment,
     };
+    // مصدر الإدخال: من صفحة مقاول الباطن أو من المحاسبة (يحدد أين تُعدَّل الدفعة)
+    const source = isEdit ? existingEntry.source : ((preset && preset.source) || "accounting");
+    if (source) entry.source = source;
     let logSuffix = "";
     if (category === "رواتب") {
       const empSelect = ov.querySelector("#g_employee");
