@@ -267,7 +267,7 @@ function projectExtrasCardHtml(p, contract) {
   return `
     <div class="card">
       <div class="flex between" style="align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
-        <h3 class="mt-0">الأعمال الإضافية والبنود غير المنفذة (التمرير النهائي) <span class="badge gray">${works.length}</span></h3>
+        <h3 class="mt-0">الأعمال الإضافية والبنود غير المنفذة (التمتير النهائي) <span class="badge gray">${works.length}</span></h3>
         <div class="flex gap">
           ${works.length ? `<button class="btn sm" id="openExtrasPrint">${svgIcon("printer")} صفحة الطباعة</button>` : ""}
           <button class="btn sm primary" id="addExtraWork">+ إضافة بند</button>
