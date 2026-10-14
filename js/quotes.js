@@ -942,7 +942,16 @@ function renderQuoteView(el) {
 
   document.getElementById("backList2").onclick = () => { QUOTES_VIEW = "list"; router(); };
   document.getElementById("bcQuotes").onclick = () => { QUOTES_VIEW = "list"; router(); };
-  document.getElementById("printQuote").onclick = () => window.print();
+  document.getElementById("printQuote").onclick = () => {
+    // اسم ملف PDF الافتراضي يؤخذ من عنوان الصفحة → نضع اسم المشروع مؤقتاً أثناء الطباعة
+    const prevTitle = document.title;
+    const fileName = (q.projectName || q.number || "عرض سعر").replace(/[\/:*?"<>|]+/g, " ").trim();
+    document.title = fileName;
+    const restore = () => { document.title = prevTitle; window.removeEventListener("afterprint", restore); };
+    window.addEventListener("afterprint", restore);
+    window.print();
+    setTimeout(restore, 1000);
+  };
   const editQuoteBtn = document.getElementById("editQuoteBtn");
   if (editQuoteBtn) editQuoteBtn.onclick = () => startEditQuote(q.id, "view");
 
