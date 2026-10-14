@@ -490,9 +490,11 @@ table.data-table tr.row-near { background: #fdecd6; }
 
 .print-only { display: none; }
 @media print {
-  @page { size: A4; margin: 10mm; }
+  /* هامش الصفحة صفر يخفي ترويسة/تذييل المتصفح (التاريخ والوقت ورابط الصفحة)، والهامش الفعلي 10مم يُحاكى بحشوة تتكرر في كل صفحة */
+  @page { size: A4; margin: 0; }
   /* html/body بارتفاع 100% وoverflow مخفي وحاويات flex كانت تقصّ الطباعة على صفحة واحدة — نعيدها لتدفق عادي متعدد الصفحات */
   html, body { height: auto !important; overflow: visible !important; background: #fff !important; zoom: 1 !important; }
+  body { padding: 10mm !important; box-sizing: border-box; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
   .sidebar, .sidebar-backdrop, .topbar, .no-print, .toast { display: none !important; }
   .app-shell, .main { display: block !important; min-height: 0 !important; }
   .content { padding: 0 !important; }
