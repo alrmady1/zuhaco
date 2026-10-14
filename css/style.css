@@ -480,7 +480,7 @@ table.data-table tr.row-near { background: #fdecd6; }
 .kv-row .v { font-weight: 700; }
 .kv-row .kv-input {
   border: 1px solid transparent; background: transparent; font-weight: 700; font-size: 13px;
-  padding: 3px 6px; border-radius: 6px; max-width: 60%; font-family: inherit;
+  padding: 3px 6px; border-radius: 6px; flex: 1; min-width: 0; margin-inline-start: 10px; text-align: right; font-family: inherit;
 }
 .kv-row .kv-input:hover { border-color: var(--border); }
 .kv-row .kv-input:focus { border-color: var(--primary); background: #fff; outline: none; }
