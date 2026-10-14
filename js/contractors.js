@@ -1437,13 +1437,31 @@ function openExtraWorkModal(c, project, ag, existing, onSaved) {
       const itemSel = box.querySelector("#ex_item");
       if (itemSel && !isEdit) itemSel.onchange = () => { const it = items.find(i => i.id === itemSel.value); if (it) { box.querySelector("#ex_price").value = Number(it.unitPrice) || 0; computeAmount(); } };
     } else if (kind === "item") {
+      const projectExtras = (project.extraWorks || []).filter(w => w.kind !== "deduction");
       box.innerHTML = `
+        ${projectExtras.length ? `
+        <div class="field"><label>اختيار من الأعمال الإضافية المسجّلة على المشروع (اختياري)</label>
+          <select id="ex_pickProjExtra">
+            <option value="">— إدخال بند جديد يدوياً —</option>
+            ${projectExtras.map(w => `<option value="${w.id}">${escHtml(w.name)} (${w.kind === "invoice" ? "فاتورة" : (w.qty + " " + (w.unit || ""))} × ${fmtMoney(w.unitPrice)})</option>`).join("")}
+          </select>
+          <div class="hint">عند الاختيار تُملأ الحقول أدناه من العمل الإضافي المسجّل على المشروع ويمكنك تعديلها قبل الحفظ</div>
+        </div>` : ""}
         <div class="field"><label>اسم البند الإضافي</label><input id="ex_title" value="${x0.kind === "item" ? (x0.title || "") : ""}"></div>
         <div class="grid cols-3">
           <div class="field"><label>الوحدة</label><input id="ex_unit" value="${x0.kind === "item" ? (x0.unit || "م²") : "م²"}"></div>
           <div class="field"><label>الكمية</label><input type="number" min="0" step="0.01" id="ex_qty" value="${x0.kind === "item" ? (x0.qty || 1) : 1}"></div>
           <div class="field"><label>سعر الوحدة (ر.س)</label><input type="number" min="0" step="0.01" id="ex_price" value="${x0.kind === "item" ? (x0.unitPrice || 0) : 0}"></div>
         </div>`;
+      const pickSel = box.querySelector("#ex_pickProjExtra");
+      if (pickSel) pickSel.onchange = () => {
+        const w = projectExtras.find(x => x.id === pickSel.value);
+        if (!w) return;
+        box.querySelector("#ex_title").value = w.name || "";
+        box.querySelector("#ex_unit").value = w.kind === "invoice" ? "فاتورة" : (w.unit || "م²");
+        box.querySelector("#ex_qty").value = w.kind === "invoice" ? 1 : (Number(w.qty) || 1);
+        box.querySelector("#ex_price").value = Number(w.unitPrice) || 0;
+      };
     } else if (kind === "purchase") {
       const invoices = projectPurchaseInvoices(project.id, isEdit ? existing.id : null).filter(i => i.available > 0 || i.entry.id === x0.entryId);
       const wasKind = x0.kind === "purchase";
