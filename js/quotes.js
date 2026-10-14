@@ -388,6 +388,14 @@ function renderQuoteBuilder(el) {
         <input type="checkbox" id="f_hidePrice" ${q.hidePrice ? "checked" : ""}>
         إخفاء عمود السعر والإجمالي لكل بند عند طباعة العرض النهائي (يبقى الإجمالي الكلي ظاهراً)
       </label>
+      <label class="chk" style="font-weight:700;margin-top:8px">
+        <input type="checkbox" id="f_hideUnit" ${q.hideUnit ? "checked" : ""}>
+        إخفاء عمود الوحدة / نوع الحساب لكل بند عند طباعة العرض النهائي (مقطوعية، م²...)
+      </label>
+      <label class="chk" style="font-weight:700;margin-top:8px">
+        <input type="checkbox" id="f_hideCatTotal" ${q.hideCatTotal ? "checked" : ""}>
+        إخفاء صف إجمالي البنود (المجموع) أسفل كل تصنيف عند طباعة العرض النهائي
+      </label>
     </div>
 
     <div class="card">
@@ -550,6 +558,8 @@ function bindQuoteBuilderEvents(el) {
   document.getElementById("f_showHeader").onchange = (e) => { q.showCompanyHeader = e.target.checked; };
   document.getElementById("f_hideQty").onchange = (e) => { q.hideQty = e.target.checked; };
   document.getElementById("f_hidePrice").onchange = (e) => { q.hidePrice = e.target.checked; };
+  document.getElementById("f_hideUnit").onchange = (e) => { q.hideUnit = e.target.checked; };
+  document.getElementById("f_hideCatTotal").onchange = (e) => { q.hideCatTotal = e.target.checked; };
   document.getElementById("f_noteValidity").oninput = (e) => { q.noteValidity = e.target.value; };
   document.getElementById("f_notePayment").oninput = (e) => { q.notePayment = e.target.value; };
 
@@ -944,7 +954,9 @@ function plainMoney(n) {
 function buildQuotePrintTables(q) {
   const showQty = !q.hideQty;
   const showPrice = !q.hidePrice;
-  const totalCols = 3 + (showQty ? 1 : 0) + (showPrice ? 2 : 0); // رقم + الوصف + الوحدة (دائماً) + الكمية؟ + السعر/المجموع؟
+  const showUnit = !q.hideUnit;
+  const showCatTotal = !q.hideCatTotal;
+  const totalCols = 2 + (showUnit ? 1 : 0) + (showQty ? 1 : 0) + (showPrice ? 2 : 0); // رقم + الوصف + الوحدة؟ + الكمية؟ + السعر/المجموع؟
   return q.categories.map((qc, ci) => {
     const catNum = toArabicNum(ci + 1, 2);
     const blockTotal = qc.items.reduce((s, it) => s + itemTotal(it), 0);
@@ -955,7 +967,7 @@ function buildQuotePrintTables(q) {
           <tr class="print-cat-head-row">
             <th class="pc-num">رقم</th>
             <th class="pc-desc">الوصف</th>
-            <th class="pc-unit">الوحدة</th>
+            ${showUnit ? `<th class="pc-unit">الوحدة</th>` : ""}
             ${showQty ? `<th class="pc-qty">الكمية</th>` : ""}
             ${showPrice ? `<th class="pc-price">السعر</th><th class="pc-total">المجموع</th>` : ""}
           </tr>
@@ -966,13 +978,13 @@ function buildQuotePrintTables(q) {
             <tr>
               <td class="pc-num">${catNum}-${toArabicNum(ii + 1, 2)}</td>
               <td class="pc-desc">${escHtml(it.name)}</td>
-              <td class="pc-unit">${escHtml(it.unit)}</td>
+              ${showUnit ? `<td class="pc-unit">${escHtml(it.unit)}</td>` : ""}
               ${showQty ? `<td class="pc-qty">${plainMoney(it.qty)}</td>` : ""}
               ${showPrice ? `<td class="pc-price">${plainMoney(itemUnitPrice(it))}</td><td class="pc-total">${plainMoney(itemTotal(it))}</td>` : ""}
             </tr>`;
           }).join("") || `<tr><td class="pc-desc" colspan="${totalCols}" style="text-align:center">لا توجد بنود في هذا التصنيف</td></tr>`}
         </tbody>
-        ${qc.items.length ? `
+        ${qc.items.length && showCatTotal ? `
         <tfoot>
           <tr class="print-cat-total-row">
             <td colspan="${totalCols - 1}">المجموع</td>
