@@ -20,6 +20,7 @@ function newDraftQuote() {
     client: null, // { id?, name, phone, email, taxNumber }
     projectName: "",
     location: "",
+    date: todayISO(),
     showCompanyHeader: true,
     noteValidity: DEFAULT_NOTE_VALIDITY,
     notePayment: DEFAULT_NOTE_PAYMENT,
@@ -367,6 +368,13 @@ function renderQuoteBuilder(el) {
       <h3>${svgIcon("folder", 22)} بيانات المشروع</h3>
       <div class="grid cols-2">
         <div class="field"><label>اسم المشروع</label><input id="f_projectName" value="${q.projectName}"></div>
+        <div class="field"><label>تاريخ عرض السعر</label>
+          <div class="flex gap">
+            <input type="date" id="f_date" value="${q.date || todayISO()}" style="flex:1">
+            <button class="btn sm" id="f_dateToday" type="button" title="تعيين تاريخ اليوم">اليوم</button>
+          </div>
+          <div class="hint">الافتراضي تاريخ اليوم — يمكنك اختيار أي تاريخ آخر</div>
+        </div>
         <div class="field">
           <label>موقع المشروع (رابط خرائط جوجل)</label>
           <div class="flex gap">
@@ -555,6 +563,8 @@ function bindQuoteBuilderEvents(el) {
       { enableHighAccuracy: true, timeout: 10000 }
     );
   };
+  document.getElementById("f_date").onchange = (e) => { q.date = e.target.value || todayISO(); e.target.value = q.date; };
+  document.getElementById("f_dateToday").onclick = () => { q.date = todayISO(); document.getElementById("f_date").value = q.date; };
   document.getElementById("f_showHeader").onchange = (e) => { q.showCompanyHeader = e.target.checked; };
   document.getElementById("f_hideQty").onchange = (e) => { q.hideQty = e.target.checked; };
   document.getElementById("f_hidePrice").onchange = (e) => { q.hidePrice = e.target.checked; };
@@ -824,7 +834,7 @@ function bindQuoteBuilderEvents(el) {
 
     q.id = uid("q");
     q.number = "Q-" + (1000 + quotes.length + 1);
-    q.date = todayISO();
+    q.date = q.date || todayISO();
     quotes.push(q);
     dbSet("quotes", quotes);
     logActivity(`تم إنشاء عرض سعر "${q.number}" للعميل "${q.client.name}" بقيمة ${fmtMoney(quoteTotal(q))}`);
@@ -901,6 +911,7 @@ function renderQuoteView(el) {
         <div>
           <h3 class="mt-0">${svgIcon("folder", 22)} بيانات المشروع</h3>
           <div class="kv-row"><span class="k">اسم المشروع</span><span class="v">${q.projectName}</span></div>
+          <div class="kv-row"><span class="k">تاريخ العرض</span><span class="v">${fmtDate(q.date)}</span></div>
           <div class="kv-row"><span class="k">الموقع</span><span class="v">${locationDisplay(q.location)}</span></div>
         </div>
       </div>
