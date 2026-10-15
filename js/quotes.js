@@ -80,8 +80,44 @@ function supplyInstallLabel(it) {
   return "";
 }
 
-function quoteTotal(q) {
+// مجموع البنود كما أُدخلت (قبل أي معالجة للضريبة)
+function quoteItemsSum(q) {
   return q.categories.reduce((s, c) => s + c.items.reduce((si, it) => si + itemTotal(it), 0), 0);
+}
+
+// الضريبة المختارة لعرض السعر (q.vatMode): none (بدون — الافتراضي) | included (الأسعار شاملة) | excluded (الأسعار غير شاملة وتُضاف)
+const QUOTE_VAT_MODES = [
+  { key: "none", label: "بدون ضريبة (لا تظهر الضريبة في العرض)" },
+  { key: "included", label: "الأسعار شاملة الضريبة (توضيح قيمة الضريبة والإجمالي)" },
+  { key: "excluded", label: "الأسعار غير شاملة — تُضاف الضريبة على الإجمالي" },
+];
+
+function quoteAmounts(q) {
+  const sum = quoteItemsSum(q);
+  const mode = q.vatMode || "none";
+  if (mode === "included") { const base = sum / (1 + VAT_RATE); return { mode, base, vat: sum - base, grand: sum }; }
+  if (mode === "excluded") return { mode, base: sum, vat: sum * VAT_RATE, grand: sum * (1 + VAT_RATE) };
+  return { mode: "none", base: sum, vat: 0, grand: sum };
+}
+
+// الإجمالي النهائي المستحق على العميل (شامل الضريبة عند اختيارها)
+function quoteTotal(q) {
+  return quoteAmounts(q).grand;
+}
+
+// صندوق الإجماليات أسفل العرض: بدون ضريبة → إجمالي واحد، وإلا يُفصَّل قبل الضريبة / الضريبة / بعدها
+function quoteTotalsHtml(q, numId) {
+  const a = quoteAmounts(q);
+  if (a.mode === "none") {
+    return `<div class="grand-total-box"><div>الإجمالي الكلي لعرض السعر</div><div class="num" id="${numId}">${fmtMoney(a.grand)}</div></div>`;
+  }
+  const pct = Math.round(VAT_RATE * 100);
+  const baseLabel = a.mode === "included" ? "الإجمالي قبل الضريبة (بعد استخراج الضريبة من الأسعار الشاملة)" : "الإجمالي قبل الضريبة";
+  return `<div class="quote-vat-box">
+      <div class="row"><span>${baseLabel}</span><strong>${fmtMoney(a.base)}</strong></div>
+      <div class="row"><span>ضريبة القيمة المضافة (${pct}%)</span><strong>${fmtMoney(a.vat)}</strong></div>
+    </div>
+    <div class="grand-total-box"><div>الإجمالي بعد الضريبة</div><div class="num" id="${numId}">${fmtMoney(a.grand)}</div></div>`;
 }
 
 function renderQuotes(el) {
@@ -375,6 +411,10 @@ function renderQuoteBuilder(el) {
           </div>
           <div class="hint">الافتراضي تاريخ اليوم — يمكنك اختيار أي تاريخ آخر</div>
         </div>
+        <div class="field"><label>الضريبة (ضريبة القيمة المضافة)</label>
+          <select id="f_vatMode">${QUOTE_VAT_MODES.map(m => `<option value="${m.key}" ${(q.vatMode || "none") === m.key ? "selected" : ""}>${m.label}</option>`).join("")}</select>
+          <div class="hint">عند اختيار «شاملة الضريبة» تظهر قيمة الضريبة والإجمالي بعد الضريبة أسفل العرض</div>
+        </div>
         <div class="field">
           <label>موقع المشروع (رابط خرائط جوجل)</label>
           <div class="flex gap">
@@ -418,10 +458,7 @@ function renderQuoteBuilder(el) {
       ${q.categories.map((qc, idx) => renderCatBlock(qc, catalog, idx, q.categories.length)).join("") || `<div class="card empty-state"><div class="ic">${svgIcon("box", 40)}</div>اختر تصنيفاً أعلاه للبدء بإضافة البنود</div>`}
     </div>
 
-    <div class="grand-total-box">
-      <div>الإجمالي الكلي لعرض السعر</div>
-      <div class="num" id="grandTotal">${fmtMoney(total)}</div>
-    </div>
+    <div id="grandTotalWrap">${quoteTotalsHtml(q, "grandTotal")}</div>
 
     <div class="card">
       <h3>${svgIcon("file-text", 22)} ملاحظات عرض السعر (تظهر أسفل العرض النهائي)</h3>
@@ -565,6 +602,11 @@ function bindQuoteBuilderEvents(el) {
   };
   document.getElementById("f_date").onchange = (e) => { q.date = e.target.value || todayISO(); e.target.value = q.date; };
   document.getElementById("f_dateToday").onclick = () => { q.date = todayISO(); document.getElementById("f_date").value = q.date; };
+  document.getElementById("f_vatMode").onchange = (e) => {
+    q.vatMode = e.target.value;
+    const wrap = document.getElementById("grandTotalWrap");
+    if (wrap) wrap.innerHTML = quoteTotalsHtml(q, "grandTotal");
+  };
   document.getElementById("f_showHeader").onchange = (e) => { q.showCompanyHeader = e.target.checked; };
   document.getElementById("f_hideQty").onchange = (e) => { q.hideQty = e.target.checked; };
   document.getElementById("f_hidePrice").onchange = (e) => { q.hidePrice = e.target.checked; };
@@ -856,8 +898,8 @@ function updateRowAndTotals(el, catId, idx) {
   const block = el.querySelector(`[data-block="${catId}"] .cat-total`);
   if (block) block.textContent = "إجمالي التصنيف: " + fmtMoney(blockTotal);
 
-  const grand = el.querySelector("#grandTotal");
-  if (grand) grand.textContent = fmtMoney(quoteTotal(q));
+  const wrap = el.querySelector("#grandTotalWrap");
+  if (wrap) wrap.innerHTML = quoteTotalsHtml(q, "grandTotal");
 }
 
 /* ---------- عرض/طباعة عرض السعر ---------- */
@@ -928,10 +970,7 @@ function renderQuoteView(el) {
 
     <div class="print-only">${buildQuotePrintTables(q)}</div>
 
-    <div class="grand-total-box">
-      <div>الإجمالي الكلي لعرض السعر</div>
-      <div class="num" id="vGrandTotal">${fmtMoney(total)}</div>
-    </div>
+    <div id="vGrandTotalWrap">${quoteTotalsHtml(q, "vGrandTotal")}</div>
 
     <div class="card">
       <h3>${svgIcon("file-text", 22)} ملاحظات</h3>
@@ -1157,8 +1196,8 @@ function bindQuoteViewEvents(el, q, quotes, catalog) {
     const row = el.querySelector(`tr[data-vrow="${ci}:${ii}"]`);
     const labelSpan = row ? row.querySelector(".print-only-inline") : null;
     if (labelSpan) { const lbl = supplyInstallLabel(it); labelSpan.textContent = lbl ? lbl + " - " : ""; }
-    const grand = el.querySelector("#vGrandTotal");
-    if (grand) grand.textContent = fmtMoney(quoteTotal(q));
+    const wrap = el.querySelector("#vGrandTotalWrap");
+    if (wrap) wrap.innerHTML = quoteTotalsHtml(q, "vGrandTotal");
   }
 
   el.querySelectorAll("[data-vqty]").forEach(inp => inp.oninput = () => {
