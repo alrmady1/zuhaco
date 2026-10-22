@@ -90,6 +90,12 @@ function extraWorkSigned(w) {
   return w.kind === "deduction" ? -extraWorkTotal(w) : extraWorkTotal(w);
 }
 
+// كمية العقد والكمية الفعلية (للبنود المقارَنة بكمية العقد) تُعرض تحت الكمية
+function extraWorkQtyNote(w) {
+  if (w.contractQty === undefined || w.contractQty === null || w.actualQty === undefined || w.actualQty === null) return "";
+  return `<div class="text-muted" style="font-size:10.5px">العقد ${w.contractQty} ← الفعلي ${w.actualQty}</div>`;
+}
+
 function signedMoney(w) {
   return (w.kind === "deduction" ? "- " : "") + fmtMoney(extraWorkTotal(w));
 }
@@ -111,21 +117,27 @@ function projectExtrasTotals(p) {
 function projectContractItems(p) {
   const quote = p.approvedQuoteId ? dbGet("quotes", []).find(q => q.id === p.approvedQuoteId) : null;
   if (!quote) return [];
-  return quote.categories.flatMap(c => c.items.map(it => ({ name: it.name, unit: it.unit || "", price: itemUnitPrice(it) })));
+  return quote.categories.flatMap(c => c.items.map(it => ({ name: it.name, unit: it.unit || "", price: itemUnitPrice(it), qty: Number(it.qty) || 0 })));
 }
 
 function openProjectExtraModal(p, existing, onSaved) {
   const isEdit = !!existing;
   const w = existing || { kind: "extra_qty", name: "", unit: "", qty: 1, unitPrice: "", date: todayISO(), invoiceNumber: "", notes: "" };
   const contractItems = projectContractItems(p);
-  let kind = w.kind;
+  // الوضع: contract (بند موجود في العقد: كمية العقد / الفعلية / الفرق) | new_item | invoice
+  // النوع المحفوظ يُشتق من إشارة الفرق: موجب → extra_qty (كمية إضافية)، سالب → deduction (غير منفذ — خصم)
+  let kind = (w.kind === "extra_qty" || w.kind === "deduction") ? "contract" : w.kind;
+  const legacyItem = contractItems.find(i => i.name === w.name);
+  const initContractQty = w.contractQty !== undefined && w.contractQty !== null ? w.contractQty : (isEdit && legacyItem ? legacyItem.qty : "");
+  const initActualQty = w.actualQty !== undefined && w.actualQty !== null ? w.actualQty
+    : (isEdit && initContractQty !== "" ? Number((Number(initContractQty) + (w.kind === "deduction" ? -1 : 1) * (Number(w.qty) || 0)).toFixed(3)) : "");
   let vatApplicable = w.vatApplicable !== false;
   let vatIncluded = !!w.vatIncluded;
 
   const html = `
     <div class="modal-head"><h3>${isEdit ? "تعديل عمل إضافي" : "إضافة عمل إضافي"}</h3><button class="modal-close" id="mClose">×</button></div>
     <div class="field"><label>نوع البند</label>
-      <div class="pill-group" id="ew_kinds">${EXTRA_KINDS.map(k => `<div class="pill ${kind === k.key ? "active" : ""}" data-ekind="${k.key}">${k.label}</div>`).join("")}</div>
+      <div class="pill-group" id="ew_kinds">${[{ key: "contract", label: "بند موجود في العقد" }, { key: "new_item", label: "بند جديد" }, { key: "invoice", label: "فاتورة إضافية" }].map(k => `<div class="pill ${kind === k.key ? "active" : ""}" data-ekind="${k.key}">${k.label}</div>`).join("")}</div>
     </div>
     <div class="field"><label id="ew_nameLabel">البند</label>
       <input id="ew_name" list="ew_contractItems" value="${escHtml(w.name)}" autocomplete="off">
@@ -133,8 +145,13 @@ function openProjectExtraModal(p, existing, onSaved) {
       <div class="hint" id="ew_hint"></div>
     </div>
     <div class="field" id="ew_invoiceWrap"><label>رقم الفاتورة / المرجع (اختياري)</label><input id="ew_invoiceNumber" value="${escHtml(w.invoiceNumber || "")}"></div>
+    <div class="grid cols-3" id="ew_cmpRow">
+      <div class="field"><label>الكمية الموجودة بالعقد</label><input type="number" min="0" step="0.01" id="ew_contractQty" value="${initContractQty}"></div>
+      <div class="field"><label>الكمية الفعلية</label><input type="number" min="0" step="0.01" id="ew_actualQty" value="${initActualQty}"></div>
+      <div class="field"><label>الفرق (+ زيادة / − نقص)</label><div id="ew_diff" style="padding:10px 0;font-weight:800"></div></div>
+    </div>
     <div class="grid cols-3" id="ew_qtyRow">
-      <div class="field"><label>الكمية</label><input type="number" min="0" step="0.01" id="ew_qty" value="${w.qty}"></div>
+      <div class="field" id="ew_qtyField"><label>الكمية</label><input type="number" min="0" step="0.01" id="ew_qty" value="${w.qty}"></div>
       <div class="field"><label>الوحدة</label><input id="ew_unit" value="${escHtml(w.unit || "")}" placeholder="م² / عدد / مقطوعية"></div>
       <div class="field"><label>سعر الوحدة (ر.س)</label><input type="number" min="0" step="0.01" id="ew_price" value="${w.unitPrice}"></div>
     </div>
@@ -165,8 +182,16 @@ function openProjectExtraModal(p, existing, onSaved) {
   $("ew_cancel").onclick = closeModal;
 
   function currentPrice() { return kind === "invoice" ? Number($("ew_amount").value) || 0 : Number($("ew_price").value) || 0; }
-  function currentQty() { return kind === "invoice" ? 1 : Number($("ew_qty").value) || 0; }
+  function currentDiff() { return (Number($("ew_actualQty").value) || 0) - (Number($("ew_contractQty").value) || 0); }
+  function currentQty() { return kind === "invoice" ? 1 : kind === "contract" ? Math.abs(currentDiff()) : Number($("ew_qty").value) || 0; }
+  function refreshDiff() {
+    const d = Number(currentDiff().toFixed(3));
+    const color = d > 0 ? "var(--success)" : d < 0 ? "var(--danger)" : "inherit";
+    const lbl = d > 0 ? "زيادة — تُسجَّل كمية إضافية" : d < 0 ? "نقص — يُسجَّل بنداً غير منفذ (خصم)" : "لا يوجد فرق";
+    $("ew_diff").innerHTML = `<span style="color:${color}" dir="ltr">${d > 0 ? "+" : d < 0 ? "−" : ""}${Math.abs(d)}</span><div class="text-muted" style="font-size:11px;font-weight:400">${lbl}</div>`;
+  }
   function refreshTotal() {
+    if (kind === "contract") refreshDiff();
     const entered = currentQty() * currentPrice();
     if (!vatApplicable) {
       $("ew_total").innerHTML = `${fmtMoney(entered)}<div class="text-muted" style="font-size:11px;font-weight:400">مبلغ مقطوع بدون ضريبة — لن تُضاف عليه أي ضريبة</div>`;
@@ -181,9 +206,11 @@ function openProjectExtraModal(p, existing, onSaved) {
   function applyKind() {
     ov.querySelectorAll("[data-ekind]").forEach(p => p.classList.toggle("active", p.dataset.ekind === kind));
     const isInvoice = kind === "invoice";
-    const fromContract = kind === "extra_qty" || kind === "deduction";
-    $("ew_nameLabel").textContent = isInvoice ? "وصف الفاتورة" : kind === "extra_qty" ? "البند من العقد (اختر من القائمة أو اكتب اسمه)" : kind === "deduction" ? "البند غير المنفذ من العقد (اختر من القائمة أو اكتب اسمه)" : "اسم البند الجديد";
-    $("ew_hint").textContent = fromContract ? (contractItems.length ? "تظهر بنود العرض المعتمد للمشروع كاقتراحات، ويُملأ السعر والوحدة تلقائياً عند اختيار بند." + (kind === "deduction" ? " الكمية هنا هي الكمية التي لم تُنفَّذ، وتُخصم من قيمة المشروع." : "") : "لا يوجد عرض سعر معتمد للمشروع — اكتب اسم البند يدوياً.") : "";
+    const fromContract = kind === "contract";
+    $("ew_nameLabel").textContent = isInvoice ? "وصف الفاتورة" : fromContract ? "البند من العقد (اختر من القائمة أو اكتب اسمه)" : "اسم البند الجديد";
+    $("ew_hint").textContent = fromContract ? (contractItems.length ? "تظهر بنود العرض المعتمد للمشروع كاقتراحات، ويُملأ السعر والوحدة وكمية العقد تلقائياً عند اختيار بند. أدخل الكمية الفعلية ويُحسب الفرق: الزيادة تُضاف للمشروع، والنقص يُخصم منه." : "لا يوجد عرض سعر معتمد للمشروع — اكتب اسم البند وكمية العقد يدوياً.") : "";
+    $("ew_cmpRow").style.display = fromContract ? "grid" : "none";
+    $("ew_qtyField").style.display = fromContract ? "none" : "block";
     $("ew_invoiceWrap").style.display = isInvoice ? "block" : "none";
     $("ew_qtyRow").style.display = isInvoice ? "none" : "grid";
     $("ew_amountWrap").style.display = isInvoice ? "block" : "none";
@@ -203,12 +230,12 @@ function openProjectExtraModal(p, existing, onSaved) {
     ov.querySelectorAll("[data-evat]").forEach(x => x.classList.toggle("active", x.dataset.evat === (vatIncluded ? "1" : "0")));
     applyKind();
   });
-  ["ew_qty", "ew_price", "ew_amount"].forEach(id => $(id).oninput = refreshTotal);
+  ["ew_qty", "ew_price", "ew_amount", "ew_contractQty", "ew_actualQty"].forEach(id => $(id).oninput = refreshTotal);
 
   $("ew_name").onchange = () => {
-    if (kind !== "extra_qty" && kind !== "deduction") return;
+    if (kind !== "contract") return;
     const item = contractItems.find(i => i.name === $("ew_name").value.trim());
-    if (item) { $("ew_unit").value = item.unit; $("ew_price").value = item.price; refreshTotal(); }
+    if (item) { $("ew_unit").value = item.unit; $("ew_price").value = item.price; $("ew_contractQty").value = item.qty; refreshTotal(); }
   };
 
   $("ew_save").onclick = () => {
@@ -216,9 +243,13 @@ function openProjectExtraModal(p, existing, onSaved) {
     const price = currentPrice();
     if (!name) { toast("يرجى إدخال اسم البند"); return; }
     if (price <= 0) { toast("يرجى إدخال سعر أو مبلغ صحيح"); return; }
+    if (kind === "contract" && currentDiff() === 0) { toast("لا يوجد فرق بين الكمية في العقد والكمية الفعلية"); return; }
     if (kind !== "invoice" && currentQty() <= 0) { toast("يرجى إدخال كمية صحيحة"); return; }
+    const savedKind = kind === "contract" ? (currentDiff() > 0 ? "extra_qty" : "deduction") : kind;
     const data = {
-      kind, name, qty: currentQty(), unitPrice: price, vatApplicable, vatIncluded,
+      kind: savedKind, name,
+      contractQty: kind === "contract" ? Number($("ew_contractQty").value) || 0 : undefined,
+      actualQty: kind === "contract" ? Number($("ew_actualQty").value) || 0 : undefined, qty: currentQty(), unitPrice: price, vatApplicable, vatIncluded,
       unit: kind === "invoice" ? "فاتورة" : $("ew_unit").value.trim(),
       invoiceNumber: kind === "invoice" ? $("ew_invoiceNumber").value.trim() : "",
       date: $("ew_date").value || todayISO(), notes: $("ew_notes").value.trim(),
@@ -284,7 +315,7 @@ function projectExtrasCardHtml(p, contract) {
                 <td>${i + 1}</td>
                 <td><span class="badge ${w.kind === "invoice" ? "orange" : w.kind === "extra_qty" ? "blue" : w.kind === "deduction" ? "red" : "gray"}">${extraKindInfo(w.kind).label}</span></td>
                 <td>${escHtml(w.name)}${w.invoiceNumber ? ` <span class="text-muted" style="font-size:11px">(${escHtml(w.invoiceNumber)})</span>` : ""}</td>
-                <td>${w.kind === "invoice" ? "-" : w.qty}</td>
+                <td>${w.kind === "invoice" ? "-" : w.qty}${extraWorkQtyNote(w)}</td>
                 <td>${escHtml(w.unit || "-")}</td>
                 <td>${fmtMoney(w.unitPrice)}</td>
                 <td><strong style="${w.kind === "deduction" ? "color:var(--danger)" : ""}">${signedMoney(w)}</strong><div class="text-muted" style="font-size:10.5px">${extraWorkVatLabel(w)}</div></td>
@@ -328,7 +359,7 @@ function renderProjectExtras(el) {
         <tr>
           <td>${++n}</td>
           <td>${escHtml(w.name)}${w.invoiceNumber ? `<div class="text-muted" style="font-size:11px">فاتورة/مرجع: ${escHtml(w.invoiceNumber)}</div>` : ""}${w.notes ? `<div class="text-muted" style="font-size:11px">${escHtml(w.notes)}</div>` : ""}</td>
-          <td>${w.kind === "invoice" ? "-" : w.qty}</td>
+          <td>${w.kind === "invoice" ? "-" : w.qty}${extraWorkQtyNote(w)}</td>
           <td>${escHtml(w.unit || "-")}</td>
           <td>${fmtMoney(w.unitPrice)}</td>
           <td><strong style="${w.kind === "deduction" ? "color:var(--danger)" : ""}">${signedMoney(w)}</strong><div class="text-muted" style="font-size:10px">${extraWorkVatLabel(w)}</div></td>
