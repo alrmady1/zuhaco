@@ -92,32 +92,60 @@ const QUOTE_VAT_MODES = [
   { key: "excluded", label: "الأسعار غير شاملة — تُضاف الضريبة على الإجمالي" },
 ];
 
+// الخصم على عرض السعر (q.discountType): none | percent (نسبة من مجموع البنود) | fixed (مبلغ مقطوع)
+// يُطبَّق على مجموع البنود بنفس أساس الأسعار المُدخلة (قبل الضريبة، أو شامل الضريبة إن كانت الأسعار شاملة) ثم تُحسب الضريبة
+const QUOTE_DISCOUNT_TYPES = [
+  { key: "none", label: "بدون خصم" },
+  { key: "percent", label: "نسبة مئوية (%)" },
+  { key: "fixed", label: "مبلغ مقطوع (ر.س)" },
+];
+
+function quoteDiscountInfo(q, sum) {
+  const type = q.discountType || "none";
+  const val = Math.max(0, Number(q.discountValue) || 0);
+  if (type === "percent") { const pct = Math.min(val, 100); return { type, pct, amount: sum * pct / 100 }; }
+  if (type === "fixed") return { type, pct: 0, amount: Math.min(val, Math.max(sum, 0)) };
+  return { type: "none", pct: 0, amount: 0 };
+}
+
 function quoteAmounts(q) {
   const sum = quoteItemsSum(q);
   const mode = q.vatMode || "none";
-  if (mode === "included") { const base = sum / (1 + VAT_RATE); return { mode, base, vat: sum - base, grand: sum }; }
-  if (mode === "excluded") return { mode, base: sum, vat: sum * VAT_RATE, grand: sum * (1 + VAT_RATE) };
-  return { mode: "none", base: sum, vat: 0, grand: sum };
+  const d = quoteDiscountInfo(q, sum);
+  const after = sum - d.amount;
+  const common = { sum, discount: d.amount, discountType: d.type, discountPct: d.pct, afterDiscount: after };
+  if (mode === "included") { const base = after / (1 + VAT_RATE); return Object.assign({ mode, base, vat: after - base, grand: after }, common); }
+  if (mode === "excluded") return Object.assign({ mode, base: after, vat: after * VAT_RATE, grand: after * (1 + VAT_RATE) }, common);
+  return Object.assign({ mode: "none", base: after, vat: 0, grand: after }, common);
 }
 
-// الإجمالي النهائي المستحق على العميل (شامل الضريبة عند اختيارها)
+// الإجمالي النهائي المستحق على العميل (بعد الخصم وشامل الضريبة عند اختيارها)
 function quoteTotal(q) {
   return quoteAmounts(q).grand;
 }
 
-// صندوق الإجماليات أسفل العرض: بدون ضريبة → إجمالي واحد، وإلا يُفصَّل قبل الضريبة / الضريبة / بعدها
+// صندوق الإجماليات أسفل العرض: مجموع البنود والخصم (إن وُجد) ثم الضريبة (إن اختيرت) ثم الإجمالي النهائي
 function quoteTotalsHtml(q, numId) {
   const a = quoteAmounts(q);
-  if (a.mode === "none") {
+  const hasDisc = a.discount > 0;
+  if (a.mode === "none" && !hasDisc) {
     return `<div class="grand-total-box"><div>الإجمالي الكلي لعرض السعر</div><div class="num" id="${numId}">${fmtMoney(a.grand)}</div></div>`;
   }
-  const pct = Math.round(VAT_RATE * 100);
-  const baseLabel = a.mode === "included" ? "الإجمالي قبل الضريبة (بعد استخراج الضريبة من الأسعار الشاملة)" : "الإجمالي قبل الضريبة";
-  return `<div class="quote-vat-box">
-      <div class="row"><span>${baseLabel}</span><strong>${fmtMoney(a.base)}</strong></div>
-      <div class="row"><span>ضريبة القيمة المضافة (${pct}%)</span><strong>${fmtMoney(a.vat)}</strong></div>
-    </div>
-    <div class="grand-total-box"><div>الإجمالي بعد الضريبة</div><div class="num" id="${numId}">${fmtMoney(a.grand)}</div></div>`;
+  const rows = [];
+  if (hasDisc) {
+    rows.push(`<div class="row"><span>مجموع البنود قبل الخصم</span><strong>${fmtMoney(a.sum)}</strong></div>`);
+    rows.push(`<div class="row"><span>الخصم${a.discountType === "percent" ? " (" + Number(a.discountPct.toFixed(2)) + "%)" : " (مبلغ مقطوع)"}</span><strong style="color:var(--danger)">- ${fmtMoney(a.discount)}</strong></div>`);
+  }
+  let finalLabel = "الإجمالي بعد الخصم";
+  if (a.mode !== "none") {
+    const pct = Math.round(VAT_RATE * 100);
+    const baseLabel = a.mode === "included" ? (hasDisc ? "الإجمالي بعد الخصم قبل الضريبة" : "الإجمالي قبل الضريبة") + " (بعد استخراج الضريبة من الأسعار الشاملة)" : (hasDisc ? "الإجمالي بعد الخصم قبل الضريبة" : "الإجمالي قبل الضريبة");
+    rows.push(`<div class="row"><span>${baseLabel}</span><strong>${fmtMoney(a.base)}</strong></div>`);
+    rows.push(`<div class="row"><span>ضريبة القيمة المضافة (${pct}%)</span><strong>${fmtMoney(a.vat)}</strong></div>`);
+    finalLabel = "الإجمالي بعد الضريبة";
+  }
+  return `<div class="quote-vat-box">${rows.join("")}</div>
+    <div class="grand-total-box"><div>${finalLabel}</div><div class="num" id="${numId}">${fmtMoney(a.grand)}</div></div>`;
 }
 
 function renderQuotes(el) {
@@ -458,6 +486,18 @@ function renderQuoteBuilder(el) {
       ${q.categories.map((qc, idx) => renderCatBlock(qc, catalog, idx, q.categories.length)).join("") || `<div class="card empty-state"><div class="ic">${svgIcon("box", 40)}</div>اختر تصنيفاً أعلاه للبدء بإضافة البنود</div>`}
     </div>
 
+    <div class="card">
+      <h3>${svgIcon("dollar", 22)} الخصم على عرض السعر</h3>
+      <div class="grid cols-2">
+        <div class="field"><label>نوع الخصم</label>
+          <select id="f_discType">${QUOTE_DISCOUNT_TYPES.map(m => `<option value="${m.key}" ${(q.discountType || "none") === m.key ? "selected" : ""}>${m.label}</option>`).join("")}</select>
+        </div>
+        <div class="field"><label id="f_discLabel">قيمة الخصم</label>
+          <input type="number" min="0" step="0.01" id="f_discValue" value="${q.discountValue || ""}" ${(q.discountType || "none") === "none" ? "disabled" : ""}>
+        </div>
+      </div>
+      <div class="hint">يُخصم من مجموع البنود قبل احتساب الضريبة، ويظهر الخصم في العرض النهائي والطباعة.</div>
+    </div>
     <div id="grandTotalWrap">${quoteTotalsHtml(q, "grandTotal")}</div>
 
     <div class="card">
@@ -602,6 +642,26 @@ function bindQuoteBuilderEvents(el) {
   };
   document.getElementById("f_date").onchange = (e) => { q.date = e.target.value || todayISO(); e.target.value = q.date; };
   document.getElementById("f_dateToday").onclick = () => { q.date = todayISO(); document.getElementById("f_date").value = q.date; };
+  const refreshDiscountUi = () => {
+    const t = q.discountType || "none";
+    const inp = document.getElementById("f_discValue");
+    inp.disabled = t === "none";
+    document.getElementById("f_discLabel").textContent = t === "percent" ? "نسبة الخصم (%)" : t === "fixed" ? "مبلغ الخصم (ر.س)" : "قيمة الخصم";
+    const wrap = document.getElementById("grandTotalWrap");
+    if (wrap) wrap.innerHTML = quoteTotalsHtml(q, "grandTotal");
+  };
+  document.getElementById("f_discType").onchange = (e) => {
+    q.discountType = e.target.value;
+    if (q.discountType === "none") { q.discountValue = 0; document.getElementById("f_discValue").value = ""; }
+    refreshDiscountUi();
+  };
+  document.getElementById("f_discValue").oninput = (e) => {
+    let v = Math.max(0, Number(e.target.value) || 0);
+    if ((q.discountType || "none") === "percent" && v > 100) { v = 100; e.target.value = 100; }
+    q.discountValue = v;
+    refreshDiscountUi();
+  };
+  refreshDiscountUi();
   document.getElementById("f_vatMode").onchange = (e) => {
     q.vatMode = e.target.value;
     const wrap = document.getElementById("grandTotalWrap");
