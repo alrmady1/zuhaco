@@ -125,7 +125,7 @@ function quoteTotal(q) {
 }
 
 // صندوق الإجماليات أسفل العرض: مجموع البنود والخصم (إن وُجد) ثم الضريبة (إن اختيرت) ثم الإجمالي النهائي
-function quoteTotalsHtml(q, numId) {
+function quoteTotalsCoreHtml(q, numId) {
   const a = quoteAmounts(q);
   const hasDisc = a.discount > 0;
   if (a.mode === "none" && !hasDisc) {
@@ -146,6 +146,54 @@ function quoteTotalsHtml(q, numId) {
   }
   return `<div class="quote-vat-box">${rows.join("")}</div>
     <div class="grand-total-box"><div>${finalLabel}</div><div class="num" id="${numId}">${fmtMoney(a.grand)}</div></div>`;
+}
+
+/* ---------- إجمالي الربح (للعرض على الشاشة فقط — لا يُطبع) ---------- */
+let QUOTE_PROFIT_VISIBLE = false; // يبدأ مخفياً في كل جلسة ويُظهره المستخدم بزر
+
+// الربح بدون الضريبة: البنود المبنية على تكلفة (توريد/تركيب) فقط، والخصم يُنقص من الربح.
+// البنود ذات السعر الثابت بلا تكلفة مسجلة لا تُحتسب (تكلفتها غير معروفة) ويُنبَّه على عددها.
+function quoteProfitInfo(q) {
+  const a = quoteAmounts(q);
+  const factor = a.mode === "included" ? 1 / (1 + VAT_RATE) : 1;
+  let revenue = 0, cost = 0, uncosted = 0;
+  q.categories.forEach(c => c.items.forEach(it => {
+    const unitCost = itemCostUnit(it);
+    if ((it.supply || it.install) && unitCost > 0) {
+      const qty = Number(it.qty) || 0;
+      revenue += qty * itemUnitPrice(it) * factor;
+      cost += qty * unitCost;
+    } else if (itemTotal(it) > 0) uncosted++;
+  }));
+  const discount = a.discount * factor;
+  const net = revenue - discount;
+  return { cost, revenue, discount, profit: net - cost, margin: net > 0 ? (net - cost) / net * 100 : 0, uncosted };
+}
+
+function toggleQuoteProfit(btn) {
+  QUOTE_PROFIT_VISIBLE = !QUOTE_PROFIT_VISIBLE;
+  const body = btn.closest(".quote-profit-box").querySelector(".qprofit-body");
+  if (body) body.style.display = QUOTE_PROFIT_VISIBLE ? "block" : "none";
+  btn.textContent = QUOTE_PROFIT_VISIBLE ? "إخفاء" : "إظهار";
+}
+
+function quoteProfitHtml(q) {
+  const p = quoteProfitInfo(q);
+  const neg = p.profit < 0;
+  return `<div class="quote-profit-box no-print">
+    <div class="qprofit-head"><strong>إجمالي الربح</strong> <span class="text-muted">(للاطلاع الداخلي فقط — لا يظهر في الطباعة)</span>
+      <button type="button" class="btn sm" onclick="toggleQuoteProfit(this)">${QUOTE_PROFIT_VISIBLE ? "إخفاء" : "إظهار"}</button></div>
+    <div class="qprofit-body" style="display:${QUOTE_PROFIT_VISIBLE ? "block" : "none"}">
+      <div class="row"><span>إجمالي التكلفة (توريد + تركيب)</span><strong>${fmtMoney(p.cost)}</strong></div>
+      <div class="row"><span>إجمالي الربح${p.discount > 0 ? " (بعد الخصم)" : ""}</span><strong style="color:var(--${neg ? "danger" : "success"})">${neg ? "- " : ""}${fmtMoney(Math.abs(p.profit))}</strong></div>
+      <div class="row"><span>نسبة الربح من سعر البيع (بدون ضريبة)</span><strong>${Number(p.margin.toFixed(2))}%</strong></div>
+      ${p.uncosted ? `<div class="text-muted" style="font-size:11.5px;margin-top:4px">لا تشمل ${p.uncosted} بند/بنود بسعر ثابت بلا تكلفة مسجلة.</div>` : ""}
+    </div>
+  </div>`;
+}
+
+function quoteTotalsHtml(q, numId) {
+  return quoteTotalsCoreHtml(q, numId) + quoteProfitHtml(q);
 }
 
 function renderQuotes(el) {

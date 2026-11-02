@@ -470,6 +470,11 @@ table.data-table tr.row-near { background: #fdecd6; }
 .quote-vat-box { border: 1px solid var(--border, #e3e6ec); border-radius: 10px; padding: 10px 18px; margin-top: 10px; break-inside: avoid; }
 .quote-vat-box .row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; font-size: 14px; }
 .quote-vat-box .row + .row { border-top: 1px dashed #d9dde5; }
+.quote-profit-box { border: 1px dashed #b9c0cc; border-radius: 10px; padding: 10px 18px; margin-top: 10px; background: var(--bg, #fafbfc); }
+.quote-profit-box .qprofit-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13.5px; }
+.quote-profit-box .qprofit-head .btn { margin-inline-start: auto; }
+.quote-profit-box .row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; font-size: 14px; border-top: 1px dashed #e3e6ec; }
+.quote-profit-box .qprofit-body { margin-top: 8px; }
 
 .timeline-item { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f0f1f4; }
 .timeline-item:last-child { border-bottom: none; }
