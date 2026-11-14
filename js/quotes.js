@@ -1522,7 +1522,7 @@ function xlsxEsc(v) { return String(v).replace(/&/g, "&amp;").replace(/</g, "&lt
 function xlsxCol(i) { return String.fromCharCode(65 + i); } // A..F فقط
 
 // أنماط الخلايا (فهارس cellXfs في styles.xml أدناه)
-const XS = { def: 0, title: 1, head: 2, text: 3, qty: 4, money: 5, inMoney: 6, inQty: 7, cat: 8, totLabel: 9, totMoney: 10, inPct: 11, label: 12, bold: 13 };
+const XS = { def: 0, title: 1, head: 2, text: 3, qty: 4, money: 5, inMoney: 6, inQty: 7, cat: 8, totLabel: 9, totMoney: 10, inPct: 11, label: 12, bold: 13, headInt: 14, pctCalc: 15 };
 
 function xlsxStylesXml() {
   const border = '<border><left style="thin"><color rgb="FF999999"/></left><right style="thin"><color rgb="FF999999"/></right><top style="thin"><color rgb="FF999999"/></top><bottom style="thin"><color rgb="FF999999"/></bottom><diagonal/></border>';
@@ -1530,21 +1530,26 @@ function xlsxStylesXml() {
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
     + '<numFmts count="3"><numFmt numFmtId="164" formatCode="#,##0.00"/><numFmt numFmtId="165" formatCode="#,##0.##"/><numFmt numFmtId="166" formatCode="General&quot;%&quot;"/></numFmts>'
     + '<fonts count="4"><font><sz val="11"/><name val="Arial"/></font><font><b/><sz val="14"/><name val="Arial"/></font><font><b/><sz val="11"/><name val="Arial"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Arial"/></font></fonts>'
-    + '<fills count="6"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>'
+    + '<fills count="7"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>'
     + '<fill><patternFill patternType="solid"><fgColor rgb="FF1D6FE8"/><bgColor indexed="64"/></patternFill></fill>'
     + '<fill><patternFill patternType="solid"><fgColor rgb="FFE9E4DA"/><bgColor indexed="64"/></patternFill></fill>'
     + '<fill><patternFill patternType="solid"><fgColor rgb="FFF3F1EC"/><bgColor indexed="64"/></patternFill></fill>'
-    + '<fill><patternFill patternType="solid"><fgColor rgb="FFFFF7CC"/><bgColor indexed="64"/></patternFill></fill></fills>'
+    + '<fill><patternFill patternType="solid"><fgColor rgb="FFFFF7CC"/><bgColor indexed="64"/></patternFill></fill>'
+    + '<fill><patternFill patternType="solid"><fgColor rgb="FFC77700"/><bgColor indexed="64"/></patternFill></fill></fills>'
     + `<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>${border}</borders>`
     + '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-    + '<cellXfs count="14">'
+    + '<cellXfs count="16">'
     + xf(0, 0, 0, 0) + xf(0, 1, 0, 0, "center") + xf(0, 3, 2, 1, "center") + xf(0, 0, 0, 1) + xf(165, 0, 0, 1, "center")
     + xf(164, 0, 0, 1, "center") + xf(164, 0, 5, 1, "center") + xf(165, 0, 5, 1, "center") + xf(0, 2, 3, 1)
     + xf(0, 2, 4, 1) + xf(164, 2, 4, 1, "center") + xf(166, 0, 5, 1, "center") + xf(0, 0, 0, 0) + xf(0, 2, 0, 0)
+    + xf(0, 3, 6, 1, "center") + xf(166, 0, 0, 1, "center")
     + '</cellXfs></styleSheet>';
 }
 
 // يبني ملف xlsx لعرض السعر ويعيد { bytes, fileName }
+// الأعمدة A–F للعميل (البند/الوحدة/الكمية/السعر/الإجمالي)، والأعمدة G–J داخلية (التكلفة والربح) في آخر الورقة:
+//  - بند مبني على تكلفة (توريد/تركيب) بلا تعديل يدوي: السعر = التكلفة × (1 + نسبة الربح) فتعديل النسبة يعيد حساب السعر
+//  - غير ذلك (سعر ثابت/معدّل يدوياً): السعر مُدخَل، ونسبة الربح تُحسب من السعر والتكلفة المُدخلة
 function buildQuoteXlsx(q) {
   const rows = {};          // r → [{ c, xml }]
   const merges = [];
@@ -1563,30 +1568,49 @@ function buildQuoteXlsx(q) {
   r++;
   text(r, 0, XS.bold, "المشروع: " + (q.projectName || "")); merge(r, 0, 2);
   text(r, 3, XS.bold, "الموقع: " + (q.location || "")); merge(r, 3, 5);
-  r += 2;
+  r++;
+  text(r, 6, XS.bold, "أعمدة داخلية (التكلفة والربح) — احذفها قبل إرسال الملف للعميل"); merge(r, 6, 9);
+  r++;
   ["#", "البند", "الوحدة", "الكمية", "سعر الوحدة", "الإجمالي"].forEach((h, i) => text(r, i, XS.head, h));
+  ["تكلفة الوحدة", "نسبة الربح %", "إجمالي التكلفة", "الربح"].forEach((h, i) => text(r, 6 + i, XS.headInt, h));
   r++;
 
-  const subtotalRows = [], subtotalVals = [];
+  const subtotalRows = [], subtotalVals = [], costSubRows = [], profitSubRows = [];
+  let totalCostVal = 0, totalProfitVal = 0;
   q.categories.forEach((qc, ci) => {
     if (!qc.items.length) return;
     text(r, 0, XS.cat, (ci + 1) + " — " + (qc.name || "")); merge(r, 0, 5); fillRow(r, 0, 5, XS.cat);
     r++;
-    const first = r; let catSum = 0;
+    const first = r; let catSum = 0, catCost = 0, catProfit = 0;
     qc.items.forEach((it, ii) => {
-      const qty = Number(it.qty) || 0, price = itemUnitPrice(it);
+      const qty = Number(it.qty) || 0, price = itemUnitPrice(it), unitCost = itemCostUnit(it);
+      const hasCost = (it.supply || it.install) && unitCost > 0;
+      const overridden = it.priceOverride !== undefined && it.priceOverride !== null && it.priceOverride !== "";
+      const priceFromCost = hasCost && !overridden;
       text(r, 0, XS.text, (ci + 1) + "-" + (ii + 1));
       text(r, 1, XS.text, it.name || "");
       text(r, 2, XS.text, it.unit || "");
       num(r, 3, XS.inQty, qty);
-      num(r, 4, XS.inMoney, Number(price.toFixed(4)));
+      if (priceFromCost) fml(r, 4, XS.money, `G${r}*(1+H${r}/100)`, price);
+      else num(r, 4, XS.inMoney, Number(price.toFixed(4)));
       fml(r, 5, XS.money, `D${r}*E${r}`, qty * price);
-      catSum += qty * price;
+      if (hasCost) num(r, 6, XS.inMoney, unitCost); else cell(r, 6, XS.inMoney, "/>");
+      if (priceFromCost) num(r, 7, XS.inPct, itemMargin(it));
+      else fml(r, 7, XS.pctCalc, `IF(G${r}>0,(E${r}-G${r})/G${r}*100,0)`, hasCost ? (price - unitCost) / unitCost * 100 : 0);
+      fml(r, 8, XS.money, `D${r}*G${r}`, hasCost ? qty * unitCost : 0);
+      const profit = hasCost ? qty * (price - unitCost) : 0;
+      fml(r, 9, XS.money, `IF(G${r}>0,F${r}-I${r},0)`, profit);
+      catSum += qty * price; catCost += hasCost ? qty * unitCost : 0; catProfit += profit;
       r++;
     });
     text(r, 0, XS.totLabel, "إجمالي " + (qc.name || "")); merge(r, 0, 4); fillRow(r, 0, 4, XS.totLabel);
     fml(r, 5, XS.totMoney, `SUM(F${first}:F${r - 1})`, catSum);
+    cell(r, 6, XS.totLabel, "/>"); cell(r, 7, XS.totLabel, "/>");
+    fml(r, 8, XS.totMoney, `SUM(I${first}:I${r - 1})`, catCost);
+    fml(r, 9, XS.totMoney, `SUM(J${first}:J${r - 1})`, catProfit);
     subtotalRows.push(r); subtotalVals.push(catSum);
+    costSubRows.push(r); profitSubRows.push(r);
+    totalCostVal += catCost; totalProfitVal += catProfit;
     r++;
   });
 
@@ -1597,9 +1621,9 @@ function buildQuoteXlsx(q) {
   text(r, 0, XS.totLabel, "مجموع البنود"); merge(r, 0, 4); fillRow(r, 0, 4, XS.totLabel);
   fml(r, 5, XS.totMoney, subtotalRows.length ? subtotalRows.map(x => `F${x}`).join("+") : "0", sum);
   r++;
-  let baseRow = sumRow;
+  let baseRow = sumRow, discRow = 0, includedVatRow = 0;
   if (a.discount > 0) {
-    const discRow = r;
+    discRow = r;
     if (a.discountType === "percent") {
       text(r, 0, XS.label, "الخصم (نسبة %)"); merge(r, 0, 3);
       num(r, 4, XS.inPct, a.discountPct);
@@ -1623,6 +1647,7 @@ function buildQuoteXlsx(q) {
     fml(r, 5, XS.totMoney, `F${baseRow}+F${vatRow}`, a.grand);
   } else if (a.mode === "included") {
     const vatRow = r + 1;
+    includedVatRow = vatRow;
     text(r, 0, XS.label, "الإجمالي قبل الضريبة (الأسعار شاملة الضريبة)"); merge(r, 0, 4);
     fml(r, 5, XS.money, `F${baseRow}-F${vatRow}`, a.base);
     r++;
@@ -1636,17 +1661,43 @@ function buildQuoteXlsx(q) {
     text(r, 0, XS.totLabel, "الإجمالي الكلي"); merge(r, 0, 4); fillRow(r, 0, 4, XS.totLabel);
     fml(r, 5, XS.totMoney, `F${baseRow}`, a.grand);
   }
+
+  // ملخص داخلي في آخر الورقة: التكلفة والربح (الربح بدون ضريبة، والخصم يُنقص منه)
   r += 2;
-  text(r, 0, XS.label, "الخلايا الصفراء قابلة للتعديل (الكمية والسعر والنسب) وتتحدث الإجماليات تلقائياً."); merge(r, 0, 5);
+  text(r, 0, XS.headInt, "ملخص التكلفة والربح (داخلي — بدون ضريبة)"); merge(r, 0, 5); fillRow(r, 0, 5, XS.headInt);
+  r++;
+  const costRow = r;
+  text(r, 0, XS.totLabel, "إجمالي التكلفة"); merge(r, 0, 4); fillRow(r, 0, 4, XS.totLabel);
+  fml(r, 5, XS.totMoney, costSubRows.length ? costSubRows.map(x => `I${x}`).join("+") : "0", totalCostVal);
+  r++;
+  const grossProfitRow = r;
+  text(r, 0, XS.label, "إجمالي الربح قبل الخصم"); merge(r, 0, 4);
+  fml(r, 5, XS.money, profitSubRows.length ? profitSubRows.map(x => `J${x}`).join("+") : "0", totalProfitVal);
+  r++;
+  const factor = a.mode === "included" ? 1 / (1 + VAT_RATE) : 1;
+  let netProfitRow = grossProfitRow, netProfitVal = totalProfitVal;
+  if (discRow) {
+    text(r, 0, XS.label, "الخصم (بدون ضريبة)"); merge(r, 0, 4);
+    fml(r, 5, XS.money, includedVatRow ? `F${discRow}/(1+E${includedVatRow}/100)` : `F${discRow}`, a.discount * factor);
+    const discExRow = r; r++;
+    text(r, 0, XS.totLabel, "صافي الربح بعد الخصم"); merge(r, 0, 4); fillRow(r, 0, 4, XS.totLabel);
+    netProfitVal = totalProfitVal - a.discount * factor;
+    fml(r, 5, XS.totMoney, `F${grossProfitRow}-F${discExRow}`, netProfitVal);
+    netProfitRow = r; r++;
+  }
+  text(r, 0, XS.label, "نسبة الربح على التكلفة"); merge(r, 0, 3);
+  fml(r, 4, XS.pctCalc, `IF(F${costRow}>0,F${netProfitRow}/F${costRow}*100,0)`, totalCostVal > 0 ? netProfitVal / totalCostVal * 100 : 0);
+  r += 2;
+  text(r, 0, XS.label, "الخلايا الصفراء قابلة للتعديل (الكمية والسعر والتكلفة ونسب الربح والخصم والضريبة) وتتحدث الإجماليات والأرباح تلقائياً. للبنود المبنية على تكلفة: السعر = التكلفة × (1 + نسبة الربح)؛ ولبنود السعر الثابت أدخل التكلفة ليُحسب الربح."); merge(r, 0, 9);
 
   const lastRow = r;
   const sheetData = Object.keys(rows).map(Number).sort((x, y) => x - y)
     .map(rn => `<row r="${rn}">${rows[rn].sort((x, y) => x.c - y.c).map(x => x.xml).join("")}</row>`).join("");
   const sheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-    + `<dimension ref="A1:F${lastRow}"/><sheetViews><sheetView rightToLeft="1" workbookViewId="0"/></sheetViews>`
-    + '<cols><col min="1" max="1" width="8" customWidth="1"/><col min="2" max="2" width="48" customWidth="1"/><col min="3" max="3" width="14" customWidth="1"/><col min="4" max="4" width="12" customWidth="1"/><col min="5" max="5" width="16" customWidth="1"/><col min="6" max="6" width="18" customWidth="1"/></cols>'
+    + `<dimension ref="A1:J${lastRow}"/><sheetViews><sheetView rightToLeft="1" workbookViewId="0"/></sheetViews>`
+    + '<cols><col min="1" max="1" width="8" customWidth="1"/><col min="2" max="2" width="48" customWidth="1"/><col min="3" max="3" width="14" customWidth="1"/><col min="4" max="4" width="12" customWidth="1"/><col min="5" max="5" width="16" customWidth="1"/><col min="6" max="6" width="18" customWidth="1"/><col min="7" max="10" width="16" customWidth="1"/></cols>'
     + `<sheetData>${sheetData}</sheetData><mergeCells count="${merges.length}">${merges.map(m => `<mergeCell ref="${m}"/>`).join("")}</mergeCells>`
-    + '<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="portrait" fitToHeight="0"/></worksheet>';
+    + '<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="landscape" fitToHeight="0"/></worksheet>';
   const files = [
     { name: "[Content_Types].xml", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>' },
     { name: "_rels/.rels", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
