@@ -229,6 +229,8 @@ function renderQuotesList(el) {
                 <td>
                   <button class="btn-icon" data-view="${q.id}" title="عرض">${ICON_VIEW}</button>
                   ${canAddQuote ? `<button class="btn-icon" data-editq="${q.id}" title="تعديل العرض (إضافة/حذف/تعديل البنود)">${ICON_EDIT}</button>` : ""}
+                  ${canAddQuote ? `<button class="btn-icon" data-dupq="${q.id}" title="نسخ العرض كعرض جديد للتعديل عليه">${svgIcon("copy")}</button>` : ""}
+                  <button class="btn-icon" data-xlq="${q.id}" title="تصدير إلى Excel (بمعادلات)">${ICON_GRID}</button>
                   ${canDeleteQuote ? `<button class="btn-icon danger" data-del="${q.id}" title="حذف">${ICON_DELETE}</button>` : ""}
                 </td>
               </tr>`).join("")}
@@ -250,6 +252,11 @@ function renderQuotesList(el) {
     VIEW_QUOTE_ID = b.dataset.view; QUOTES_VIEW = "view"; router();
   });
   el.querySelectorAll("[data-editq]").forEach(b => b.onclick = () => startEditQuote(b.dataset.editq, "list"));
+  el.querySelectorAll("[data-dupq]").forEach(b => b.onclick = () => duplicateQuote(b.dataset.dupq));
+  el.querySelectorAll("[data-xlq]").forEach(b => b.onclick = () => {
+    const target = dbGet("quotes", []).find(x => x.id === b.dataset.xlq);
+    if (target) exportQuoteXlsx(target);
+  });
   el.querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
     if (!confirm("هل تريد حذف عرض السعر؟")) return;
     const target = quotes.find(q => q.id === b.dataset.del);
@@ -270,6 +277,23 @@ function startEditQuote(id, returnTo) {
   QUOTE_SHOW_ADD_CLIENT = false;
   QUOTES_VIEW = "builder";
   router();
+}
+
+/* نسخ عرض سعر محفوظ إلى مسودة جديدة (رقم وتاريخ جديدان عند الحفظ) للتعديل عليها دون المساس بالأصل */
+function duplicateQuote(id) {
+  const saved = dbGet("quotes", []).find(x => x.id === id);
+  if (!saved) return;
+  const copy = JSON.parse(JSON.stringify(saved));
+  ["id", "editingId", "number", "updatedAt", "createdAt"].forEach(k => delete copy[k]);
+  copy.id = null;
+  copy.date = todayISO();
+  DRAFT_QUOTE = copy;
+  QUOTE_EDIT_RETURN = "list";
+  QUOTE_CLIENT_SEARCH = "";
+  QUOTE_SHOW_ADD_CLIENT = false;
+  QUOTES_VIEW = "builder";
+  router();
+  toast("تم نسخ العرض " + (saved.number || "") + " — عدّل ما تريد ثم احفظه كعرض جديد");
 }
 
 /* ---------- منتقي العميل داخل عرض السعر ---------- */
@@ -1043,6 +1067,8 @@ function renderQuoteView(el) {
       <div class="flex gap">
         <button class="btn" id="backList2">رجوع</button>
         ${hasPermission((getCurrentUser() || {}).role, "quotes_add") ? `<button class="btn" id="editQuoteBtn">${ICON_EDIT} تعديل العرض</button>` : ""}
+        ${hasPermission((getCurrentUser() || {}).role, "quotes_add") ? `<button class="btn" id="dupQuoteBtn">${svgIcon("copy")} نسخ العرض</button>` : ""}
+        <button class="btn" id="xlQuoteBtn">${ICON_GRID} تصدير Excel</button>
         <button class="btn primary" id="printQuote">${svgIcon("printer")} طباعة</button>
       </div>
     </div>
@@ -1099,6 +1125,9 @@ function renderQuoteView(el) {
     window.print();
     setTimeout(restore, 1000);
   };
+  const dupQuoteBtn = document.getElementById("dupQuoteBtn");
+  if (dupQuoteBtn) dupQuoteBtn.onclick = () => duplicateQuote(q.id);
+  document.getElementById("xlQuoteBtn").onclick = () => exportQuoteXlsx(q);
   const editQuoteBtn = document.getElementById("editQuoteBtn");
   if (editQuoteBtn) editQuoteBtn.onclick = () => startEditQuote(q.id, "view");
 
@@ -1450,4 +1479,193 @@ function bindQuoteViewEvents(el, q, quotes, catalog) {
       renderQuoteView(el);
     });
   };
+}
+
+/* ================= تصدير عرض السعر إلى Excel (.xlsx) بمعادلات حيّة =================
+   لا مكتبات خارجية: نبني حزمة OOXML ونضغطها بـ ZIP بدون ضغط (stored). الإجماليات معادلات Excel حقيقية:
+   إجمالي البند = الكمية × السعر، ثم إجمالي التصنيف، ثم المجموع والخصم والضريبة — فتتغير كلها بتعديل الكمية أو السعر. */
+
+const CRC32_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; }
+  return t;
+})();
+function crc32Bytes(bytes) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) c = CRC32_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+// files: [{ name, data: string }] → Uint8Array لحزمة ZIP
+function zipStored(files) {
+  const enc = new TextEncoder();
+  const chunks = [], central = [];
+  let offset = 0;
+  const u16 = (v) => [v & 255, (v >>> 8) & 255];
+  const u32 = (v) => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
+  files.forEach(file => {
+    const nameB = enc.encode(file.name), dataB = enc.encode(file.data), crc = crc32Bytes(dataB);
+    const local = Uint8Array.from([0x50, 0x4B, 0x03, 0x04, ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(dataB.length), ...u32(dataB.length), ...u16(nameB.length), ...u16(0)]);
+    chunks.push(local, nameB, dataB);
+    central.push(Uint8Array.from([0x50, 0x4B, 0x01, 0x02, ...u16(20), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(dataB.length), ...u32(dataB.length), ...u16(nameB.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(offset)]), nameB);
+    offset += local.length + nameB.length + dataB.length;
+  });
+  const centralSize = central.reduce((n, c) => n + c.length, 0);
+  const end = Uint8Array.from([0x50, 0x4B, 0x05, 0x06, ...u16(0), ...u16(0), ...u16(files.length), ...u16(files.length), ...u32(centralSize), ...u32(offset), ...u16(0)]);
+  const all = [...chunks, ...central, end];
+  const out = new Uint8Array(all.reduce((n, c) => n + c.length, 0));
+  let p = 0; all.forEach(c => { out.set(c, p); p += c.length; });
+  return out;
+}
+
+function xlsxEsc(v) { return String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+function xlsxCol(i) { return String.fromCharCode(65 + i); } // A..F فقط
+
+// أنماط الخلايا (فهارس cellXfs في styles.xml أدناه)
+const XS = { def: 0, title: 1, head: 2, text: 3, qty: 4, money: 5, inMoney: 6, inQty: 7, cat: 8, totLabel: 9, totMoney: 10, inPct: 11, label: 12, bold: 13 };
+
+function xlsxStylesXml() {
+  const border = '<border><left style="thin"><color rgb="FF999999"/></left><right style="thin"><color rgb="FF999999"/></right><top style="thin"><color rgb="FF999999"/></top><bottom style="thin"><color rgb="FF999999"/></bottom><diagonal/></border>';
+  const xf = (num, font, fill, bord, align) => `<xf numFmtId="${num}" fontId="${font}" fillId="${fill}" borderId="${bord}" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="${align || "right"}" vertical="center" wrapText="1" readingOrder="2"/></xf>`;
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+    + '<numFmts count="3"><numFmt numFmtId="164" formatCode="#,##0.00"/><numFmt numFmtId="165" formatCode="#,##0.##"/><numFmt numFmtId="166" formatCode="General&quot;%&quot;"/></numFmts>'
+    + '<fonts count="4"><font><sz val="11"/><name val="Arial"/></font><font><b/><sz val="14"/><name val="Arial"/></font><font><b/><sz val="11"/><name val="Arial"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Arial"/></font></fonts>'
+    + '<fills count="6"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>'
+    + '<fill><patternFill patternType="solid"><fgColor rgb="FF1D6FE8"/><bgColor indexed="64"/></patternFill></fill>'
+    + '<fill><patternFill patternType="solid"><fgColor rgb="FFE9E4DA"/><bgColor indexed="64"/></patternFill></fill>'
+    + '<fill><patternFill patternType="solid"><fgColor rgb="FFF3F1EC"/><bgColor indexed="64"/></patternFill></fill>'
+    + '<fill><patternFill patternType="solid"><fgColor rgb="FFFFF7CC"/><bgColor indexed="64"/></patternFill></fill></fills>'
+    + `<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>${border}</borders>`
+    + '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+    + '<cellXfs count="14">'
+    + xf(0, 0, 0, 0) + xf(0, 1, 0, 0, "center") + xf(0, 3, 2, 1, "center") + xf(0, 0, 0, 1) + xf(165, 0, 0, 1, "center")
+    + xf(164, 0, 0, 1, "center") + xf(164, 0, 5, 1, "center") + xf(165, 0, 5, 1, "center") + xf(0, 2, 3, 1)
+    + xf(0, 2, 4, 1) + xf(164, 2, 4, 1, "center") + xf(166, 0, 5, 1, "center") + xf(0, 0, 0, 0) + xf(0, 2, 0, 0)
+    + '</cellXfs></styleSheet>';
+}
+
+// يبني ملف xlsx لعرض السعر ويعيد { bytes, fileName }
+function buildQuoteXlsx(q) {
+  const rows = {};          // r → [{ c, xml }]
+  const merges = [];
+  const cell = (r, c, s, xml) => { (rows[r] = rows[r] || []).push({ c, xml: `<c r="${xlsxCol(c)}${r}" s="${s}"${xml}` }); };
+  const text = (r, c, s, v) => cell(r, c, s, ` t="inlineStr"><is><t xml:space="preserve">${xlsxEsc(v)}</t></is></c>`);
+  const num = (r, c, s, v) => cell(r, c, s, `><v>${Number(v) || 0}</v></c>`);
+  const fml = (r, c, s, formula, cached) => cell(r, c, s, `><f>${xlsxEsc(formula)}</f><v>${Number(cached) || 0}</v></c>`);
+  const merge = (r, c1, c2) => merges.push(`${xlsxCol(c1)}${r}:${xlsxCol(c2)}${r}`);
+  const fillRow = (r, c1, c2, s) => { for (let c = c1; c <= c2; c++) if (!(rows[r] || []).some(x => x.c === c)) cell(r, c, s, "/>"); };
+
+  let r = 1;
+  text(r, 0, XS.title, "عرض سعر رقم " + (q.number || "")); merge(r, 0, 5); fillRow(r, 0, 5, XS.title);
+  r++;
+  text(r, 0, XS.bold, "العميل: " + ((q.client && q.client.name) || "")); merge(r, 0, 2);
+  text(r, 3, XS.bold, "التاريخ: " + (q.date || "")); merge(r, 3, 5);
+  r++;
+  text(r, 0, XS.bold, "المشروع: " + (q.projectName || "")); merge(r, 0, 2);
+  text(r, 3, XS.bold, "الموقع: " + (q.location || "")); merge(r, 3, 5);
+  r += 2;
+  ["#", "البند", "الوحدة", "الكمية", "سعر الوحدة", "الإجمالي"].forEach((h, i) => text(r, i, XS.head, h));
+  r++;
+
+  const subtotalRows = [], subtotalVals = [];
+  q.categories.forEach((qc, ci) => {
+    if (!qc.items.length) return;
+    text(r, 0, XS.cat, (ci + 1) + " — " + (qc.name || "")); merge(r, 0, 5); fillRow(r, 0, 5, XS.cat);
+    r++;
+    const first = r; let catSum = 0;
+    qc.items.forEach((it, ii) => {
+      const qty = Number(it.qty) || 0, price = itemUnitPrice(it);
+      text(r, 0, XS.text, (ci + 1) + "-" + (ii + 1));
+      text(r, 1, XS.text, it.name || "");
+      text(r, 2, XS.text, it.unit || "");
+      num(r, 3, XS.inQty, qty);
+      num(r, 4, XS.inMoney, Number(price.toFixed(4)));
+      fml(r, 5, XS.money, `D${r}*E${r}`, qty * price);
+      catSum += qty * price;
+      r++;
+    });
+    text(r, 0, XS.totLabel, "إجمالي " + (qc.name || "")); merge(r, 0, 4); fillRow(r, 0, 4, XS.totLabel);
+    fml(r, 5, XS.totMoney, `SUM(F${first}:F${r - 1})`, catSum);
+    subtotalRows.push(r); subtotalVals.push(catSum);
+    r++;
+  });
+
+  r++;
+  const sum = subtotalVals.reduce((a, b) => a + b, 0);
+  const a = quoteAmounts(q);
+  const sumRow = r;
+  text(r, 0, XS.totLabel, "مجموع البنود"); merge(r, 0, 4); fillRow(r, 0, 4, XS.totLabel);
+  fml(r, 5, XS.totMoney, subtotalRows.length ? subtotalRows.map(x => `F${x}`).join("+") : "0", sum);
+  r++;
+  let baseRow = sumRow;
+  if (a.discount > 0) {
+    const discRow = r;
+    if (a.discountType === "percent") {
+      text(r, 0, XS.label, "الخصم (نسبة %)"); merge(r, 0, 3);
+      num(r, 4, XS.inPct, a.discountPct);
+      fml(r, 5, XS.money, `F${sumRow}*E${r}/100`, a.discount);
+    } else {
+      text(r, 0, XS.label, "الخصم (مبلغ مقطوع)"); merge(r, 0, 4);
+      num(r, 5, XS.inMoney, a.discount);
+    }
+    r++;
+    text(r, 0, XS.totLabel, "الإجمالي بعد الخصم"); merge(r, 0, 4); fillRow(r, 0, 4, XS.totLabel);
+    fml(r, 5, XS.totMoney, `F${sumRow}-F${discRow}`, a.afterDiscount);
+    baseRow = r; r++;
+  }
+  const rate = Math.round(VAT_RATE * 100);
+  if (a.mode === "excluded") {
+    text(r, 0, XS.label, "ضريبة القيمة المضافة (نسبة %)"); merge(r, 0, 3);
+    num(r, 4, XS.inPct, rate);
+    fml(r, 5, XS.money, `F${baseRow}*E${r}/100`, a.vat);
+    const vatRow = r; r++;
+    text(r, 0, XS.totLabel, "الإجمالي بعد الضريبة"); merge(r, 0, 4); fillRow(r, 0, 4, XS.totLabel);
+    fml(r, 5, XS.totMoney, `F${baseRow}+F${vatRow}`, a.grand);
+  } else if (a.mode === "included") {
+    const vatRow = r + 1;
+    text(r, 0, XS.label, "الإجمالي قبل الضريبة (الأسعار شاملة الضريبة)"); merge(r, 0, 4);
+    fml(r, 5, XS.money, `F${baseRow}-F${vatRow}`, a.base);
+    r++;
+    text(r, 0, XS.label, "ضريبة القيمة المضافة (نسبة %)"); merge(r, 0, 3);
+    num(r, 4, XS.inPct, rate);
+    fml(r, 5, XS.money, `F${baseRow}-F${baseRow}/(1+E${r}/100)`, a.vat);
+    r++;
+    text(r, 0, XS.totLabel, "الإجمالي بعد الضريبة"); merge(r, 0, 4); fillRow(r, 0, 4, XS.totLabel);
+    fml(r, 5, XS.totMoney, `F${baseRow}`, a.grand);
+  } else if (a.discount > 0) {
+    text(r, 0, XS.totLabel, "الإجمالي الكلي"); merge(r, 0, 4); fillRow(r, 0, 4, XS.totLabel);
+    fml(r, 5, XS.totMoney, `F${baseRow}`, a.grand);
+  }
+  r += 2;
+  text(r, 0, XS.label, "الخلايا الصفراء قابلة للتعديل (الكمية والسعر والنسب) وتتحدث الإجماليات تلقائياً."); merge(r, 0, 5);
+
+  const lastRow = r;
+  const sheetData = Object.keys(rows).map(Number).sort((x, y) => x - y)
+    .map(rn => `<row r="${rn}">${rows[rn].sort((x, y) => x.c - y.c).map(x => x.xml).join("")}</row>`).join("");
+  const sheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+    + `<dimension ref="A1:F${lastRow}"/><sheetViews><sheetView rightToLeft="1" workbookViewId="0"/></sheetViews>`
+    + '<cols><col min="1" max="1" width="8" customWidth="1"/><col min="2" max="2" width="48" customWidth="1"/><col min="3" max="3" width="14" customWidth="1"/><col min="4" max="4" width="12" customWidth="1"/><col min="5" max="5" width="16" customWidth="1"/><col min="6" max="6" width="18" customWidth="1"/></cols>'
+    + `<sheetData>${sheetData}</sheetData><mergeCells count="${merges.length}">${merges.map(m => `<mergeCell ref="${m}"/>`).join("")}</mergeCells>`
+    + '<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="portrait" fitToHeight="0"/></worksheet>';
+  const files = [
+    { name: "[Content_Types].xml", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>' },
+    { name: "_rels/.rels", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
+    { name: "xl/workbook.xml", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView rightToLeft="1"/></bookViews><sheets><sheet name="عرض السعر" sheetId="1" r:id="rId1"/></sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>' },
+    { name: "xl/_rels/workbook.xml.rels", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>' },
+    { name: "xl/styles.xml", data: xlsxStylesXml() },
+    { name: "xl/worksheets/sheet1.xml", data: sheet },
+  ];
+  const fileName = ((q.projectName || q.number || "عرض سعر") + "").replace(/[\\/:*?"<>|]+/g, " ").trim() + ".xlsx";
+  return { bytes: zipStored(files), fileName };
+}
+
+function exportQuoteXlsx(q) {
+  const { bytes, fileName } = buildQuoteXlsx(q);
+  const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url; link.download = fileName;
+  document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  toast("تم تصدير عرض السعر إلى Excel");
 }
