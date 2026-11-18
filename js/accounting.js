@@ -312,6 +312,7 @@ function printAccProjectsLog(project, from, to, types) {
 function openAccEntryViewModal(e) {
   const html = `
     <div class="modal-head"><h3>تفاصيل الحركة المالية</h3><button class="modal-close" id="mClose">×</button></div>
+    ${receiptEntryButtonHtml(e)}
     <div class="kv-row"><span class="k">النوع</span><span class="v">${e.type}</span></div>
     <div class="kv-row"><span class="k">المبلغ</span><span class="v">${fmtMoney(e.amount)}</span></div>
     <div class="kv-row"><span class="k">التاريخ</span><span class="v">${fmtDate(e.date)}</span></div>
@@ -327,12 +328,14 @@ function openAccEntryViewModal(e) {
   const ov = openModalShell(html);
   ov.querySelector("#mClose").onclick = closeModal;
   ov.querySelector("#v_close").onclick = closeModal;
+  bindReceiptEntryButton(ov, e);
 }
 
 function openAccEntryModal(el, existingEntry) {
   const isEdit = !!existingEntry;
   const html = `
     <div class="modal-head"><h3>${isEdit ? "تعديل حركة مالية" : "إضافة حركة مالية للمشروع"}</h3><button class="modal-close" id="mClose">×</button></div>
+    ${isEdit ? receiptEntryButtonHtml(existingEntry) : ""}
     <div class="field"><label>نوع الحركة</label>
       <select id="e_type">${ACC_TYPES.map(t => `<option value="${t}" ${isEdit && existingEntry.type === t ? "selected" : ""}>${t}</option>`).join("")}</select>
     </div>
@@ -346,6 +349,7 @@ function openAccEntryModal(el, existingEntry) {
     <div class="flex gap"><button class="btn primary" id="e_save">حفظ</button><button class="btn" id="e_cancel">إلغاء</button></div>
   `;
   const ov = openModalShell(html);
+  if (isEdit) bindReceiptEntryButton(ov, existingEntry);
   ov.querySelector("#mClose").onclick = closeModal;
   ov.querySelector("#e_cancel").onclick = closeModal;
 

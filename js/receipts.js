@@ -269,3 +269,15 @@ function receiptForEntry(entryId, projectId, rerender) {
   const entry = dbGet("accProjects", []).find(e => e.id === entryId);
   if (entry) openReceiptModal({ projectId, entry, onSaved: rerender });
 }
+
+// زر "طباعة سند قبض" داخل نافذة دفعة الإيراد نفسها (عرض/تعديل): يفتح السند المرتبط أو يصدر سنداً جديداً للدفعة
+function receiptEntryButtonHtml(entry) {
+  if (!entry || entry.type !== "إيراد مشروع") return "";
+  const existing = getReceipts().find(r => r.entryId === entry.id);
+  return `<div style="margin:0 0 14px"><button type="button" class="btn primary" id="entryReceiptBtn">${svgIcon("printer")} ${existing ? "طباعة سند القبض (" + escHtml(existing.number) + ")" : "إصدار وطباعة سند قبض"}</button></div>`;
+}
+function bindReceiptEntryButton(ov, entry) {
+  const btn = ov.querySelector("#entryReceiptBtn");
+  if (!btn) return;
+  btn.onclick = () => receiptForEntry(entry.id, entry.projectId, () => { if (typeof router === "function") router(); });
+}
