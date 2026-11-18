@@ -171,13 +171,11 @@ function renderAccProjects(el) {
         </table>
       </div>` : `<div class="empty-state"><div class="ic">${svgIcon("dollar", 40)}</div>لا توجد حركات مالية لهذا المشروع بعد</div>`}
     </div>
-    <div id="receiptsCardHost"></div>
   `;
 
   document.getElementById("accProjectSelect").onchange = (e) => { ACC_SELECTED_PROJECT = e.target.value; renderAccProjects(el); };
   document.getElementById("addEntryBtn").onclick = () => openAccEntryModal(el);
   document.getElementById("addInvoiceBtn").onclick = () => openInvoiceModal(el);
-  renderReceiptsCard(document.getElementById("receiptsCardHost"), ACC_SELECTED_PROJECT, () => renderAccProjects(el));
   el.querySelectorAll("[data-receiptentry]").forEach(b => b.onclick = () => receiptForEntry(b.dataset.receiptentry, ACC_SELECTED_PROJECT, () => renderAccProjects(el)));
   document.getElementById("printAccProjBtn").onclick = () => openAccProjectsPrintModal(project);
   document.getElementById("clientStatementBtn").onclick = () => openClientStatementModal(ACC_SELECTED_PROJECT);

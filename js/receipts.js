@@ -219,49 +219,6 @@ function openReceiptModal(opts) {
   };
 }
 
-/* ---------- بطاقة سندات القبض داخل محاسبة المشروع ---------- */
-function renderReceiptsCard(host, projectId, rerender) {
-  if (!host) return;
-  const list = getReceipts().filter(r => r.projectId === projectId).sort((a, b) => (b.date + b.number) > (a.date + a.number) ? 1 : -1);
-  const total = list.reduce((s, r) => s + (Number(r.amount) || 0), 0);
-  host.innerHTML = `
-    <div class="card" style="margin-top:18px">
-      <div class="flex between wrap" style="margin-bottom:10px">
-        <h3 class="mt-0">سندات القبض <span class="badge gray">${list.length}</span></h3>
-        <div class="flex gap" style="align-items:center">
-          ${list.length ? `<span class="text-muted" style="font-size:12.5px">إجمالي السندات: <strong>${fmtMoney(total)}</strong></span>` : ""}
-          <button class="btn sm primary" id="addReceiptBtn">+ إصدار سند قبض</button>
-        </div>
-      </div>
-      ${list.length ? `
-      <div class="table-wrap"><table class="data-table">
-        <thead><tr><th>رقم السند</th><th>التاريخ</th><th>العميل</th><th>المبلغ</th><th>طريقة الدفع</th><th>عن</th><th></th></tr></thead>
-        <tbody>${list.map(r => `
-          <tr>
-            <td><strong>${escHtml(r.number)}</strong></td>
-            <td>${fmtDate(r.date)}</td>
-            <td>${escHtml(r.clientName)}</td>
-            <td><strong>${fmtMoney(r.amount)}</strong></td>
-            <td>${escHtml(r.paymentMethod || "-")}</td>
-            <td class="text-muted">${escHtml(r.forWhat || "-")}</td>
-            <td style="white-space:nowrap">
-              <button class="btn-icon" data-viewrc="${r.id}" title="عرض / طباعة / إرسال">${ICON_VIEW}</button>
-              <button class="btn-icon danger" data-delrc="${r.id}" title="حذف السند">${ICON_DELETE}</button>
-            </td>
-          </tr>`).join("")}</tbody>
-      </table></div>` : `<div class="empty-state"><div class="ic">${svgIcon("file-text", 40)}</div>لا توجد سندات قبض لهذا المشروع بعد</div>`}
-    </div>`;
-  host.querySelector("#addReceiptBtn").onclick = () => openReceiptModal({ projectId, onSaved: rerender });
-  host.querySelectorAll("[data-viewrc]").forEach(b => b.onclick = () => openReceiptView(b.dataset.viewrc));
-  host.querySelectorAll("[data-delrc]").forEach(b => b.onclick = () => {
-    const rc = getReceipts().find(r => r.id === b.dataset.delrc);
-    if (!rc || !confirm(`حذف سند القبض ${rc.number}؟ (لن يُحذف أي إيراد مسجل في حركة الحساب)`)) return;
-    dbSet("receipts", getReceipts().filter(r => r.id !== rc.id));
-    logActivity(`تم حذف سند قبض "${rc.number}"`);
-    rerender();
-  });
-}
-
 // زر "سند قبض" على صف إيراد مشروع في حركة الحساب: يفتح السند الموجود، أو يصدر سنداً مرتبطاً بالحركة
 function receiptForEntry(entryId, projectId, rerender) {
   const existing = getReceipts().find(r => r.entryId === entryId);
