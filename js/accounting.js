@@ -162,6 +162,7 @@ function renderAccProjects(el) {
                 <td>${e.attachment ? `<a href="${e.attachment.url}" target="_blank" rel="noopener" class="badge blue" style="text-decoration:none">${svgIcon("paperclip", 14)} عرض المرفق</a>` : "-"}</td>
                 <td>
                   ${e.type === "فاتورة ضريبية" ? `<button class="btn sm" data-printinv="${e.id}">طباعة</button>` : `<button class="btn-icon" data-viewentry="${e.id}" title="عرض">${ICON_VIEW}</button><button class="btn-icon" data-editentry="${e.id}" title="تعديل">${ICON_EDIT}</button>`}
+                  ${e.type === "إيراد مشروع" ? `<button class="btn-icon" data-receiptentry="${e.id}" title="سند قبض لهذه الدفعة">${svgIcon("file-text")}</button>` : ""}
                   <button class="btn-icon danger" data-delentry="${e.id}" title="حذف">${ICON_DELETE}</button>
                 </td>
               </tr>`).join("")}
@@ -169,11 +170,14 @@ function renderAccProjects(el) {
         </table>
       </div>` : `<div class="empty-state"><div class="ic">${svgIcon("dollar", 40)}</div>لا توجد حركات مالية لهذا المشروع بعد</div>`}
     </div>
+    <div id="receiptsCardHost"></div>
   `;
 
   document.getElementById("accProjectSelect").onchange = (e) => { ACC_SELECTED_PROJECT = e.target.value; renderAccProjects(el); };
   document.getElementById("addEntryBtn").onclick = () => openAccEntryModal(el);
   document.getElementById("addInvoiceBtn").onclick = () => openInvoiceModal(el);
+  renderReceiptsCard(document.getElementById("receiptsCardHost"), ACC_SELECTED_PROJECT, () => renderAccProjects(el));
+  el.querySelectorAll("[data-receiptentry]").forEach(b => b.onclick = () => receiptForEntry(b.dataset.receiptentry, ACC_SELECTED_PROJECT, () => renderAccProjects(el)));
   document.getElementById("printAccProjBtn").onclick = () => openAccProjectsPrintModal(project);
   el.querySelectorAll("[data-sortkey]").forEach(th => th.onclick = () => {
     const k = th.dataset.sortkey;

@@ -516,6 +516,13 @@ table.data-table tr.row-near { background: #fdecd6; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 
+/* الطباعة المعزولة (سند القبض...): لا يُطبع إلا #printIsolateArea */
+#printIsolateArea { display: none; }
+@media print {
+  body.print-isolate > *:not(#printIsolateArea) { display: none !important; }
+  body.print-isolate #printIsolateArea { display: block !important; padding: 0; }
+}
+
 .toast {
   position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
   background: #1f2430; color: #fff; padding: 11px 20px; border-radius: 30px; font-size: 13px; z-index: 200;
