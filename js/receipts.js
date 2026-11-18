@@ -281,3 +281,100 @@ function bindReceiptEntryButton(ov, entry) {
   if (!btn) return;
   btn.onclick = () => receiptForEntry(entry.id, entry.projectId, () => { if (typeof router === "function") router(); });
 }
+
+/* =========================================================
+   كشف حساب المشروع للعميل: الدفعات الواردة وتفاصيلها والمتبقي حتى نهاية المشروع
+   ========================================================= */
+function projectStatementData(projectId, asOf) {
+  const project = dbGet("projects", []).find(p => p.id === projectId) || {};
+  const info = receiptClientInfo(projectId);
+  const receipts = getReceipts();
+  const payments = dbGet("accProjects", [])
+    .filter(e => e.projectId === projectId && e.type === "إيراد مشروع" && (!asOf || (e.date || "") <= asOf))
+    .sort((a, b) => ((a.date || "") + a.id) > ((b.date || "") + b.id) ? 1 : -1);
+  const contractValue = projectTotalValue(project); // العقد أو عرض السعر المعتمد (شامل الضريبة إن وُجدت)
+  const hasExtras = (project.extraWorks || []).length > 0;
+  const extras = hasExtras ? projectExtrasTotals(project).total : 0;
+  const finalValue = contractValue !== null ? contractValue + extras : null;
+  const paid = payments.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  let running = 0;
+  const rows = payments.map(e => {
+    running += Number(e.amount) || 0;
+    const rc = receipts.find(r => r.entryId === e.id);
+    return {
+      date: e.date, amount: Number(e.amount) || 0, method: e.paymentMethod || "",
+      receipt: rc ? rc.number : (e.receiptNumber || ""),
+      desc: (rc && rc.forWhat) || e.note || "",
+      remaining: finalValue !== null ? finalValue - running : null,
+    };
+  });
+  return { project, clientName: info.name, contractValue, hasExtras, extras, finalValue, paid, remaining: finalValue !== null ? finalValue - paid : null, rows };
+}
+
+function projectStatementHtml(projectId, asOf) {
+  const d = projectStatementData(projectId, asOf);
+  const th = (t, w) => `<th style="padding:8px 10px;border:1px solid #bbb;background:#e9e4da;font-size:13px${w ? ";width:" + w : ""}">${t}</th>`;
+  const td = (v, extra) => `<td style="padding:8px 10px;border:1px solid #ccc;font-size:13px;${extra || ""}">${v}</td>`;
+  const sumRow = (label, value, strong, color) => `<tr><td style="padding:8px 12px;border:1px solid #cfcfcf;${strong ? "font-weight:800;background:#f3f1ec" : "background:#fafafa"}">${label}</td><td style="padding:8px 12px;border:1px solid #cfcfcf;text-align:left;${strong ? "font-weight:800;background:#f3f1ec" : ""}${color ? ";color:" + color : ""}">${value}</td></tr>`;
+  const over = d.remaining !== null && d.remaining < 0;
+  return `
+    <div class="statement-sheet" style="font-family:inherit;color:#111;direction:rtl">
+      ${companyHeaderHtml()}
+      <div style="text-align:center;margin:14px 0 10px">
+        <div style="font-size:24px;font-weight:800">كشف حساب مشروع</div>
+        <div style="color:#555;font-size:13px">كما في تاريخ ${fmtDate(asOf || todayISO())}</div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:12px">
+        <tr><td style="width:130px;font-weight:700;padding:8px 12px;border:1px solid #cfcfcf;background:#f6f6f6">العميل</td><td style="padding:8px 12px;border:1px solid #cfcfcf">${escHtml(d.clientName || "-")}</td>
+            <td style="width:130px;font-weight:700;padding:8px 12px;border:1px solid #cfcfcf;background:#f6f6f6">المشروع</td><td style="padding:8px 12px;border:1px solid #cfcfcf">${escHtml(d.project.name || "-")}</td></tr>
+      </table>
+
+      <div style="font-weight:800;margin:12px 0 6px">ملخص الحساب</div>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:14px">
+        ${d.contractValue !== null ? sumRow("قيمة العقد / عرض السعر المعتمد", fmtMoney(d.contractValue)) : ""}
+        ${d.hasExtras ? sumRow("الأعمال الإضافية والبنود غير المنفذة (الصافي)", (d.extras < 0 ? "- " : "") + fmtMoney(Math.abs(d.extras))) : ""}
+        ${d.finalValue !== null ? sumRow("إجمالي قيمة المشروع", fmtMoney(d.finalValue), true) : ""}
+        ${sumRow("إجمالي الدفعات المستلمة", fmtMoney(d.paid), false, "#1a7f4e")}
+        ${d.remaining !== null ? sumRow(over ? "مبلغ مدفوع زائد عن قيمة المشروع" : "المتبقي حتى نهاية المشروع", fmtMoney(Math.abs(d.remaining)), true, over ? "#1a7f4e" : "#b42318") : sumRow("المتبقي", "غير محدد (المشروع غير مرتبط بعقد أو عرض سعر معتمد)")}
+      </table>
+
+      <div style="font-weight:800;margin:12px 0 6px">تفاصيل الدفعات المستلمة</div>
+      ${d.rows.length ? `
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr>${th("#", "36px")}${th("التاريخ")}${th("رقم السند")}${th("طريقة الدفع")}${th("البيان")}${th("المبلغ")}${d.finalValue !== null ? th("المتبقي بعد الدفعة") : ""}</tr></thead>
+        <tbody>
+          ${d.rows.map((r, i) => `<tr style="break-inside:avoid">${td(i + 1, "text-align:center")}${td(fmtDate(r.date))}${td(escHtml(r.receipt || "-"))}${td(escHtml(r.method || "-"))}${td(escHtml(r.desc || "-"))}${td("<strong>" + fmtMoney(r.amount) + "</strong>")}${d.finalValue !== null ? td(fmtMoney(r.remaining)) : ""}</tr>`).join("")}
+        </tbody>
+        <tfoot><tr>${td("<strong>الإجمالي</strong>", "background:#f3f1ec").replace("<td ", `<td colspan="5" `)}${td("<strong>" + fmtMoney(d.paid) + "</strong>", "background:#f3f1ec")}${d.finalValue !== null ? td("<strong>" + fmtMoney(d.remaining) + "</strong>", "background:#f3f1ec") : ""}</tr></tfoot>
+      </table>` : `<div style="padding:14px;border:1px dashed #bbb;text-align:center;color:#666">لا توجد دفعات مستلمة حتى هذا التاريخ</div>`}
+
+      <div style="margin-top:22px;font-size:12px;color:#555">المبالغ بالريال السعودي. هذا الكشف صادر من النظام بتاريخ ${fmtDate(todayISO())}.</div>
+      <div style="display:flex;justify-content:space-between;margin-top:34px;font-size:14px">
+        <div style="text-align:center;min-width:200px">المحاسب<div style="margin-top:30px;border-top:1px solid #888;padding-top:6px">${escHtml((getCurrentUser() || {}).name || "")}</div></div>
+        <div style="text-align:center;min-width:200px">ختم الشركة<div style="margin-top:30px;border-top:1px solid #888;padding-top:6px">${escHtml(getCompanyProfile().name || "")}</div></div>
+      </div>
+    </div>`;
+}
+
+function openClientStatementModal(projectId) {
+  const project = dbGet("projects", []).find(p => p.id === projectId);
+  if (!project) { toast("اختر مشروعاً أولاً"); return; }
+  let asOf = todayISO();
+  const ov = openModalShell(`
+    <div class="modal-head"><h3>كشف حساب العميل — ${escHtml(project.name)}</h3><button class="modal-close" id="mClose">×</button></div>
+    <div class="grid cols-2" style="margin-bottom:10px">
+      <div class="field"><label>كما في تاريخ (تُحتسب الدفعات حتى هذا التاريخ)</label><input type="date" id="st_asof" value="${asOf}"></div>
+    </div>
+    <div id="st_preview" style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;max-height:56vh;overflow:auto"></div>
+    <div class="flex gap wrap">
+      <button class="btn primary" id="st_print">${svgIcon("printer")} طباعة / حفظ PDF</button>
+      <button class="btn" id="st_close">إغلاق</button>
+    </div>
+  `, true);
+  const refresh = () => { ov.querySelector("#st_preview").innerHTML = projectStatementHtml(projectId, asOf); };
+  refresh();
+  ov.querySelector("#st_asof").onchange = (e) => { asOf = e.target.value || todayISO(); refresh(); };
+  ov.querySelector("#mClose").onclick = closeModal;
+  ov.querySelector("#st_close").onclick = closeModal;
+  ov.querySelector("#st_print").onclick = () => printIsolated(projectStatementHtml(projectId, asOf), "كشف حساب - " + project.name);
+}

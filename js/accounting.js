@@ -138,6 +138,7 @@ function renderAccProjects(el) {
         <h3 class="mt-0">حركة الحساب — ${project ? project.name : ""}</h3>
         <div class="flex gap">
           <button class="btn sm" id="printAccProjBtn">${svgIcon("printer")} طباعة السجل</button>
+          <button class="btn sm" id="clientStatementBtn">${svgIcon("file-text")} كشف حساب العميل</button>
           <button class="btn sm" id="addEntryBtn">+ إضافة حركة</button>
           <button class="btn sm primary" id="addInvoiceBtn">+ إصدار فاتورة ضريبية</button>
         </div>
@@ -179,6 +180,7 @@ function renderAccProjects(el) {
   renderReceiptsCard(document.getElementById("receiptsCardHost"), ACC_SELECTED_PROJECT, () => renderAccProjects(el));
   el.querySelectorAll("[data-receiptentry]").forEach(b => b.onclick = () => receiptForEntry(b.dataset.receiptentry, ACC_SELECTED_PROJECT, () => renderAccProjects(el)));
   document.getElementById("printAccProjBtn").onclick = () => openAccProjectsPrintModal(project);
+  document.getElementById("clientStatementBtn").onclick = () => openClientStatementModal(ACC_SELECTED_PROJECT);
   el.querySelectorAll("[data-sortkey]").forEach(th => th.onclick = () => {
     const k = th.dataset.sortkey;
     if (ACC_PROJ_SORT.key === k) ACC_PROJ_SORT.dir = ACC_PROJ_SORT.dir === "asc" ? "desc" : "asc";
