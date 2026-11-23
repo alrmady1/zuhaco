@@ -21,6 +21,7 @@ function renderSettings(el) {
       <div class="tab-btn ${SETTINGS_TAB === "company" ? "active" : ""}" data-tab="company">٩. بيانات المؤسسة والشعار</div>
       <div class="tab-btn ${SETTINGS_TAB === "activity" ? "active" : ""}" data-tab="activity">١٠. سجل العمليات</div>
       <div class="tab-btn ${SETTINGS_TAB === "riyadhZones" ? "active" : ""}" data-tab="riyadhZones">١١. مناطق الرياض</div>
+      <div class="tab-btn ${SETTINGS_TAB === "landing" ? "active" : ""}" data-tab="landing">١٢. صفحة العرض LAND CODE</div>
     </div>
     <div id="settingsBody"></div>
   `;
@@ -37,6 +38,7 @@ function renderSettings(el) {
   else if (SETTINGS_TAB === "appearance") renderAppearanceTab(body);
   else if (SETTINGS_TAB === "activity") renderActivityLogTab(body);
   else if (SETTINGS_TAB === "riyadhZones") renderRiyadhZonesTab(body);
+  else if (SETTINGS_TAB === "landing") renderLandingTab(body);
   else renderCompanyTab(body);
 }
 

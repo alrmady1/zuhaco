@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LAND CODE | ابدأ مشروعك</title>
+<meta name="description" content="LAND CODE — تصميم وتنفيذ أعمال الديكور والتشطيبات الداخلية في الرياض.">
+<meta name="theme-color" content="#121212">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 130'%3E%3Crect width='120' height='130' fill='%23121212'/%3E%3Cg fill='none' stroke='%23fff' stroke-width='7'%3E%3Cpolyline points='30,51 60,33 90,51'/%3E%3Cpolyline points='24,61 60,82 96,61'/%3E%3Cpolyline points='24,61 24,103 60,124 96,103 96,61'/%3E%3Cline x1='60' y1='82' x2='60' y2='124'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --accent: #b08d57;
+    --dark: #121212;
+    --ink: #1a1a1a;
+    --muted: #6f6a62;
+    --paper: #f6f3ee;
+    --paper-2: #ece6dc;
+    --line: rgba(26,26,26,.12);
+    --white: #fff;
+    --radius: 4px;
+    --ar: "IBM Plex Sans Arabic", system-ui, sans-serif;
+    --en: "Montserrat", "IBM Plex Sans Arabic", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: var(--ar); color: var(--ink); background: var(--paper); line-height: 1.7; -webkit-font-smoothing: antialiased; }
+  img { max-width: 100%; display: block; }
+  a { color: inherit; text-decoration: none; }
+  .wrap { width: min(1200px, 100% - 32px); margin-inline: auto; }
+  .en { font-family: var(--en); direction: ltr; unicode-bidi: isolate; letter-spacing: .14em; text-transform: uppercase; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 12px; font-size: 12px; font-weight: 600; color: var(--accent); margin-bottom: 14px; }
+  .eyebrow::before { content: ""; width: 28px; height: 1px; background: currentColor; }
+  .num { font-family: var(--en); font-weight: 700; color: var(--accent); font-size: 13px; letter-spacing: .1em; }
+  h1, h2, h3 { margin: 0; line-height: 1.25; }
+  h2.sec-title { font-size: clamp(28px, 4vw, 44px); font-weight: 700; margin-bottom: 14px; }
+  .sec { padding: clamp(64px, 9vw, 120px) 0; }
+  .sec-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 48px; flex-wrap: wrap; }
+  .sec-head p { margin: 0; color: var(--muted); max-width: 460px; }
+
+  /* أزرار */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 15px 26px; border-radius: var(--radius); font-family: var(--ar); font-weight: 600; font-size: 15px; border: 1px solid transparent; cursor: pointer; transition: transform .2s, background .2s, color .2s, border-color .2s; }
+  .btn:hover { transform: translateY(-2px); }
+  .btn svg { width: 20px; height: 20px; flex: none; }
+  .btn-wa { background: #1fa855; color: #fff; }
+  .btn-wa:hover { background: #17924a; }
+  .btn-ghost { border-color: rgba(255,255,255,.55); color: #fff; background: rgba(255,255,255,.04); backdrop-filter: blur(4px); }
+  .btn-ghost:hover { background: #fff; color: var(--dark); }
+  .btn-accent { background: var(--accent); color: #fff; }
+  .btn-accent:hover { filter: brightness(.92); }
+
+  /* الترويسة */
+  .hdr { position: fixed; inset: 0 0 auto 0; z-index: 50; transition: background .3s, box-shadow .3s; }
+  .hdr.solid { background: rgba(18,18,18,.92); backdrop-filter: blur(10px); box-shadow: 0 1px 0 rgba(255,255,255,.06); }
+  .hdr .wrap { display: flex; align-items: center; justify-content: space-between; height: 76px; gap: 20px; }
+  .brand { display: flex; align-items: center; gap: 12px; color: #fff; }
+  .brand .mark { width: 38px; height: 42px; color: #fff; }
+  .brand .mark svg, .brand .mark img { width: 100%; height: 100%; object-fit: contain; }
+  .brand .bn { display: flex; flex-direction: column; line-height: 1.1; }
+  .brand .bn b { font-family: var(--en); font-weight: 800; font-size: 19px; letter-spacing: .06em; direction: ltr; }
+  .brand .bn small { font-family: var(--en); font-size: 8.5px; letter-spacing: .16em; opacity: .7; direction: ltr; }
+  .nav { display: flex; gap: 28px; color: rgba(255,255,255,.82); font-size: 14.5px; }
+  .nav a:hover { color: #fff; }
+  .hdr .btn { padding: 10px 18px; font-size: 14px; }
+  @media (max-width: 900px) { .nav { display: none; } }
+
+  /* الواجهة الرئيسية */
+  .hero { position: relative; min-height: 100svh; display: flex; align-items: flex-end; color: #fff; background: var(--dark); overflow: hidden; }
+  .hero-bg { position: absolute; inset: 0; background-size: cover; background-position: center; transform: scale(1.04); animation: heroZoom 18s ease-out forwards; }
+  @keyframes heroZoom { to { transform: scale(1); } }
+  .hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.45) 0%, rgba(0,0,0,.25) 35%, rgba(10,10,10,.88) 100%); }
+  .hero .wrap { position: relative; z-index: 1; padding: 140px 0 72px; }
+  .hero .eyebrow { color: #e3cfa9; }
+  .hero h1 { font-size: clamp(36px, 6.4vw, 76px); font-weight: 700; max-width: 900px; margin-bottom: 18px; }
+  .hero h1 .brand-word { font-family: var(--en); font-weight: 800; letter-spacing: .02em; color: #e9d8b6; direction: ltr; unicode-bidi: isolate; }
+  .hero p.sub { font-size: clamp(16px, 1.9vw, 20px); max-width: 640px; color: rgba(255,255,255,.86); margin: 0 0 14px; font-weight: 300; }
+  .hero .tagline { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 15px; color: rgba(255,255,255,.75); margin-bottom: 34px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border: 1px solid rgba(255,255,255,.3); border-radius: 30px; font-size: 13px; }
+  .chip svg { width: 14px; height: 14px; }
+  .hero .ctas { display: flex; gap: 14px; flex-wrap: wrap; }
+  .hero-foot { position: relative; z-index: 1; border-top: 1px solid rgba(255,255,255,.12); }
+  .scroll-cue { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 1; width: 22px; height: 36px; border: 1.5px solid rgba(255,255,255,.5); border-radius: 12px; }
+  .scroll-cue::after { content: ""; position: absolute; left: 50%; top: 7px; width: 3px; height: 7px; margin-left: -1.5px; background: #fff; border-radius: 2px; animation: cue 1.8s infinite; }
+  @keyframes cue { 0% { opacity: 0; transform: translateY(0); } 40% { opacity: 1; } 100% { opacity: 0; transform: translateY(12px); } }
+  @media (max-width: 640px) { .scroll-cue { display: none; } .hero .ctas .btn { flex: 1 1 100%; } }
+
+  /* الخدمات */
+  .services { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); border-inline-start: 1px solid var(--line); }
+  .svc { padding: 34px 30px 38px; border-bottom: 1px solid var(--line); border-inline-end: 1px solid var(--line); position: relative; transition: background .3s, color .3s; }
+  .svc:hover { background: var(--dark); color: #fff; }
+  .svc:hover .svc-desc { color: rgba(255,255,255,.7); }
+  .svc h3 { font-size: 21px; font-weight: 600; margin: 22px 0 6px; }
+  .svc .en { font-size: 11px; color: var(--muted); }
+  .svc:hover .en { color: #cdb68d; }
+  .svc-desc { margin: 14px 0 0; color: var(--muted); font-size: 15px; transition: color .3s; }
+  @media (max-width: 900px) { .services { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 560px) { .services { grid-template-columns: 1fr; } .svc { padding: 28px 22px; } }
+
+  /* المعرض */
+  .sec.dark { background: var(--dark); color: #fff; }
+  .sec.dark .sec-head p { color: rgba(255,255,255,.6); }
+  .gallery { display: grid; grid-template-columns: repeat(12, 1fr); grid-auto-rows: 240px; gap: 14px; }
+  .gal { position: relative; overflow: hidden; border-radius: var(--radius); background: linear-gradient(135deg, #2a2724, #3b352e); grid-column: span 4; }
+  .gal:nth-child(6n+1) { grid-column: span 7; grid-row: span 2; }
+  .gal:nth-child(6n+2) { grid-column: span 5; }
+  .gal:nth-child(6n+3) { grid-column: span 5; }
+  .gal img { width: 100%; height: 100%; object-fit: cover; transition: transform .8s; }
+  .gal:hover img { transform: scale(1.06); }
+  .gal figcaption { position: absolute; inset: auto 0 0 0; padding: 40px 20px 16px; background: linear-gradient(transparent, rgba(0,0,0,.75)); display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; }
+  .gal figcaption b { font-size: 17px; font-weight: 600; }
+  .gal figcaption .en { font-size: 10.5px; color: #dcc59c; }
+  .gal.noimg::before { content: ""; position: absolute; inset: 0; opacity: .25; background: repeating-linear-gradient(45deg, transparent 0 18px, rgba(255,255,255,.08) 18px 19px); }
+  @media (max-width: 900px) { .gallery { grid-template-columns: 1fr 1fr; grid-auto-rows: 200px; } .gal, .gal:nth-child(n) { grid-column: span 1; grid-row: span 1; } .gal:nth-child(3n+1) { grid-column: span 2; } }
+
+  /* الأرقام */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  .stat { background: var(--paper); padding: 34px 24px; text-align: center; }
+  .stat b { display: block; font-family: var(--en); font-size: clamp(32px, 4vw, 48px); font-weight: 700; color: var(--ink); direction: ltr; }
+  .stat span { color: var(--muted); font-size: 15px; }
+  @media (max-width: 700px) { .stats { grid-template-columns: 1fr 1fr; } }
+
+  /* النموذج */
+  .form-sec { background: var(--paper-2); }
+  .form-grid { display: grid; grid-template-columns: 5fr 7fr; gap: clamp(32px, 6vw, 80px); align-items: start; }
+  .form-aside p { color: var(--muted); font-size: 16px; }
+  .contact-list { list-style: none; padding: 0; margin: 28px 0 0; display: grid; gap: 14px; }
+  .contact-list li a, .contact-list li span { display: flex; align-items: center; gap: 12px; font-size: 15px; }
+  .contact-list svg { width: 20px; height: 20px; color: var(--accent); flex: none; }
+  .lead-form { position: relative; background: var(--white); padding: clamp(24px, 4vw, 44px); border-radius: var(--radius); box-shadow: 0 30px 60px -30px rgba(0,0,0,.18); }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .fld { margin-bottom: 18px; }
+  .fld > label, .fld > .lbl { display: block; font-size: 13.5px; font-weight: 600; margin-bottom: 8px; }
+  .fld > label small, .fld > .lbl small { color: var(--muted); font-weight: 400; }
+  .fld input:not([type=radio]):not([type=checkbox]), .fld select, .fld textarea { width: 100%; font-family: var(--ar); font-size: 15px; padding: 13px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: #fcfbf9; color: var(--ink); transition: border-color .2s, box-shadow .2s; }
+  .fld input:focus, .fld select:focus, .fld textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); background: #fff; }
+  .fld textarea { min-height: 96px; resize: vertical; }
+  .fld input[type=tel] { direction: ltr; text-align: right; }
+  .seg { display: flex; flex-wrap: wrap; gap: 8px; }
+  .seg label { cursor: pointer; }
+  .seg label { position: relative; }
+  .seg input { position: absolute; inset: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .seg span { display: inline-block; padding: 9px 16px; border: 1px solid var(--line); border-radius: 30px; font-size: 14px; transition: all .2s; background: #fcfbf9; }
+  .seg input:checked + span { background: var(--dark); color: #fff; border-color: var(--dark); }
+  .seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .consent { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--muted); margin: 6px 0 22px; }
+  .consent input { margin-top: 5px; accent-color: var(--accent); width: 16px; height: 16px; flex: none; }
+  .consent a { color: var(--ink); text-decoration: underline; cursor: pointer; }
+  .lead-form .btn { width: 100%; padding: 16px; font-size: 16px; }
+  .form-msg { display: none; margin-top: 16px; padding: 14px 16px; border-radius: var(--radius); font-size: 14.5px; }
+  .form-msg.ok { display: block; background: #eaf6ee; color: #1d6b3a; }
+  .form-msg.err { display: block; background: #fdeeee; color: #9c2b2b; }
+  .hp { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+  @media (max-width: 900px) { .form-grid { grid-template-columns: 1fr; } }
+  @media (max-width: 560px) { .row { grid-template-columns: 1fr; gap: 0; } }
+
+  /* آلية العمل */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; counter-reset: s; }
+  .step { position: relative; padding-top: 30px; border-top: 1px solid var(--line); }
+  .step::before { content: ""; position: absolute; top: -1px; right: 0; width: 56px; height: 2px; background: var(--accent); }
+  .step .num { font-size: 44px; font-weight: 300; color: var(--paper-2); -webkit-text-stroke: 1px var(--accent); display: block; line-height: 1; margin-bottom: 18px; }
+  .step h3 { font-size: 21px; font-weight: 600; margin-bottom: 8px; }
+  .step p { color: var(--muted); margin: 0; }
+  @media (max-width: 800px) { .steps { grid-template-columns: 1fr; } }
+
+  /* العملاء */
+  .clients { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: clamp(28px, 6vw, 72px); }
+  .clients img { height: 54px; width: auto; filter: grayscale(1); opacity: .7; transition: all .3s; }
+  .clients img:hover { filter: none; opacity: 1; }
+  .clients .cname { font-family: var(--en); font-weight: 700; letter-spacing: .1em; color: var(--muted); }
+
+  /* الأسئلة */
+  .faq { max-width: 860px; }
+  .faq details { border-bottom: 1px solid var(--line); }
+  .faq summary { list-style: none; cursor: pointer; padding: 22px 0; font-size: 18px; font-weight: 600; display: flex; justify-content: space-between; gap: 20px; align-items: center; }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::after { content: "+"; font-family: var(--en); font-weight: 300; font-size: 28px; color: var(--accent); transition: transform .3s; line-height: 1; }
+  .faq details[open] summary::after { transform: rotate(45deg); }
+  .faq details p { margin: 0 0 22px; color: var(--muted); }
+
+  /* الختام والتذييل */
+  .cta-band { background: var(--dark); color: #fff; padding: clamp(56px, 8vw, 96px) 0; text-align: center; position: relative; overflow: hidden; }
+  .cta-band .mark-bg { position: absolute; left: -40px; bottom: -60px; width: 320px; color: rgba(255,255,255,.04); }
+  .cta-band h2 { font-size: clamp(26px, 4vw, 42px); margin-bottom: 12px; }
+  .cta-band p { color: rgba(255,255,255,.7); margin: 0 0 30px; }
+  .cta-band .ctas { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; position: relative; }
+  footer { background: #0b0b0b; color: rgba(255,255,255,.65); padding: 56px 0 28px; font-size: 14px; }
+  .ftr { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 40px; padding-bottom: 36px; border-bottom: 1px solid rgba(255,255,255,.08); }
+  .ftr h4 { color: #fff; font-size: 15px; margin: 0 0 16px; font-weight: 600; }
+  .ftr ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  .ftr a:hover { color: #fff; }
+  .ftr .brand { margin-bottom: 16px; }
+  .ftr .legal { font-size: 13px; line-height: 1.9; }
+  .socials { display: flex; gap: 10px; margin-top: 18px; }
+  .socials a { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.15); border-radius: 50%; }
+  .socials a:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .socials svg { width: 17px; height: 17px; }
+  .copy { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding-top: 22px; font-size: 13px; }
+  .copy a { text-decoration: underline; cursor: pointer; }
+  @media (max-width: 800px) { .ftr { grid-template-columns: 1fr; gap: 28px; } }
+
+  /* الزر العائم وشريط الجوال */
+  .fab { position: fixed; left: 20px; bottom: 20px; z-index: 60; width: 58px; height: 58px; border-radius: 50%; background: #1fa855; color: #fff; display: grid; place-items: center; box-shadow: 0 10px 25px rgba(31,168,85,.45); transition: transform .2s; }
+  .fab:hover { transform: scale(1.07); }
+  .fab svg { width: 30px; height: 30px; }
+  .mbar { display: none; }
+  @media (max-width: 640px) {
+    .fab { display: none; }
+    .mbar { display: grid; grid-template-columns: 1fr 1fr; position: fixed; inset: auto 0 0 0; z-index: 60; background: var(--dark); padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); gap: 10px; box-shadow: 0 -8px 20px rgba(0,0,0,.2); }
+    .mbar .btn { padding: 12px; font-size: 14px; }
+    body { padding-bottom: 70px; }
+  }
+
+  /* نافذة الخصوصية */
+  .modal { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; padding: 16px; }
+  .modal.open { display: flex; }
+  .modal .box { background: #fff; max-width: 560px; width: 100%; border-radius: 6px; padding: 30px; max-height: 85vh; overflow: auto; }
+  .modal h3 { margin-bottom: 14px; }
+  .modal p { color: var(--muted); white-space: pre-line; }
+
+  /* حركة الظهور */
+  .reveal { opacity: 0; transform: translateY(24px); transition: opacity .8s ease, transform .8s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; } .hero-bg { animation: none; transform: none; } html { scroll-behavior: auto; } }
+
+  .offline { min-height: 100svh; display: grid; place-items: center; text-align: center; background: var(--dark); color: #fff; padding: 24px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="modal" id="privacyModal" role="dialog" aria-modal="true" aria-labelledby="pmTitle">
+  <div class="box"><h3 id="pmTitle">سياسة الخصوصية</h3><p id="pmText"></p><button class="btn btn-accent" type="button" data-close>حسناً</button></div>
+</div>
+
+<script src="../js/landing-defaults.js"></script>
+<script>
+(function () {
+  const ICONS = {
+    wa: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.47 14.38c-.3-.15-1.75-.86-2.02-.96-.27-.1-.47-.15-.67.15-.2.3-.77.96-.94 1.16-.17.2-.35.22-.64.07-.3-.15-1.25-.46-2.38-1.47-.88-.79-1.47-1.76-1.65-2.06-.17-.3-.02-.46.13-.6.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.88 1.21 3.08c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.69.63.71.22 1.36.19 1.87.12.57-.09 1.75-.72 2-1.41.25-.69.25-1.29.17-1.41-.07-.12-.27-.2-.57-.35zM12.05 21.5h-.01a9.43 9.43 0 0 1-4.81-1.32l-.35-.2-3.57.94.95-3.48-.22-.36a9.4 9.4 0 0 1-1.44-5.02c0-5.2 4.24-9.44 9.46-9.44 2.52 0 4.9.99 6.68 2.77a9.38 9.38 0 0 1 2.76 6.68c0 5.21-4.24 9.44-9.45 9.44zm8.04-17.48A11.3 11.3 0 0 0 12.05.7C5.78.7.68 5.8.68 12.06c0 2 .52 3.96 1.52 5.68L.58 23.3l5.7-1.5a11.34 11.34 0 0 0 5.43 1.38h.01c6.26 0 11.36-5.1 11.36-11.36 0-3.04-1.18-5.89-3.32-8.04z"/></svg>',
+    phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>',
+    mail: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 6-10 7L2 6"/></svg>',
+    pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+    web: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>',
+    arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>',
+    instagram: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1" fill="currentColor"/></svg>',
+    x: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.65l-5.21-6.82-5.97 6.82H1.68l7.73-8.84L1.25 2.25h6.83l4.71 6.23 5.45-6.23zm-1.16 17.52h1.83L7.08 4.13H5.12l11.96 15.64z"/></svg>',
+    tiktok: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.6 6.7a4.8 4.8 0 0 1-3.8-4.2V2h-3.4v13.7a2.9 2.9 0 1 1-2-2.7V9.5a6.3 6.3 0 1 0 5.4 6.2V8.8a8.2 8.2 0 0 0 3.8 1.2V6.7z"/></svg>',
+    snapchat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 2.5c3.2 0 5.4 2.4 5.4 5.6v2.3l1.9-.6c.6-.1 1 .6.5 1-.6.5-1.6.9-2.3 1.1.4 1.6 1.9 3.3 3.6 3.9.5.2.4.8-.1 1-1 .3-1.9.4-2.2.8-.2.4-.1 1.1-.6 1.2-.8.2-1.8-.3-3 .2-1 .4-1.8 1.5-3.2 1.5s-2.2-1.1-3.2-1.5c-1.2-.5-2.2 0-3-.2-.5-.1-.4-.8-.6-1.2-.3-.4-1.2-.5-2.2-.8-.5-.2-.6-.8-.1-1 1.7-.6 3.2-2.3 3.6-3.9-.7-.2-1.7-.6-2.3-1.1-.5-.4-.1-1.1.5-1l1.9.6V8.1c0-3.2 2.2-5.6 5.4-5.6z"/></svg>',
+  };
+
+  const esc = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const safeUrl = (u) => { u = String(u || "").trim(); return /^(https?:|data:image\/|\/|\.\.?\/)/i.test(u) ? u : ""; };
+  const pad = (i) => String(i + 1).padStart(2, "0");
+  const digits = (v) => String(v || "").replace(/\D/g, "");
+
+  let S = null;
+
+  function waLink(msg) {
+    const n = digits(S.whatsapp);
+    const text = encodeURIComponent(msg || S.whatsappMessage || "");
+    return n ? `https://wa.me/${n}?text=${text}` : "#form";
+  }
+  function logoHtml() {
+    const src = safeUrl(S.logo);
+    return src ? `<img src="${esc(src)}" alt="${esc(S.brandName)}">` : LANDCODE_LOGO_SVG;
+  }
+  function brandHtml() {
+    return `<a class="brand" href="#top" aria-label="${esc(S.brandName)}"><span class="mark">${logoHtml()}</span><span class="bn"><b>${esc(S.brandName)}</b><small>${esc(S.tagline)}</small></span></a>`;
+  }
+  function titleWithBrand(t) {
+    const b = S.brandName || "";
+    const e = esc(t);
+    return b && t.includes(b) ? e.replace(esc(b), `<span class="brand-word">${esc(b)}</span>`) : e;
+  }
+  function segHtml(name, opts) {
+    return `<div class="seg" role="radiogroup">${(opts || []).map((o, i) => `<label><input type="radio" name="${name}" value="${esc(o)}" ${i === 0 ? "checked" : ""}><span>${esc(o)}</span></label>`).join("")}</div>`;
+  }
+  function secHead(eyebrow, title, num, extra) {
+    return `<div class="sec-head reveal"><div>${eyebrow ? `<div class="eyebrow en">${num ? num + " — " : ""}${esc(eyebrow)}</div>` : ""}<h2 class="sec-title">${esc(title)}</h2></div>${extra || ""}</div>`;
+  }
+
+  function render() {
+    const on = S.sections || {};
+    document.title = S.seo.title || document.title;
+    const md = document.querySelector('meta[name="description"]'); if (md) md.content = S.seo.description || "";
+    document.documentElement.style.setProperty("--accent", S.accent || "#b08d57");
+    document.documentElement.style.setProperty("--dark", S.dark || "#121212");
+
+    const navItems = [
+      on.services && ["#services", "خدماتنا"],
+      on.gallery && ["#work", "أعمالنا"],
+      on.process && ["#process", "كيف نشتغل"],
+      on.faq && ["#faq", "الأسئلة"],
+      on.form && ["#form", "اطلب استشارة"],
+    ].filter(Boolean);
+
+    const hasWa = !!digits(S.whatsapp);
+    const waBtn = (label, cls) => `<a class="btn ${cls || "btn-wa"}" href="${esc(waLink())}" ${hasWa ? 'target="_blank" rel="noopener"' : ""}>${ICONS.wa}<span>${esc(label)}</span></a>`;
+    const socials = Object.entries(S.social || {}).filter(([, u]) => safeUrl(u)).map(([k, u]) => `<a href="${esc(safeUrl(u))}" target="_blank" rel="noopener" aria-label="${k}">${ICONS[k] || ""}</a>`).join("");
+
+    let sectionNum = 0;
+    const nextNum = () => pad(sectionNum++);
+    const html = [];
+
+    html.push(`
+      <header class="hdr" id="hdr"><div class="wrap">
+        ${brandHtml()}
+        <nav class="nav">${navItems.map(([h, t]) => `<a href="${h}">${t}</a>`).join("")}</nav>
+        ${waBtn("واتساب")}
+      </div></header>
+
+      <section class="hero" id="top">
+        <div class="hero-bg" style="background-image:url('${esc(safeUrl(S.hero.image))}')"></div>
+        <div class="wrap">
+          <div class="eyebrow en">${esc(S.hero.eyebrow)}</div>
+          <h1>${titleWithBrand(S.hero.title)}</h1>
+          <p class="sub">${esc(S.hero.subtitle)}</p>
+          <div class="tagline"><span>${esc(S.hero.tagline)}</span>${S.city ? `<span class="chip">${ICONS.pin}${esc(S.city)}</span>` : ""}</div>
+          <div class="ctas">
+            ${waBtn(S.hero.ctaWhatsapp)}
+            ${on.form ? `<a class="btn btn-ghost" href="#form"><span>${esc(S.hero.ctaForm)}</span>${ICONS.arrow}</a>` : ""}
+          </div>
+        </div>
+        <span class="scroll-cue" aria-hidden="true"></span>
+      </section>`);
+
+    if (on.services && S.services.length) {
+      html.push(`<section class="sec" id="services"><div class="wrap">
+        ${secHead(S.servicesEyebrow, S.servicesTitle, nextNum())}
+        <div class="services">${S.services.map((s, i) => `
+          <article class="svc reveal"><span class="num">${pad(i)}</span><h3>${esc(s.title)}</h3><div class="en">${esc(s.en)}</div><p class="svc-desc">${esc(s.desc)}</p></article>`).join("")}
+        </div></div></section>`);
+    }
+
+    if (on.gallery && S.gallery.length) {
+      html.push(`<section class="sec dark" id="work"><div class="wrap">
+        ${secHead(S.galleryEyebrow, S.galleryTitle, nextNum())}
+        <div class="gallery">${S.gallery.map(g => {
+          const src = safeUrl(g.image);
+          return `<figure class="gal reveal ${src ? "" : "noimg"}" style="margin:0">${src ? `<img src="${esc(src)}" alt="${esc(g.title)}" loading="lazy" onerror="this.remove();this.parentNode&&this.parentNode.classList.add('noimg')">` : ""}<figcaption><b>${esc(g.title)}</b><span class="en">${esc(g.en)}</span></figcaption></figure>`;
+        }).join("")}</div></div></section>`);
+    }
+
+    if (on.stats && S.stats.length) {
+      html.push(`<section class="sec" style="padding-bottom:0"><div class="wrap"><div class="stats reveal">${S.stats.map(s => `<div class="stat"><b>${esc(s.value)}</b><span>${esc(s.label)}</span></div>`).join("")}</div></div></section>`);
+    }
+
+    if (on.form) {
+      const f = S.form;
+      const contacts = [
+        S.phone && `<li><a href="tel:${esc(digits(S.phone) ? "+" + digits(S.phone).replace(/^0/, "966") : "")}">${ICONS.phone}<span dir="ltr">${esc(S.phone)}</span></a></li>`,
+        hasWa && `<li><a href="${esc(waLink())}" target="_blank" rel="noopener">${ICONS.wa}<span>واتساب</span></a></li>`,
+        S.email && `<li><a href="mailto:${esc(S.email)}">${ICONS.mail}<span>${esc(S.email)}</span></a></li>`,
+        (S.address || S.city) && `<li><span>${ICONS.pin}<span>${esc(S.address || S.city)}</span></span></li>`,
+      ].filter(Boolean).join("");
+      html.push(`<section class="sec form-sec" id="form"><div class="wrap form-grid">
+        <div class="form-aside reveal">
+          <div class="eyebrow en">${nextNum()} — ${esc(f.eyebrow)}</div>
+          <h2 class="sec-title">${esc(f.title)}</h2>
+          <p>${esc(f.intro)}</p>
+          ${contacts ? `<ul class="contact-list">${contacts}</ul>` : ""}
+        </div>
+        <form class="lead-form reveal" id="leadForm" novalidate>
+          <div class="row">
+            <div class="fld"><label for="lf_name">الاسم</label><input id="lf_name" name="name" autocomplete="name" required maxlength="100"></div>
+            <div class="fld"><label for="lf_phone">رقم الجوال</label><input id="lf_phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="05XXXXXXXX" required maxlength="16"></div>
+          </div>
+          <div class="row">
+            <div class="fld"><label for="lf_city">المدينة</label><select id="lf_city" name="city">${(f.cities || []).map(c => `<option>${esc(c)}</option>`).join("")}</select></div>
+            <div class="fld"><label for="lf_area">المساحة التقريبية <small>(م² — اختياري)</small></label><input id="lf_area" name="area" inputmode="numeric" maxlength="10"></div>
+          </div>
+          <div class="fld"><span class="lbl">نوع المشروع</span>${segHtml("projectType", f.projectTypes)}</div>
+          <div class="fld"><span class="lbl">المطلوب</span>${segHtml("need", f.needs)}</div>
+          <div class="fld"><label for="lf_loc">الموقع <small>(الحي أو رابط خرائط قوقل)</small></label><input id="lf_loc" name="location" maxlength="300"></div>
+          <div class="fld"><label for="lf_det">تفاصيل إضافية <small>(اختياري)</small></label><textarea id="lf_det" name="details" maxlength="2000"></textarea></div>
+          <div class="hp" aria-hidden="true"><input name="website" tabindex="-1" autocomplete="off"></div>
+          <label class="consent"><input type="checkbox" name="consent" required><span>${esc(f.consent)} — <a data-privacy>سياسة الخصوصية</a></span></label>
+          <button class="btn btn-accent" type="submit" id="lf_submit">${esc(f.submit)}</button>
+          <div class="form-msg" id="lf_msg" role="status" aria-live="polite"></div>
+        </form>
+      </div></section>`);
+    }
+
+    if (on.process && S.process.length) {
+      html.push(`<section class="sec" id="process"><div class="wrap">
+        ${secHead(S.processEyebrow, S.processTitle, nextNum())}
+        <div class="steps">${S.process.map((p, i) => `<div class="step reveal"><span class="num">${pad(i)}</span><h3>${esc(p.title)}</h3><p>${esc(p.desc)}</p></div>`).join("")}</div>
+      </div></section>`);
+    }
+
+    if (on.clients && S.clients.length) {
+      html.push(`<section class="sec" style="background:#fff"><div class="wrap">
+        <div class="sec-head reveal" style="justify-content:center;text-align:center"><div><div class="eyebrow en">Trusted By</div><h2 class="sec-title">${esc(S.clientsTitle)}</h2></div></div>
+        <div class="clients reveal">${S.clients.map(c => safeUrl(c.logo) ? `<img src="${esc(safeUrl(c.logo))}" alt="${esc(c.name)}" loading="lazy">` : `<span class="cname">${esc(c.name)}</span>`).join("")}</div>
+      </div></section>`);
+    }
+
+    if (on.faq && S.faq.length) {
+      html.push(`<section class="sec" id="faq" style="padding-top:0"><div class="wrap">
+        ${secHead("FAQ", S.faqTitle, nextNum())}
+        <div class="faq reveal">${S.faq.map(q => `<details><summary>${esc(q.q)}</summary><p>${esc(q.a)}</p></details>`).join("")}</div>
+      </div></section>`);
+    }
+
+    html.push(`
+      <section class="cta-band"><div class="mark-bg" aria-hidden="true">${LANDCODE_LOGO_SVG}</div><div class="wrap">
+        <h2>جاهز تبدأ مشروعك؟</h2><p>${esc(S.hero.tagline)}</p>
+        <div class="ctas">${waBtn(S.hero.ctaWhatsapp)}${on.form ? `<a class="btn btn-ghost" href="#form"><span>${esc(S.hero.ctaForm)}</span>${ICONS.arrow}</a>` : ""}</div>
+      </div></section>
+
+      <footer><div class="wrap">
+        <div class="ftr">
+          <div>
+            ${brandHtml()}
+            <div class="legal">${esc(S.brandName)} علامة تجارية لـ ${esc(S.legalName)}${S.crNumber ? `<br>سجل تجاري: <span dir="ltr">${esc(S.crNumber)}</span>` : ""}${S.vatNumber ? `<br>الرقم الضريبي: <span dir="ltr">${esc(S.vatNumber)}</span>` : ""}</div>
+            ${socials ? `<div class="socials">${socials}</div>` : ""}
+          </div>
+          <div><h4>روابط</h4><ul>${navItems.map(([h, t]) => `<li><a href="${h}">${t}</a></li>`).join("")}</ul></div>
+          <div><h4>تواصل معنا</h4><ul>
+            ${S.phone ? `<li><a href="tel:+${esc(digits(S.phone).replace(/^0/, "966"))}" dir="ltr">${esc(S.phone)}</a></li>` : ""}
+            ${S.email ? `<li><a href="mailto:${esc(S.email)}">${esc(S.email)}</a></li>` : ""}
+            ${safeUrl(S.website) ? `<li><a href="${esc(safeUrl(S.website))}" target="_blank" rel="noopener">${esc(S.website.replace(/^https?:\/\//, ""))}</a></li>` : ""}
+            ${S.city ? `<li>${esc(S.city)}${S.address ? " — " + esc(S.address) : ""}</li>` : ""}
+          </ul></div>
+        </div>
+        <div class="copy"><span>© ${new Date().getFullYear()} ${esc(S.brandName)} — ${esc(S.legalName)}</span><a data-privacy>سياسة الخصوصية</a></div>
+      </div></footer>
+
+      ${hasWa ? `<a class="fab" href="${esc(waLink())}" target="_blank" rel="noopener" aria-label="واتساب">${ICONS.wa}</a>` : ""}
+      <div class="mbar">${waBtn("واتساب")}${on.form ? `<a class="btn btn-accent" href="#form">اطلب استشارة</a>` : (S.phone ? `<a class="btn btn-accent" href="tel:+${esc(digits(S.phone).replace(/^0/, "966"))}">اتصل بنا</a>` : "")}</div>
+    `);
+
+    document.getElementById("app").innerHTML = html.join("");
+    bind();
+  }
+
+  function bind() {
+    const hdr = document.getElementById("hdr");
+    const onScroll = () => hdr.classList.toggle("solid", window.scrollY > 40);
+    window.addEventListener("scroll", onScroll, { passive: true }); onScroll();
+
+    const io = "IntersectionObserver" in window ? new IntersectionObserver((ents) => ents.forEach(e => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { threshold: .12 }) : null;
+    document.querySelectorAll(".reveal").forEach(el => io ? io.observe(el) : el.classList.add("in"));
+
+    const pm = document.getElementById("privacyModal");
+    document.getElementById("pmText").textContent = S.privacyText || "";
+    document.querySelectorAll("[data-privacy]").forEach(a => a.onclick = (e) => { e.preventDefault(); pm.classList.add("open"); });
+    pm.onclick = (e) => { if (e.target === pm || e.target.hasAttribute("data-close")) pm.classList.remove("open"); };
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") pm.classList.remove("open"); });
+
+    const form = document.getElementById("leadForm");
+    if (form) form.onsubmit = submitLead;
+  }
+
+  async function submitLead(e) {
+    e.preventDefault();
+    const form = e.target, msg = document.getElementById("lf_msg"), btn = document.getElementById("lf_submit");
+    const fd = new FormData(form);
+    const data = Object.fromEntries(fd.entries());
+    data.consent = !!form.elements.consent.checked;
+    data.source = location.href.slice(0, 300);
+    const showErr = (t) => { msg.className = "form-msg err"; msg.textContent = t; };
+    if (String(data.name || "").trim().length < 2) return showErr("يرجى إدخال الاسم."), form.elements.name.focus();
+    if (digits(data.phone).length < 9) return showErr("يرجى إدخال رقم جوال صحيح."), form.elements.phone.focus();
+    if (!data.consent) return showErr("يرجى الموافقة على التواصل معك.");
+
+    btn.disabled = true; btn.textContent = "جارٍ الإرسال…";
+    try {
+      const res = await fetch("/api/landing-leads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+      if (!res.ok) throw new Error("http " + res.status);
+      form.reset();
+      form.querySelectorAll(".seg").forEach(s => { const f = s.querySelector("input"); if (f) f.checked = true; });
+      msg.className = "form-msg ok"; msg.textContent = S.form.success;
+    } catch (err) {
+      // في حال تعذّر الإرسال للخادم: نعرض بديل واتساب حتى لا يضيع الطلب
+      const text = `طلب استشارة — ${S.brandName}\nالاسم: ${data.name}\nالجوال: ${data.phone}\nالمدينة: ${data.city || ""}\nنوع المشروع: ${data.projectType || ""}\nالمطلوب: ${data.need || ""}\nالموقع: ${data.location || ""}\n${data.details || ""}`;
+      msg.className = "form-msg err";
+      msg.innerHTML = digits(S.whatsapp) ? `تعذّر إرسال الطلب حالياً. <a href="${esc(waLink(text))}" target="_blank" rel="noopener" style="text-decoration:underline;font-weight:600">أرسل بياناتك عبر واتساب</a>` : "تعذّر إرسال الطلب حالياً، حاول مرة أخرى بعد قليل.";
+    } finally {
+      btn.disabled = false; btn.textContent = S.form.submit;
+    }
+  }
+
+  async function init() {
+    let saved = null;
+    try {
+      const res = await fetch("/api/landing", { cache: "no-store" });
+      if (res.ok) saved = (await res.json()).settings;
+    } catch (e) { /* تشغيل محلي بلا خادم: نستخدم المحتوى الافتراضي */ }
+    S = mergeLandingSettings(saved);
+    if (S.enabled === false) {
+      document.getElementById("app").innerHTML = `<div class="offline"><div><div style="width:80px;margin:0 auto 24px;color:#fff">${LANDCODE_LOGO_SVG}</div><h1 class="en" style="font-size:26px">${esc(S.brandName)}</h1><p style="opacity:.7">الموقع قيد التحديث — نعود قريباً</p></div></div>`;
+      return;
+    }
+    render();
+  }
+  init();
+})();
+</script>
+</body>
+</html>
