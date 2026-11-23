@@ -233,7 +233,7 @@
   <div class="box"><h3 id="pmTitle">سياسة الخصوصية</h3><p id="pmText"></p><button class="btn btn-accent" type="button" data-close>حسناً</button></div>
 </div>
 
-<script src="../js/landing-defaults.js"></script>
+<script src="../js/landing-defaults.js?v=137"></script>
 <script>
 (function () {
   const ICONS = {
@@ -257,7 +257,10 @@
   let S = null;
 
   function waLink(msg) {
-    const n = digits(S.whatsapp);
+    let n = digits(S.whatsapp);
+    if (n.startsWith("00")) n = n.slice(2);
+    if (n.startsWith("05")) n = "966" + n.slice(1);
+    else if (n.length === 9 && n.startsWith("5")) n = "966" + n;
     const text = encodeURIComponent(msg || S.whatsappMessage || "");
     return n ? `https://wa.me/${n}?text=${text}` : "#form";
   }
