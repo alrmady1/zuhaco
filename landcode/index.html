@@ -87,16 +87,15 @@
   @media (max-width: 640px) { .scroll-cue { display: none; } .hero .ctas .btn { flex: 1 1 100%; } }
 
   /* الخدمات */
-  .services { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); border-inline-start: 1px solid var(--line); }
-  .svc { padding: 34px 30px 38px; border-bottom: 1px solid var(--line); border-inline-end: 1px solid var(--line); position: relative; transition: background .3s, color .3s; }
-  .svc:hover { background: var(--dark); color: #fff; }
-  .svc:hover .svc-desc { color: rgba(255,255,255,.7); }
-  .svc h3 { font-size: 21px; font-weight: 600; margin: 22px 0 6px; }
-  .svc .en { font-size: 11px; color: var(--muted); }
-  .svc:hover .en { color: #cdb68d; }
-  .svc-desc { margin: 14px 0 0; color: var(--muted); font-size: 15px; transition: color .3s; }
-  @media (max-width: 900px) { .services { grid-template-columns: 1fr 1fr; } }
-  @media (max-width: 560px) { .services { grid-template-columns: 1fr; } .svc { padding: 28px 22px; } }
+  .services { display: flex; flex-direction: column; }
+  .svc { display: flex; align-items: center; gap: 18px; padding: 20px 0; border-bottom: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line)); transition: padding .3s; }
+  .svc:hover { padding-inline-start: 8px; }
+  .svc .num { font-size: 13px; font-weight: 500; letter-spacing: .05em; flex: none; min-width: 22px; }
+  .svc-body { flex: 1; min-width: 0; }
+  .svc h3 { font-size: 17px; font-weight: 600; margin: 0 0 2px; }
+  .svc-desc { margin: 0; color: var(--muted); font-size: 14px; }
+  .svc .en { flex: none; font-size: 10.5px; font-weight: 500; letter-spacing: .28em; color: var(--accent); }
+  @media (max-width: 560px) { .svc { align-items: flex-start; gap: 12px; } .svc .en { display: none; } }
 
   /* المعرض */
   .sec.dark { background: var(--dark); color: #fff; }
@@ -156,13 +155,16 @@
   @media (max-width: 560px) { .row { grid-template-columns: 1fr; gap: 0; } }
 
   /* آلية العمل */
-  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; counter-reset: s; }
-  .step { position: relative; padding-top: 30px; border-top: 1px solid var(--line); }
-  .step::before { content: ""; position: absolute; top: -1px; right: 0; width: 56px; height: 2px; background: var(--accent); }
-  .step .num { font-size: 44px; font-weight: 300; color: var(--paper-2); -webkit-text-stroke: 1px var(--accent); display: block; line-height: 1; margin-bottom: 18px; }
-  .step h3 { font-size: 21px; font-weight: 600; margin-bottom: 8px; }
-  .step p { color: var(--muted); margin: 0; }
-  @media (max-width: 800px) { .steps { grid-template-columns: 1fr; } }
+  .process-sec { padding: clamp(48px, 6vw, 72px) 0; }
+  .process-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding-bottom: 26px; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+  .process-head h2 { font-size: clamp(24px, 2.6vw, 30px); font-weight: 700; }
+  .process-head .en { font-size: 11px; font-weight: 500; letter-spacing: .3em; color: var(--accent); }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+  .step { padding: 22px 0 22px; border-bottom: 1px solid var(--line); }
+  .step .num { display: block; font-family: var(--en); font-size: clamp(44px, 4.4vw, 56px); font-weight: 300; line-height: 1; color: var(--ink); letter-spacing: 0; margin-bottom: 14px; }
+  .step h3 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .step p { color: var(--muted); margin: 0; font-size: 14px; }
+  @media (max-width: 800px) { .steps { grid-template-columns: 1fr; gap: 0; } .step .num { font-size: 40px; } }
 
   /* العملاء */
   .clients { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: clamp(28px, 6vw, 72px); }
@@ -329,10 +331,11 @@
       </section>`);
 
     if (on.services && S.services.length) {
-      html.push(`<section class="sec" id="services"><div class="wrap">
-        ${secHead(S.servicesEyebrow, S.servicesTitle, nextNum())}
+      nextNum();
+      html.push(`<section class="sec process-sec" id="services"><div class="wrap">
+        <div class="process-head reveal"><h2>${esc(S.servicesTitle)}</h2>${S.servicesEyebrow ? `<span class="en">${esc(S.servicesEyebrow)}</span>` : ""}</div>
         <div class="services">${S.services.map((s, i) => `
-          <article class="svc reveal"><span class="num">${pad(i)}</span><h3>${esc(s.title)}</h3><div class="en">${esc(s.en)}</div><p class="svc-desc">${esc(s.desc)}</p></article>`).join("")}
+          <article class="svc reveal"><span class="num">${pad(i)}</span><div class="svc-body"><h3>${esc(s.title)}</h3><p class="svc-desc">${esc(s.desc)}</p></div><span class="en">${esc(s.en)}</span></article>`).join("")}
         </div></div></section>`);
     }
 
@@ -386,8 +389,9 @@
     }
 
     if (on.process && S.process.length) {
-      html.push(`<section class="sec" id="process"><div class="wrap">
-        ${secHead(S.processEyebrow, S.processTitle, nextNum())}
+      nextNum();
+      html.push(`<section class="sec process-sec" id="process"><div class="wrap">
+        <div class="process-head reveal"><h2>${esc(S.processTitle)}</h2>${S.processEyebrow ? `<span class="en">${esc(S.processEyebrow)}</span>` : ""}</div>
         <div class="steps">${S.process.map((p, i) => `<div class="step reveal"><span class="num">${pad(i)}</span><h3>${esc(p.title)}</h3><p>${esc(p.desc)}</p></div>`).join("")}</div>
       </div></section>`);
     }
