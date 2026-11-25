@@ -286,6 +286,14 @@ function renderLandingEditor(body, rootEl) {
     html += lsSectionCard("gallery", "معرض الأعمال", "يُفضّل 6 صور (أو مضاعفاتها) لأفضل ترتيب", `
       <div class="grid cols-2">${lsField("عنوان القسم", "galleryTitle")}${lsField("عنوان صغير بالإنجليزي", "galleryEyebrow", { ltr: true })}</div>
       ${lsListEditor("gallery", "صورة", [{ k: "title", label: "العنوان" }, { k: "en", label: "بالإنجليزي", ltr: true }, { k: "image", label: "الصورة", image: true }], { title: "", en: "", image: "" }, { cols: 2 })}`);
+    html += lsSectionCard("execution", "أعمالنا — قسم التنفيذ", "صور مصغرة لأعمال التنفيذ الفعلية في المواقع، يكبّرها الزائر بالضغط عليها — لا يظهر القسم إلا بعد إضافة صور", `
+      <div class="grid cols-2">${lsField("عنوان القسم", "executionTitle")}${lsField("عنوان صغير بالإنجليزي", "executionEyebrow", { ltr: true })}</div>
+      <div class="field" style="border:1px dashed var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px">
+        <label>إضافة عدة صور دفعة واحدة</label>
+        <input type="file" accept="image/*" multiple data-bulk="execution">
+        <div class="hint">يمكنك اختيار عدة صور معاً — تُصغَّر تلقائياً وتُضاف إلى القائمة أدناه، ثم اكتب عنواناً لكل صورة إن رغبت.</div>
+      </div>
+      ${lsListEditor("execution", "صورة", [{ k: "title", label: "العنوان (اختياري)" }, { k: "image", label: "الصورة", image: true, maxW: 1200 }], { title: "", image: "" }, { cols: 2 })}`);
     html += lsSectionCard("stats", "الأرقام والإحصائيات", "اكتب أرقاماً حقيقية فقط قبل إظهار هذا القسم", `
       ${lsListEditor("stats", "رقم", [{ k: "value", label: "الرقم", ltr: true }, { k: "label", label: "الوصف" }], { value: "", label: "" }, { cols: 2 })}`);
     html += lsSectionCard("form", "نموذج الطلب (اترك بياناتك)", "الطلبات تصل إلى تبويب (الطلبات الواردة)", `
@@ -335,6 +343,19 @@ function renderLandingEditor(body, rootEl) {
 
   body.onchange = async (e) => {
     const t = e.target;
+    if (t.dataset.bulk) {
+      const files = Array.from(t.files || []);
+      if (!files.length) return;
+      const list = landingGet(LANDING_DRAFT, t.dataset.bulk);
+      let added = 0;
+      for (const file of files) {
+        try { list.push({ title: "", image: await landingCompressImage(file, 1200, 0.8, false) }); added++; }
+        catch (err) { /* تجاهل الملف غير الصالح ومتابعة البقية */ }
+      }
+      if (added) { LANDING_DIRTY = true; rerender(); toast(`تمت إضافة ${added} صورة — اضغط (حفظ ونشر)`); }
+      else toast("تعذّر قراءة الصور");
+      return;
+    }
     if (t.type === "url" || !t.dataset.img) return;
     const file = t.files && t.files[0];
     if (!file) return;

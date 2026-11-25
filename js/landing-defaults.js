@@ -50,7 +50,7 @@ const LANDING_DEFAULTS = {
     ctaForm: "اترك بياناتك ونتصل فيك",
   },
 
-  sections: { services: true, gallery: true, stats: false, form: true, process: true, clients: false, faq: true },
+  sections: { services: true, gallery: true, execution: true, stats: false, form: true, process: true, clients: false, faq: true },
 
   servicesTitle: "وش نسوي لك",
   servicesEyebrow: "What We Do",
@@ -73,6 +73,11 @@ const LANDING_DEFAULTS = {
     { title: "استقبال", en: "Lobby", image: "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1200&q=70" },
     { title: "واجهة فيلا", en: "Villa Facade", image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=70" },
   ],
+
+  // صور مصغرة لأعمال قسم التنفيذ — تُكبَّر عند الضغط عليها (لا يظهر القسم إلا بعد إضافة صور)
+  executionTitle: "أعمالنا — قسم التنفيذ",
+  executionEyebrow: "Execution Work",
+  execution: [],            // [{ title, image }]
 
   stats: [
     { value: "+100", label: "مشروع منجز" },
